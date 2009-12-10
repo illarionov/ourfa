@@ -1240,6 +1240,24 @@ static int dump_hash(ourfa_xmlapictx_t *ctx,
 		     (const char *)cnt_name);
 	 xmlFree(cnt_name);
 
+      /* BREAK */
+      }else if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"break") == 0) {
+	 unsigned node_found;
+
+	 node_found=0;
+	 while (cur_node != end_node) {
+	    if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"for") == 0) {
+	       node_found=1;
+	       break;
+	    }
+	    cur_node=cur_node->parent;
+	 }
+
+	 if (!node_found) {
+	    ret_code = set_ctx_err(ctx, "Wrong break node");
+	    break;
+	 }
+
       /* ERROR  */
       }else if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"error") == 0){
 	 ret_code = exec_error_node(ctx, cur_node, h);
@@ -1608,6 +1626,24 @@ int ourfa_xmlapictx_load_resp_pkt(ourfa_xmlapictx_t *ctx,
 	    continue;
 	 }
 	 xmlFree(cnt_name);
+
+      /* BREAK */
+      }else if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"break") == 0) {
+	 unsigned node_found;
+
+	 node_found=0;
+	 while (ctx->out_p != ctx->out) {
+	    if (xmlStrcasecmp(ctx->out_p->name, (const xmlChar *)"for") == 0) {
+	       node_found=1;
+	       break;
+	    }
+	    ctx->out_p=ctx->out_p->parent;
+	 }
+
+	 if (!node_found) {
+	    ret_code = set_ctx_err(ctx, "Wrong break node");
+	    break;
+	 }
 
       /* ERROR  */
       }else if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"error") == 0){
