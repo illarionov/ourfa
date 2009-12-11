@@ -25,7 +25,7 @@ $OURFA_CLIENT -H "$HOST" -l "$LOGIN" -p "$PASSWORD" -x "$XML_DIR" \
     }
  }
  END {
-   for (idx in idxs) {printf "%s\t%s\t%s\t\%s\n",
+   for (idx in idxs) {printf "%s\t%s\t%s\t%s\n",
       users[idx,"basic_account"],
       users[idx,"login_array"],
       users[idx,"balance"],

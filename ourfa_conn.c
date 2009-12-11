@@ -731,6 +731,7 @@ static int hash_dump_xml(ourfa_t *ourfa, const char *func_name,
       return set_err(ourfa, "%s",
 	    ourfa_xmlapi_last_err_str(ourfa->xmlapi));
 
+   res=0;
    switch (dump_format) {
       case DUMP_FORMAT_XML:
 	 res = ourfa_xmlapictx_xml_dump(ctx, h, stream, dump_input);
