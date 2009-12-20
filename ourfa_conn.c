@@ -339,7 +339,7 @@ int ourfa_connect(ourfa_t *ourfa)
       }
 
       if (connect(s, res->ai_addr, res->ai_addrlen) < 0) {
-	 set_err(ourfa, "Cannot connect: %s", strerror(errno));
+	 set_err(ourfa, "%s", strerror(errno));
 	 continue;
       }
       break;
