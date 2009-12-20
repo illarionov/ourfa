@@ -129,7 +129,10 @@ ourfa_xmlapi_t *ourfa_xmlapi_new(const char *xml_dir, const char *xml_file,
    }else
       res->api_file = NULL;
 
-   asprintf(&xmlapi_file, "%s/%s",
+   if ((res->api_dir == NULL) && res->api_file != NULL)
+      xmlapi_file = strdup(res->api_file);
+   else
+      asprintf(&xmlapi_file, "%s/%s",
 	    res->api_dir ? res->api_dir : DEFAULT_API_XML_DIR,
 	    res->api_file ? res->api_file : DEFAULT_API_XML_FILE);
 
