@@ -233,12 +233,9 @@ int ourfa_set_conf(
    if (ssl != NULL)
       tmp.ssl = *ssl;
 
-   /*  XXX */
-   tmp.xmlapi = ourfa_xmlapi_new(api_xml_dir, api_xml_file);
-   if (tmp.xmlapi == NULL) {
-      set_err(ctx, "Cannot create xml api");
+   tmp.xmlapi = ourfa_xmlapi_new(api_xml_dir, api_xml_file, ctx->err_msg, sizeof(ctx->err_msg));
+   if (tmp.xmlapi == NULL)
       goto setconf_error;
-   }
 
    if (timeout != NULL)
       tmp.timeout = *timeout;

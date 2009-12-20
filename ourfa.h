@@ -228,7 +228,8 @@ int ourfa_hash_parse_idx_list(ourfa_hash_t *h, const char *idx_list,
       unsigned *res, size_t res_size);
 
 /*  XML API  */
-ourfa_xmlapi_t *ourfa_xmlapi_new(const char *xml_dir, const char *xml_file);
+ourfa_xmlapi_t *ourfa_xmlapi_new(const char *xml_dir, const char *xml_file,
+      char *err_str, size_t err_str_size);
 void ourfa_xmlapi_free(ourfa_xmlapi_t *api);
 
 ourfa_xmlapictx_t *ourfa_xmlapictx_new(struct ourfa_xmlapi_t *api, const char *func_name);

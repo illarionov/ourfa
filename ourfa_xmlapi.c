@@ -78,28 +78,41 @@ enum dump_format_t {
    DUMP_FORMAT_BATCH
 };
 
+struct err_str_params_t {
+   char *err_str;
+   size_t err_str_size;
+};
 
 static int set_err(ourfa_xmlapi_t *api, const char *fmt, ...);
 static int set_ctx_err(ourfa_xmlapictx_t *api, const char *fmt, ...);
+static void xml_generic_error_func(void *ctx, const char *msg, ...);
 static int dump_hash(ourfa_xmlapictx_t *ctx,
       ourfa_hash_t *h, FILE *stream, unsigned is_input, enum dump_format_t dump_format);
 
-ourfa_xmlapi_t *ourfa_xmlapi_new(const char *xml_dir, const char *xml_file)
+ourfa_xmlapi_t *ourfa_xmlapi_new(const char *xml_dir, const char *xml_file,
+      char *err_str, size_t err_str_size)
 {
    ourfa_xmlapi_t *res;
    char *xmlapi_file;
+   struct err_str_params_t err_params;
 
    LIBXML_TEST_VERSION
 
+   err_params.err_str = err_str;
+   err_params.err_str_size = err_str_size;
+
    res = malloc(sizeof(struct ourfa_xmlapi_t));
 
-   if (res == NULL)
+   if (res == NULL) {
+      xml_generic_error_func(&err_params, "Cannot allocate memory for xml api");
       return NULL;
+   }
 
    if (xml_dir != NULL) {
       res->api_dir = strdup(xml_dir);
       if (res->api_dir == NULL) {
 	 free(res);
+	 xml_generic_error_func(&err_params, "Cannot allocate memory for xml api");
 	 return NULL;
       }
    }else
@@ -110,6 +123,7 @@ ourfa_xmlapi_t *ourfa_xmlapi_new(const char *xml_dir, const char *xml_file)
       if (res->api_file == NULL) {
 	 free(res->api_dir);
 	 free(res);
+	 xml_generic_error_func(&err_params, "Cannot allocate memory for xml api");
 	 return NULL;
       }
    }else
@@ -123,11 +137,15 @@ ourfa_xmlapi_t *ourfa_xmlapi_new(const char *xml_dir, const char *xml_file)
       free(res->api_dir);
       free(res->api_file);
       free(res);
+      xml_generic_error_func(&err_params, "Cannot allocate memory for xml api");
       return NULL;
    }
 
+   xmlSetGenericErrorFunc(&err_params, xml_generic_error_func);
+
    res->api = xmlReadFile(xmlapi_file, NULL, XML_PARSE_COMPACT);
    if (res->api == NULL) {
+      xmlSetGenericErrorFunc(NULL, NULL);
       free(xmlapi_file);
       free(res->api_dir);
       free(res->api_file);
@@ -135,6 +153,7 @@ ourfa_xmlapi_t *ourfa_xmlapi_new(const char *xml_dir, const char *xml_file)
       return NULL;
    }
 
+   xmlSetGenericErrorFunc(NULL, NULL);
    free(xmlapi_file);
 
    return res;
@@ -1734,6 +1753,22 @@ static int set_ctx_err(ourfa_xmlapictx_t *ctx, const char *fmt, ...)
    return -1;
 }
 
+static void xml_generic_error_func(void *ctx, const char *msg, ...)
+{
+   va_list ap;
+   struct err_str_params_t *err;
+
+   err = (struct err_str_params_t *)ctx;
+   if ((err == NULL)
+	 || (err->err_str == NULL)
+	 || (err->err_str_size == 0))
+      return;
+
+   va_start(ap, msg);
+   vsnprintf(err->err_str, err->err_str_size, msg, ap);
+   va_end(ap);
+}
+
 const char *ourfa_xmlapi_last_err_str(ourfa_xmlapi_t *api)
 {
    if (api == NULL)
@@ -1747,4 +1782,5 @@ const char *ourfa_xmlapictx_last_err_str(ourfa_xmlapictx_t *ctx)
       return NULL;
    return ctx->err_msg;
 }
+
 
