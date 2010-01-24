@@ -92,6 +92,18 @@ typedef struct ourfa_attr_hdr_t {
 } ourfa_attr_hdr_t;
 
 
+struct ourfa_traverse_funcs_t {
+   int (* node)(const char *node_type, const char *node_name, const char *arr_index , void *ctx);
+   int (* start_for)(const char *node_name, unsigned from, unsigned cnt, void *ctx);
+   int (* err_node)(const char *err_str, unsigned err_code, void *ctx);
+   int (* start_for_item)(void *ctx);
+   int (* end_for_item)(void *ctx);
+   int (* end_for)(void *ctx);
+};
+
+typedef struct ourfa_traverse_funcs_t ourfa_traverse_funcs_t;
+
+
 /* Session */
 ourfa_t *ourfa_new();
 void ourfa_free(ourfa_t *ourfa);
@@ -228,21 +240,39 @@ int ourfa_hash_parse_idx_list(ourfa_hash_t *h, const char *idx_list,
       unsigned *res, size_t res_size);
 
 /*  XML API  */
-ourfa_xmlapi_t *ourfa_xmlapi_new(const char *xml_dir, const char *xml_file,
-      char *err_str, size_t err_str_size);
+ourfa_xmlapi_t *ourfa_xmlapi_new(
+      const char *xml_dir,
+      const char *xml_file,
+      char *err_str,
+      size_t err_str_size);
 void ourfa_xmlapi_free(ourfa_xmlapi_t *api);
 
-ourfa_xmlapictx_t *ourfa_xmlapictx_new(struct ourfa_xmlapi_t *api, const char *func_name);
+ourfa_xmlapictx_t *ourfa_xmlapictx_new(
+      ourfa_xmlapi_t *api,
+      const char *func_name,
+      unsigned traverse_in,
+      const ourfa_traverse_funcs_t *funcs,
+      ourfa_hash_t *data_h,
+      void *user_ctx);
 void ourfa_xmlapictx_free(ourfa_xmlapictx_t *ctx);
+
 int ourfa_xmlapictx_func_id(ourfa_xmlapictx_t *ctx);
 int ourfa_xmlapictx_have_input_parameters(ourfa_xmlapictx_t *ctx);
 int ourfa_xmlapictx_have_output_parameters(ourfa_xmlapictx_t *ctx);
+
+int ourfa_xmlapictx_traverse_start(ourfa_xmlapictx_t *ctx);
+int ourfa_xmlapictx_traverse(ourfa_xmlapictx_t *ctx);
+
 const char *ourfa_xmlapictx_last_err_str(ourfa_xmlapictx_t *ctx);
 
 int ourfa_xmlapictx_get_req_pkt(ourfa_xmlapictx_t *ctx,
       ourfa_hash_t *in, ourfa_pkt_t **out);
-int ourfa_xmlapictx_load_resp_pkt(ourfa_xmlapictx_t *ctx,
-      ourfa_pkt_t *pkt, ourfa_hash_t **out);
+
+void *ourfa_xmlapictx_load_resp_pkt_start(
+      struct ourfa_xmlapi_t *api,
+      const char *func_name);
+int ourfa_xmlapictx_load_resp_pkt(void *resp_pkt_ctx, ourfa_pkt_t *pkt);
+ourfa_hash_t *ourfa_xmlapictx_load_resp_pkt_end(void *resp_pkt_ctx);
 
 const char *ourfa_xmlapi_last_err_str(ourfa_xmlapi_t *api);
 

@@ -71,10 +71,12 @@ enum dump_format_t {
    DUMP_FORMAT_BATCH
 };
 
-/* From ourfa_xmlapi.c  */
-int ourfa_xmlapictx_xml_dump(ourfa_xmlapictx_t *ctx,
+/* From ourfa_xmlapi_dump.c */
+int ourfa_xmlapi_xml_dump(ourfa_xmlapi_t *api,
+      const char *func_name,
       ourfa_hash_t *h, FILE *stream, unsigned is_input);
-int ourfa_xmlapictx_batch_dump(ourfa_xmlapictx_t *ctx,
+int ourfa_xmlapi_batch_dump(ourfa_xmlapi_t *api,
+      const char *func_name,
       ourfa_hash_t *h, FILE *stream, unsigned is_input);
 
 
@@ -592,6 +594,7 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
    ourfa_xmlapictx_t *ctx;
    ourfa_pkt_t *pkt_in, *pkt_out;
    ourfa_hash_t *res_h;
+   void *resp_ctx;
    const ourfa_attr_hdr_t *attr_list;
    int last_err;
    ssize_t recvd_bytes;
@@ -604,7 +607,7 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
    if (ourfa->xmlapi == NULL)
       return set_err(ourfa, "XML api not loaded");
 
-   ctx = ourfa_xmlapictx_new(ourfa->xmlapi, func);
+   ctx = ourfa_xmlapictx_new(ourfa->xmlapi, func, 0, NULL, NULL, NULL);
    if (ctx == NULL)
       return set_err(ourfa, "%s",
 	    ourfa_xmlapi_last_err_str(ourfa->xmlapi));
@@ -651,15 +654,23 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
    res_h = NULL;
    last_err=1;
 
+   resp_ctx = ourfa_xmlapictx_load_resp_pkt_start(ourfa->xmlapi, func);
+   if (!resp_ctx) {
+      set_err(ourfa, "Cannot init response context: %s",
+	    ourfa_xmlapi_last_err_str(ourfa->xmlapi));
+      ourfa_xmlapictx_free(ctx);
+      /* XXX: disconnect */
+      if (out)
+	 *out = NULL;
+      return 0;
+   }
+
    while ((recvd_bytes=ourfa_recv_packet(ourfa, &pkt_out)) > 0) {
       ourfa_pkt_dump(pkt_out, ourfa->debug_stream, "Recvd\n");
 
       /* Load packet */
       if (last_err == 1) {
-	 last_err = ourfa_xmlapictx_load_resp_pkt(ctx, pkt_out, &res_h);
-	 if (last_err < 0) {
-	    set_err(ourfa, "Cannot load packet: %s", ourfa_xmlapictx_last_err_str(ctx));
-	 }
+	 last_err = ourfa_xmlapictx_load_resp_pkt(resp_ctx, pkt_out);
       }
 
       /* Check for termination attribute */
@@ -672,16 +683,16 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
       ourfa_pkt_free(pkt_out);
    }
 
+   res_h = ourfa_xmlapictx_load_resp_pkt_end(resp_ctx);
+
    /* Error while recvd packet  */
    if (recvd_bytes <=0) {
-      ourfa_hash_free(res_h);
       ourfa_xmlapictx_free(ctx);
       return -1;
    }
 
-   if (last_err < 0) {
-      set_err(ourfa, "Unnable to parse packet: %s", ourfa_xmlapictx_last_err_str(ctx));
-      ourfa_hash_free(res_h);
+   if (last_err < 0 || (res_h == NULL)) {
+      set_err(ourfa, "Unnable to parse packet: %s", ourfa_xmlapi_last_err_str(ourfa->xmlapi));
       ourfa_xmlapictx_free(ctx);
       return -1;
    }
@@ -707,7 +718,6 @@ static int hash_dump_xml(ourfa_t *ourfa, const char *func_name,
       enum dump_format_t dump_format)
 {
    int res;
-   ourfa_xmlapictx_t *ctx;
 
    if (ourfa == NULL)
       return -1;
@@ -723,32 +733,25 @@ static int hash_dump_xml(ourfa_t *ourfa, const char *func_name,
    if (stream == NULL)
       return 0;
 
-   ctx = ourfa_xmlapictx_new(ourfa->xmlapi, func_name);
-   if (ctx == NULL)
-      return set_err(ourfa, "%s",
-	    ourfa_xmlapi_last_err_str(ourfa->xmlapi));
-
    res=0;
    switch (dump_format) {
       case DUMP_FORMAT_XML:
-	 res = ourfa_xmlapictx_xml_dump(ctx, h, stream, dump_input);
+	 res = ourfa_xmlapi_xml_dump(ourfa->xmlapi, func_name, h, stream, dump_input);
 	 break;
       case DUMP_FORMAT_BATCH:
-	 res = ourfa_xmlapictx_batch_dump(ctx, h, stream, dump_input);
+	 res = ourfa_xmlapi_batch_dump(ourfa->xmlapi, func_name, h, stream, dump_input);
 	 break;
       default:
 	 assert(0);
 	 break;
    }
+
    if (res != 0) {
       set_err(ourfa, "%s",
-	    ourfa_xmlapictx_last_err_str(ctx));
-      ourfa_xmlapictx_free(ctx);
-      return res;
+	    ourfa_xmlapi_last_err_str(ourfa->xmlapi));
    }
 
-   ourfa_xmlapictx_free(ctx);
-   return 0;
+   return res;
 }
 
 int ourfa_hash_dump_xml(ourfa_t *ourfa, const char *func_name,
