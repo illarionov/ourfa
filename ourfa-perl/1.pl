@@ -1,5 +1,6 @@
 #! /usr/bin/perl
 
+use strict;
 use Devel::Peek 'Dump';
 use ExtUtils::testlib;
 use Ourfa;
