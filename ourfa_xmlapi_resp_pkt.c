@@ -55,7 +55,7 @@ static int node_func(const char *node_type, const char *node_name, const char *a
 
 int ourfa_xmlapi_set_err(ourfa_xmlapi_t *api, const char *fmt, ...);
 
-const struct ourfa_traverse_funcs_t load_resp_pkt_funcs = {
+static const struct ourfa_traverse_funcs_t load_resp_pkt_funcs = {
    node_func,
    NULL,
    NULL,

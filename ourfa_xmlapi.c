@@ -184,10 +184,10 @@ ourfa_xmlapictx_t *ourfa_xmlapictx_new(struct ourfa_xmlapi_t *api, const char *f
 {
    xmlNode *urfa_root;
    xmlNode *cur_node;
+   ourfa_xmlapictx_t *res;
 
    api->err_msg[0]='\0';
 
-   ourfa_xmlapictx_t *res;
    res = NULL;
 
    if (api == NULL || func_name == NULL || func_name[0]=='\0')

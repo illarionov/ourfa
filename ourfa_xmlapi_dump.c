@@ -64,7 +64,7 @@ static int batch_print_val(ourfa_hash_t *h, FILE *stream,
 static int attrlist2str(unsigned *attr_list, size_t attr_list_cnt,
       char *dst, size_t dst_size);
 
-const ourfa_traverse_funcs_t dump_pkt_funcs = {
+static const ourfa_traverse_funcs_t dump_pkt_funcs = {
    node_func,
    start_for_func,
    err_node_func,

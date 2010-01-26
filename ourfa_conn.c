@@ -80,6 +80,7 @@ int ourfa_xmlapi_batch_dump(ourfa_xmlapi_t *api,
       ourfa_hash_t *h, FILE *stream, unsigned is_input);
 
 
+ourfa_xmlapi_t *ourfa_get_xmlapi(ourfa_t *ourfa);
 static int login(ourfa_t *ourfa);
 static int set_err(ourfa_t *ourfa, const char *fmt, ...);
 
@@ -767,4 +768,11 @@ int ourfa_hash_dump_batch(ourfa_t *ourfa, const char *func_name,
    return hash_dump_xml(ourfa, func_name, h, stream, dump_input,
 	DUMP_FORMAT_BATCH);
 }
+
+ourfa_xmlapi_t *ourfa_get_xmlapi(ourfa_t *ourfa)
+{
+   return ourfa ? ourfa->xmlapi : NULL;
+}
+
+
 
