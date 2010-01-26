@@ -156,7 +156,7 @@ void ourfa_free(ourfa_t *ourfa)
    if (ourfa == NULL)
       return;
    if (OURFA_IS_CONNECTED(ourfa)) {
-      /*TODO */
+      ourfa_disconnect(ourfa);
    }
    free(ourfa->login);
    free(ourfa->pass);
@@ -363,6 +363,31 @@ int ourfa_connect(ourfa_t *ourfa)
    return 0;
 }
 
+int ourfa_disconnect(ourfa_t *ourfa)
+{
+   ourfa_pkt_t *pkt;
+
+   if (!ourfa)
+      return -1;
+
+   if (!OURFA_IS_CONNECTED(ourfa))
+      return -1;
+
+   pkt = ourfa_pkt_new(OURFA_PKT_SESSION_TERMINATE, "");
+   if (pkt != NULL) {
+      ourfa_pkt_dump(pkt, ourfa->debug_stream,
+	 "SENDING TERM PKT ...\n");
+      ourfa_send_packet(ourfa, pkt);
+      ourfa_pkt_free(pkt);
+   }
+
+   close(ourfa->sockfd);
+   ourfa->sockfd = -1;
+
+   return 0;
+}
+
+
 static int login(ourfa_t *ourfa)
 {
    int res;
@@ -384,7 +409,7 @@ static int login(ourfa_t *ourfa)
       goto login_exit;
 
    ourfa_pkt_dump(read_pkt, ourfa->debug_stream,
-	 "Initial packet recv\n");
+	 "RECVD HANDSHAKE PKT...\n");
 
    if (ourfa_pkt_code(read_pkt) != OURFA_PKT_SESSION_INIT) {
       set_err(ourfa, "Wrong initial packet code: 0x%x", ourfa_pkt_code(read_pkt));
@@ -427,7 +452,7 @@ static int login(ourfa_t *ourfa)
    }
 
    ourfa_pkt_dump(write_pkt, ourfa->debug_stream,
-	 "Initial packet send\n");
+	 "SENDING LOGIN PACKET ...\n");
 
    /* Send packet */
    if (ourfa_send_packet(ourfa, write_pkt) <= 0)
@@ -441,7 +466,7 @@ static int login(ourfa_t *ourfa)
       goto login_exit;
 
    ourfa_pkt_dump(read_pkt, ourfa->debug_stream,
-	 "Login response recv\n");
+	 "RECVD LOGIN RESPONSE PKT ...\n");
 
    switch (ourfa_pkt_code(read_pkt)) {
       case OURFA_PKT_ACCESS_ACCEPT:
@@ -560,13 +585,16 @@ int ourfa_start_call(ourfa_t *ourfa, int func_code)
    if (pkt == NULL)
       return set_err(ourfa, "Cannot create packet");
 
+   ourfa_pkt_dump(pkt, ourfa->debug_stream,
+	 "SENDING START FUNC CALL PKT ...\n");
    if (ourfa_send_packet(ourfa, pkt) <= 0)
       goto ourfa_start_call_exit;
 
    if (ourfa_recv_packet(ourfa, &recv_pkt) <= 0)
       goto ourfa_start_call_exit;
 
-   ourfa_pkt_dump(recv_pkt, ourfa->debug_stream, "Recvd to OURFA_PKT_SESSION_CALL:\n");
+   ourfa_pkt_dump(recv_pkt, ourfa->debug_stream,
+	 "RECVD START FUNC CALL RESPONSE PKT ...\n");
 
    if (ourfa_pkt_code(recv_pkt) != OURFA_PKT_SESSION_DATA) {
       set_err(ourfa, "Recv-d Not OURFA_PKT_SESSION_DATA packet");
@@ -622,7 +650,8 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
 	 return -1;
       }
       if (ourfa->debug_stream != NULL)
-	 ourfa_hash_dump(in, ourfa->debug_stream, "Attr hash (After parsing)\n");
+	 ourfa_hash_dump(in, ourfa->debug_stream,
+	       "FUNCTION INPUT PARAMETERS HASH ...\n");
    }
 
    /* Start call */
@@ -634,7 +663,14 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
 
    /* Send input parameters  */
    if (pkt_in != NULL) {
-      ourfa_pkt_dump(pkt_in, ourfa->debug_stream, "Send\n");
+      if (ourfa_pkt_add_attrs(pkt_in, "4i", 4) != 0) {
+	 ourfa_xmlapictx_free(ctx);
+	 ourfa_pkt_free(pkt_in);
+	 return set_err(ourfa, "Cannot add termination attribute to output packet");
+      }
+
+      ourfa_pkt_dump(pkt_in, ourfa->debug_stream,
+	    "SENDING FUNC INPUT PARAMS PKT ...\n");
       if (ourfa_send_packet(ourfa, pkt_in) <= 0) {
 	 ourfa_xmlapictx_free(ctx);
 	 ourfa_pkt_free(pkt_in);
@@ -644,12 +680,14 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
    ourfa_pkt_free(pkt_in);
 
    /* Recv and parse answer */
+   /*
    if (!ourfa_xmlapictx_have_output_parameters(ctx)) {
 	 ourfa_xmlapictx_free(ctx);
 	 if (out)
 	    *out = NULL;
 	 return 0;
    }
+   */
 
    pkt_out = NULL;
    res_h = NULL;
@@ -667,7 +705,7 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
    }
 
    while ((recvd_bytes=ourfa_recv_packet(ourfa, &pkt_out)) > 0) {
-      ourfa_pkt_dump(pkt_out, ourfa->debug_stream, "Recvd\n");
+      ourfa_pkt_dump(pkt_out, ourfa->debug_stream, "RECIVED FUNC OUTPUT PKT ...\n");
 
       /* Load packet */
       if (last_err == 1) {
@@ -693,16 +731,17 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
    }
 
    if (last_err < 0 || (res_h == NULL)) {
-      set_err(ourfa, "Unnable to parse packet: %s", ourfa_xmlapi_last_err_str(ourfa->xmlapi));
+      set_err(ourfa, "Unable to parse packet: %s", ourfa_xmlapi_last_err_str(ourfa->xmlapi));
       ourfa_xmlapictx_free(ctx);
       return -1;
    }
 
    if ((last_err == 1) && (ourfa->debug_stream != NULL))
-	 fprintf(ourfa->debug_stream, "Incomlete result\n");
+	 fprintf(ourfa->debug_stream, "Parser returns 'incomplete result' "
+	       "error (no enough imput data packets)\n");
 
    if (ourfa->debug_stream != NULL)
-      ourfa_hash_dump(res_h, ourfa->debug_stream, "Recvd hash\n");
+      ourfa_hash_dump(res_h, ourfa->debug_stream, "RECIVED HASH ...\n");
 
    if (out)
       *out = res_h;

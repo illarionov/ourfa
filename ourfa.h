@@ -121,6 +121,7 @@ int ourfa_set_conf(
       );
 
 int ourfa_connect(ourfa_t *ourfa);
+int ourfa_disconnect(ourfa_t *ourfa);
 int ourfa_call(ourfa_t *ourfa, const char *func, ourfa_hash_t *in,
       ourfa_hash_t **out);
 
