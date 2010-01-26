@@ -1,0 +1,6 @@
+Revision history for Perl extension Ourfa.
+
+0.01  Wed Jan 20 20:58:48 2010
+	- original version; created by h2xs 1.23 with options
+		-n Ourfa -F '-I/usr/local/include/libxml2 -I/usr/local/include' -lssl -lxml2
+
