@@ -326,7 +326,9 @@ static int node_func(const char *node_type, const char *node_name, const char *a
       char *s;
       SV *tmp;
       if (ourfa_hash_get_string(my_ctx->h, node_name, arr_index, &s) == 0 ) {
-	 tmp = newSVpvn_utf8(s, strlen(s), 1);
+	 tmp = newSVpvn(s, strlen(s));
+	 SvUTF8_on(tmp);
+	 /* tmp = newSVpvn_utf8(s, strlen(s), 1); */
 	 if (hv_store(h, node_name, strlen(node_name), tmp, 0)==NULL) {
 	    SvREFCNT_dec(tmp);
 	    ret_code = -1;
