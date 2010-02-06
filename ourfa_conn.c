@@ -636,7 +636,7 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
    if (ourfa->xmlapi == NULL)
       return set_err(ourfa, "XML api not loaded");
 
-   ctx = ourfa_xmlapictx_new(ourfa->xmlapi, func, 0, NULL, NULL, NULL);
+   ctx = ourfa_xmlapictx_new(ourfa->xmlapi, func, 0, NULL, NULL, 0, NULL);
    if (ctx == NULL)
       return set_err(ourfa, "%s",
 	    ourfa_xmlapi_last_err_str(ourfa->xmlapi));

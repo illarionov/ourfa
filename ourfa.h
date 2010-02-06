@@ -254,6 +254,7 @@ ourfa_xmlapictx_t *ourfa_xmlapictx_new(
       unsigned traverse_in,
       const ourfa_traverse_funcs_t *funcs,
       ourfa_hash_t *data_h,
+      unsigned use_unset,
       void *user_ctx);
 void ourfa_xmlapictx_free(ourfa_xmlapictx_t *ctx);
 

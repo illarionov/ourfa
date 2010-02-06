@@ -88,7 +88,7 @@ void *ourfa_xmlapictx_load_resp_pkt_start(struct ourfa_xmlapi_t *api,
    }
 
    my_ctx->xmlapi_ctx = ourfa_xmlapictx_new(api, func_name, 0,
-	 &load_resp_pkt_funcs, my_ctx->res_h, my_ctx);
+	 &load_resp_pkt_funcs, my_ctx->res_h, 0, my_ctx);
    if (!my_ctx->xmlapi_ctx) {
       ourfa_hash_free(my_ctx->res_h);
       free(my_ctx);

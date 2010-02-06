@@ -79,6 +79,9 @@ struct ourfa_xmlapictx_t {
    /*  Data hash for IF/FOR/SET nodes  */
    ourfa_hash_t *data_h;
 
+   /* XXX Ugly hack */
+   unsigned use_unset;
+
    char	 err_msg[200];
 };
 
@@ -180,6 +183,7 @@ ourfa_xmlapictx_t *ourfa_xmlapictx_new(struct ourfa_xmlapi_t *api, const char *f
       unsigned traverse_in,
       const ourfa_traverse_funcs_t *funcs,
       ourfa_hash_t *data_h,
+      unsigned use_unset,
       void *user_ctx)
 {
    xmlNode *urfa_root;
@@ -303,6 +307,7 @@ ourfa_xmlapictx_t *ourfa_xmlapictx_new(struct ourfa_xmlapi_t *api, const char *f
    res->user_ctx = user_ctx;
    res->data_h = data_h;
    res->traverse_in = traverse_in;
+   res->use_unset = use_unset;
 
    return res;
 }
@@ -556,6 +561,19 @@ static int exec_set_node(ourfa_xmlapictx_t *ctx, xmlNodePtr cur_node, ourfa_hash
       xmlFree(value);
    }else {
       src_idx = xmlGetProp(cur_node, (const xmlChar *)"src_index");
+      if (ctx->use_unset && dst_idx && !src_idx) {
+	 /* XXX Ugly hack */
+	 xmlChar *tmp, *tmp_idx;
+	 tmp = src;
+	 tmp_idx = src_idx;
+
+	 src = dst;
+	 src_idx = dst_idx;
+
+	 dst = tmp;
+	 dst_idx = tmp_idx;
+      }
+
       if (ourfa_hash_copy_val(h, (const char *)dst, (const char *)dst_idx,
 	       (const char *)src, (const char *)src_idx) != 0) {
 	 set_ctx_err(ctx, "Cannot copy hash value ('%s(%s)'='%s(%s)') in function %s",

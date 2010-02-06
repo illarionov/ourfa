@@ -302,6 +302,7 @@ static int dump_hash(struct ourfa_xmlapi_t *api,
 	 is_input,
 	 &dump_pkt_funcs,
 	 my_ctx.h,
+	 1,
 	 &my_ctx);
 
    if (my_ctx.xmlapi_ctx == NULL) {

@@ -268,7 +268,7 @@ int ourfah2hv(ourfa_t *ourfa, const char *func_name,
    my_ctx.top_idx=0;
 
    my_ctx.xmlapi_ctx = ourfa_xmlapictx_new(my_ctx.api,
-	 func_name, 0, &ourfah2hv_funcs, my_ctx.h, &my_ctx);
+	 func_name, 0, &ourfah2hv_funcs, my_ctx.h, 1, &my_ctx);
    if (!my_ctx.xmlapi_ctx) {
       hv_undef(my_ctx.res_h);
       return -1;
