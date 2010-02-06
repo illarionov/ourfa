@@ -365,6 +365,10 @@ static int start_for_func(const char *node_name, unsigned from, unsigned cnt, vo
    if (from) {};
 
    my_ctx = ctx;
+   /* printf("start_fot_func: '%s' from: %u cnt: %u\n", node_name, from, cnt); */
+
+   if (cnt == 0)
+      return 0;
 
    h = (HV *)my_ctx->s[my_ctx->top_idx];
 
@@ -408,6 +412,7 @@ static int start_for_item(void *ctx)
 
    assert(SvROK(sv));
    assert(SvTYPE(SvRV(sv)) == SVt_PVAV);
+   /* printf("start_fot_item\n"); */
 
    h0 = newHV();
    if (!h0)
@@ -435,6 +440,7 @@ static int end_for_item(void *ctx)
    my_ctx = ctx;
 
    assert(my_ctx->top_idx > 0);
+   /* printf("end_fot_item\n"); */
 
    sv = my_ctx->s[my_ctx->top_idx];
    assert(SvTYPE(sv) == SVt_PVHV);
