@@ -9,6 +9,7 @@ lib/Ourfa.pm
 ourfa/Makefile.PL
 ourfa/ourfa.h
 ourfa/ourfa_conn.c
+ourfa/ourfa_conn_stream.c
 ourfa/ourfa_inout.c
 ourfa/ourfa_pkt.c
 ourfa/ourfa_xmlapi.c

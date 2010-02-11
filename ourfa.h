@@ -80,6 +80,7 @@ typedef struct ourfa_t ourfa_t;
 typedef struct ourfa_pkt_t ourfa_pkt_t;
 typedef xmlHashTable ourfa_hash_t;
 typedef struct ourfa_array_t ourfa_array_t;
+typedef struct ourfa_conn_t ourfa_conn_t;
 typedef struct ourfa_xmlapi_t ourfa_xmlapi_t;
 typedef struct ourfa_xmlapictx_t ourfa_xmlapictx_t;
 
@@ -125,7 +126,6 @@ int ourfa_disconnect(ourfa_t *ourfa);
 int ourfa_call(ourfa_t *ourfa, const char *func, ourfa_hash_t *in,
       ourfa_hash_t **out);
 
-int ourfa_start_call(ourfa_t *ourfa, int func_code);
 ssize_t ourfa_send_packet(ourfa_t *ourfa, const ourfa_pkt_t *pkt);
 ssize_t ourfa_recv_packet(ourfa_t *ourfa, ourfa_pkt_t **res);
 
@@ -140,6 +140,8 @@ int ourfa_hash_dump_xml(ourfa_t *ourfa, const char *func_name,
 int ourfa_hash_dump_batch(ourfa_t *ourfa, const char *func_name,
       ourfa_hash_t *h, FILE *stream, unsigned dump_input);
 
+ourfa_xmlapi_t *ourfa_get_xmlapi(ourfa_t *ourfa);
+ourfa_conn_t *ourfa_get_conn(ourfa_t *conn);
 
 /* Packet */
 ourfa_pkt_t *ourfa_pkt_new (unsigned pkt_code, const char *fmt, ...);
@@ -277,5 +279,25 @@ int ourfa_xmlapictx_load_resp_pkt(void *resp_pkt_ctx, ourfa_pkt_t *pkt);
 ourfa_hash_t *ourfa_xmlapictx_load_resp_pkt_end(void *resp_pkt_ctx);
 
 const char *ourfa_xmlapi_last_err_str(ourfa_xmlapi_t *api);
+
+/* Connection  */
+ourfa_conn_t *ourfa_conn_open(
+      const char *server_port,
+      const char *login,
+      const char *pass,
+      unsigned login_type,
+      unsigned timeout_s,
+      unsigned use_ssl,
+      char *err_str,
+      size_t err_str_size);
+
+void ourfa_conn_close(ourfa_conn_t *conn);
+ssize_t ourfa_conn_send_packet(ourfa_conn_t *conn, const ourfa_pkt_t *pkt);
+ssize_t ourfa_conn_recv_packet(ourfa_conn_t *conn, ourfa_pkt_t **res);
+int ourfa_conn_start_func_call(ourfa_conn_t *conn, int func_code);
+
+int ourfa_conn_set_debug_stream(ourfa_conn_t *conn, FILE *stream);
+const char *ourfa_conn_last_err_str(ourfa_conn_t *conn);
+
 
 #endif  /* _OPENURFA_H */

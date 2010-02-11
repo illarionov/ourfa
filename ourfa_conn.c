@@ -26,17 +26,13 @@
 
 #include <sys/errno.h>
 #include <sys/types.h>
-#include <sys/socket.h>
 
 #include <assert.h>
-#include <netdb.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-#include <openssl/md5.h>
 
 #include "ourfa.h"
 
@@ -57,13 +53,10 @@ struct ourfa_t {
    char *server_port;
 
    ourfa_xmlapi_t *xmlapi;
+   ourfa_conn_t *conn;
 
    char	 err_msg[500];
    FILE	 *debug_stream;
-
-   int	sockfd;
-#define OURFA_IS_CONNECTED(_ourfa) ((_ourfa)->sockfd >= 0)
-
 };
 
 enum dump_format_t {
@@ -79,9 +72,6 @@ int ourfa_xmlapi_batch_dump(ourfa_xmlapi_t *api,
       const char *func_name,
       ourfa_hash_t *h, FILE *stream, unsigned is_input);
 
-
-ourfa_xmlapi_t *ourfa_get_xmlapi(ourfa_t *ourfa);
-static int login(ourfa_t *ourfa);
 static int set_err(ourfa_t *ourfa, const char *fmt, ...);
 
 const char *ourfa_last_err_str(ourfa_t *ourfa)
@@ -89,31 +79,6 @@ const char *ourfa_last_err_str(ourfa_t *ourfa)
    if (ourfa == NULL)
       return NULL;
    return ourfa->err_msg;
-}
-
-const char *ourfa_logint_type2str(unsigned login_type)
-{
-   const char *res = NULL;
-   switch (login_type) {
-      case OURFA_LOGIN_USER:
-	 res =  "LOGIN_USER";
-	 break;
-      case OURFA_LOGIN_SYSTEM:
-	 res = "LOGIN_SYSTEM";
-	 break;
-      case OURFA_LOGIN_CARD:
-	 res = "LOGIN_CARD";
-	 /* FALLTHROUGH */
-      default:
-	 break;
-   }
-
-   return res;
-}
-
-unsigned ourfa_is_valid_login_type(unsigned login_type)
-{
-   return ourfa_logint_type2str(login_type) != NULL;
 }
 
 static int set_err(ourfa_t *ourfa, const char *fmt, ...)
@@ -143,7 +108,7 @@ ourfa_t *ourfa_new()
    res->login_type = DEFAULT_LOGIN_TYPE;
    res->ssl = 0;
    res->xmlapi = NULL;
-   res->sockfd = -1;
+   res->conn = NULL;
    res->err_msg[0] = '\0';
    res->timeout = DEFAULT_TIMEOUT;
    res->debug_stream = NULL;
@@ -155,13 +120,11 @@ void ourfa_free(ourfa_t *ourfa)
 {
    if (ourfa == NULL)
       return;
-   if (OURFA_IS_CONNECTED(ourfa)) {
-      ourfa_disconnect(ourfa);
-   }
    free(ourfa->login);
    free(ourfa->pass);
    free(ourfa->server_port);
 
+   ourfa_conn_close(ourfa->conn);
    ourfa_xmlapi_free(ourfa->xmlapi);
 
    free(ourfa);
@@ -174,6 +137,10 @@ int ourfa_set_debug_stream(ourfa_t *ourfa, FILE *stream)
    if (ourfa == NULL)
       return -1;
    ourfa->debug_stream = stream;
+
+   if (ourfa->conn) {
+      ourfa_conn_set_debug_stream(ourfa->conn, stream);
+   }
 
    return 0;
 }
@@ -195,7 +162,7 @@ int ourfa_set_conf(
    if (ctx == NULL)
       return -1;
 
-   if (OURFA_IS_CONNECTED(ctx))
+   if (ctx->conn)
       return set_err(ctx, "Can not set configuration when online.  Disconnect first");
 
    tmp.login = tmp.pass = tmp.server_port = NULL;
@@ -285,78 +252,22 @@ setconf_error:
 
 int ourfa_connect(ourfa_t *ourfa)
 {
-   int s, err;
-   struct sockaddr_in servaddr;
-   struct addrinfo hints, *res, *res0;
-   const char *str_serv_port;
-   struct timeval tv;
-   char host_name[255];
-   char service_name[30];
-
    if (ourfa == NULL)
       return -1;
 
    ourfa->err_msg[0] = '\0';
-   memset(&servaddr, 0, sizeof(servaddr));
+   ourfa->conn = ourfa_conn_open(
+	 ourfa->server_port ? ourfa->server_port : DEFAULT_SERVERPORT,
+	 ourfa->login ? ourfa->login : DEFAULT_LOGIN,
+	 ourfa->pass ? ourfa->pass : DEFAULT_PASS,
+	 ourfa->login_type,
+	 ourfa->timeout,
+	 ourfa->ssl,
+	 ourfa->err_msg,
+	 sizeof(ourfa->err_msg)
+	 );
 
-   str_serv_port = ourfa->server_port ? ourfa->server_port : DEFAULT_SERVERPORT;
-
-   /* Scan hostname, servicename */
-   if (sscanf(str_serv_port, "%254[a-zA-Z.0-9-]:%30[0-9]",
-	    host_name, service_name) != 2) {
-      if (sscanf(str_serv_port, "%254[a-zA-Z.0-9-]", host_name) == 1) {
-	 snprintf(service_name, sizeof(service_name), "%u", DEFAULT_PORT);
-      }else
-	 return set_err(ourfa, "Wrong server:port address '%s'", str_serv_port);
-   }
-
-   /* Resolv hostname */
-   memset(&hints, 0, sizeof(hints));
-   hints.ai_family = AF_UNSPEC;
-   hints.ai_socktype = SOCK_STREAM;
-   hints.ai_protocol = IPPROTO_TCP;
-
-   err = getaddrinfo(host_name, service_name, &hints, &res0);
-
-   if (err != 0)
-      return set_err(ourfa, "Error connecting to '%s': %s",
-	    str_serv_port, gai_strerror(err));
-
-   /* Connect */
-   s = -1;
-   tv.tv_sec = ourfa->timeout;
-   tv.tv_usec = 0;
-   for (res = res0; res; res = res->ai_next) {
-      s = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-      if (s < 0) {
-	 set_err(ourfa, "Cannot create socket: %s", strerror(errno));
-	 continue;
-      }
-
-      /* Socket timeout */
-      if (setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv))
-	    || setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)))
-      {
-	 set_err(ourfa, "Cannot set socket timeout: %s", strerror(errno));
-	 continue;
-      }
-
-      if (connect(s, res->ai_addr, res->ai_addrlen) < 0) {
-	 set_err(ourfa, "%s", strerror(errno));
-	 continue;
-      }
-      break;
-   }
-   freeaddrinfo(res0);
-
-   if (s < 0)
-      return -1;
-
-   ourfa->sockfd = s;
-
-   if (login(ourfa)) {
-      close(ourfa->sockfd);
-      ourfa->sockfd = -1;
+   if (ourfa->conn == NULL) {
       return -1;
    }
 
@@ -365,256 +276,47 @@ int ourfa_connect(ourfa_t *ourfa)
 
 int ourfa_disconnect(ourfa_t *ourfa)
 {
-   ourfa_pkt_t *pkt;
-
    if (!ourfa)
       return -1;
 
-   if (!OURFA_IS_CONNECTED(ourfa))
-      return -1;
-
-   pkt = ourfa_pkt_new(OURFA_PKT_SESSION_TERMINATE, "");
-   if (pkt != NULL) {
-      ourfa_pkt_dump(pkt, ourfa->debug_stream,
-	 "SENDING TERM PKT ...\n");
-      ourfa_send_packet(ourfa, pkt);
-      ourfa_pkt_free(pkt);
-   }
-
-   close(ourfa->sockfd);
-   ourfa->sockfd = -1;
+   ourfa_conn_close(ourfa->conn);
+   ourfa->conn = NULL;
 
    return 0;
 }
 
-
-static int login(ourfa_t *ourfa)
+ssize_t ourfa_send_packet(ourfa_t *ourfa, const ourfa_pkt_t *pkt)
 {
-   int res;
-   ourfa_pkt_t *read_pkt, *write_pkt;
-   const ourfa_attr_hdr_t *attr_md5_salt;
-   MD5_CTX md5_ctx;
-   unsigned char md5_hash[16];
+   ssize_t res;
 
-   if (ourfa == NULL)
+   if (!ourfa || !ourfa->conn)
       return -1;
 
-   ourfa->err_msg[0] = '\0';
-   read_pkt = NULL;
-   write_pkt = NULL;
-   res = -1;
+   res = ourfa_conn_send_packet(ourfa->conn, pkt);
 
-   /* Read initial packet */
-   if (ourfa_recv_packet(ourfa, &read_pkt) <= 0)
-      goto login_exit;
-
-   ourfa_pkt_dump(read_pkt, ourfa->debug_stream,
-	 "RECVD HANDSHAKE PKT...\n");
-
-   if (ourfa_pkt_code(read_pkt) != OURFA_PKT_SESSION_INIT) {
-      set_err(ourfa, "Wrong initial packet code: 0x%x", ourfa_pkt_code(read_pkt));
-      goto login_exit;
+   if (res < 0) {
+      set_err(ourfa, "%s", ourfa_conn_last_err_str(ourfa->conn));
    }
 
-   /* Generate MD5 hash */
-   attr_md5_salt = ourfa_pkt_get_attrs_list(read_pkt, OURFA_ATTR_MD5_CHALLENGE);
-   if (attr_md5_salt == NULL) {
-      set_err(ourfa, "Wrong code: no MD5 challange attribute");
-      goto login_exit;
-   }
-
-   MD5_Init(&md5_ctx);
-   MD5_Update(&md5_ctx, attr_md5_salt->data, attr_md5_salt->data_length);
-   MD5_Update(&md5_ctx, ourfa->pass ? ourfa->pass : DEFAULT_PASS,
-	 strlen(ourfa->pass ? ourfa->pass : DEFAULT_PASS));
-   MD5_Final(&md5_hash[0], &md5_ctx);
-
-   /* 7D ATTR_CHAP_REQUEST
-    * 1i ATTR_LOGIN_TYPE
-    * 2s ATTR_LOGIN
-    * 8D ATTR_CHAP_RESPONSE
-    * 9i ATTR_SSL_REQUEST
-    */
-   write_pkt = ourfa_pkt_new(OURFA_PKT_ACCESS_REQUEST,
-	 "7D 1i 2s 8D 9i",
-	 (size_t)attr_md5_salt->data_length,
-	 (const void *)attr_md5_salt->data,
-	 ourfa->login_type,
-	 ourfa->login ? ourfa->login : DEFAULT_LOGIN,
-	 (size_t)16,
-	 (const void *)&md5_hash[0],
-	 ourfa->ssl
-	 );
-
-   if (write_pkt == NULL) {
-      set_err(ourfa, "Cannot create packet");
-      goto login_exit;
-   }
-
-   ourfa_pkt_dump(write_pkt, ourfa->debug_stream,
-	 "SENDING LOGIN PACKET ...\n");
-
-   /* Send packet */
-   if (ourfa_send_packet(ourfa, write_pkt) <= 0)
-      goto login_exit;
-
-   ourfa_pkt_free(read_pkt);
-   read_pkt = NULL;
-
-   /* Read response */
-   if (ourfa_recv_packet(ourfa, &read_pkt) <= 0)
-      goto login_exit;
-
-   ourfa_pkt_dump(read_pkt, ourfa->debug_stream,
-	 "RECVD LOGIN RESPONSE PKT ...\n");
-
-   switch (ourfa_pkt_code(read_pkt)) {
-      case OURFA_PKT_ACCESS_ACCEPT:
-	 break;
-      case OURFA_PKT_ACCESS_REJECT:
-	 set_err(ourfa, "Auth rejected");
-	 goto login_exit;
-      default:
-	 set_err(ourfa, "Unknown packet code: 0x%x",
-	       (unsigned)ourfa_pkt_code(read_pkt));
-	 goto login_exit;
-   }
-
-   res=0;
-login_exit:
-   ourfa_pkt_free(read_pkt);
-   ourfa_pkt_free(write_pkt);
    return res;
 }
 
-ssize_t ourfa_send_packet(ourfa_t *ourfa, const ourfa_pkt_t *pkt)
-{
-   size_t pkt_size;
-   ssize_t transmitted_size;
-   const void *buf;
-
-   if (ourfa == NULL || pkt == NULL)
-      return -1;
-
-   ourfa->err_msg[0]='\0';
-
-   /* Get packet size */
-   buf = ourfa_pkt_data(pkt, &pkt_size);
-   if (buf == NULL)
-      return set_err(ourfa, "Cannot create output packet");
-
-   transmitted_size = send(ourfa->sockfd, buf, pkt_size, MSG_NOSIGNAL);
-   if (transmitted_size < (ssize_t)pkt_size)
-      return set_err(ourfa, "Cannot send packet: %s", strerror(errno));
-
-   return transmitted_size;
-}
 
 ssize_t ourfa_recv_packet(ourfa_t *ourfa, ourfa_pkt_t **res)
 {
-   ssize_t recv_size;
-   size_t packet_size;
-   ourfa_pkt_t *pkt;
+   ssize_t res0;
 
-   struct {
-      uint8_t code;
-      uint8_t version;
-      uint16_t length;
-   }pkt_hdr;
-
-   uint8_t *buf;
-   if (ourfa == NULL)
+   if (!ourfa || !ourfa->conn)
       return -1;
 
-   ourfa->err_msg[0]='\0';
+   res0 = ourfa_conn_recv_packet(ourfa->conn, res);
 
-   if (!OURFA_IS_CONNECTED(ourfa))
-      return set_err(ourfa, "Not connected");
-
-   recv_size = recv(ourfa->sockfd, &pkt_hdr, 4, MSG_PEEK | MSG_WAITALL);
-   if (recv_size < 4)
-      return set_err(ourfa, "%s", strerror(errno));
-
-   /* Check header */
-   if (!ourfa_pkt_is_valid_code(pkt_hdr.code))
-      return set_err(ourfa,"Invalid packet code: 0x%x",(unsigned)pkt_hdr.code);
-
-   if (pkt_hdr.version != OURFA_PROTO_VERSION)
-      return set_err(ourfa,
-	    "Invalid protocol version: 0x%x", (unsigned)pkt_hdr.code);
-
-   packet_size = ntohs(pkt_hdr.length);
-   buf = (uint8_t *)malloc(packet_size);
-   if (buf == NULL)
-      return set_err(ourfa,
-	    "Malloc error: %s (%u bytes)", strerror(errno), packet_size);
-
-   recv_size = recv(ourfa->sockfd, buf, packet_size, MSG_WAITALL);
-   if (recv_size < 0) {
-      free(buf);
-      return set_err(ourfa, "%s", strerror(errno));
+   if (res0 < 0) {
+      set_err(ourfa, "%s", ourfa_conn_last_err_str(ourfa->conn));
    }
 
-   /* Create new packet */
-   pkt = ourfa_pkt_new2(buf, recv_size);
-   if (pkt == NULL)
-      return set_err(ourfa, "Create packet error");
-
-   free(buf);
-
-   *res = pkt;
-
-   return recv_size;
+   return res0;
 }
-
-int ourfa_start_call(ourfa_t *ourfa, int func_code)
-{
-   ourfa_pkt_t *pkt, *recv_pkt;
-   const ourfa_attr_hdr_t *attr_list;
-   int tmp;
-   int res;
-
-   if (ourfa == NULL)
-      return -1;
-
-   ourfa->err_msg[0]='\0';
-   pkt = recv_pkt = NULL;
-   res = -1;
-
-   pkt = ourfa_pkt_new(OURFA_PKT_SESSION_CALL, "3i", func_code);
-   if (pkt == NULL)
-      return set_err(ourfa, "Cannot create packet");
-
-   ourfa_pkt_dump(pkt, ourfa->debug_stream,
-	 "SENDING START FUNC CALL PKT ...\n");
-   if (ourfa_send_packet(ourfa, pkt) <= 0)
-      goto ourfa_start_call_exit;
-
-   if (ourfa_recv_packet(ourfa, &recv_pkt) <= 0)
-      goto ourfa_start_call_exit;
-
-   ourfa_pkt_dump(recv_pkt, ourfa->debug_stream,
-	 "RECVD START FUNC CALL RESPONSE PKT ...\n");
-
-   if (ourfa_pkt_code(recv_pkt) != OURFA_PKT_SESSION_DATA) {
-      set_err(ourfa, "Recv-d Not OURFA_PKT_SESSION_DATA packet");
-      goto ourfa_start_call_exit;
-   }
-
-   attr_list = ourfa_pkt_get_attrs_list(recv_pkt, OURFA_ATTR_CALL);
-   res = ourfa_pkt_get_int(attr_list, &tmp);
-   if (attr_list == NULL || (tmp != func_code)) {
-      set_err(ourfa, "Wrong ATTR_CALL attribute\n");
-      goto ourfa_start_call_exit;
-   }
-
-   res = 0;
-ourfa_start_call_exit:
-   ourfa_pkt_free(pkt);
-   ourfa_pkt_free(recv_pkt);
-   return res;
-}
-
 
 int ourfa_call(ourfa_t *ourfa, const char *func,
       ourfa_hash_t *in,
@@ -655,7 +357,7 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
    }
 
    /* Start call */
-   if (ourfa_start_call(ourfa, ourfa_xmlapictx_func_id(ctx)) != 0) {
+   if (ourfa_conn_start_func_call(ourfa->conn, ourfa_xmlapictx_func_id(ctx)) != 0) {
       ourfa_xmlapictx_free(ctx);
       ourfa_pkt_free(pkt_in);
       return -1;
@@ -813,5 +515,8 @@ ourfa_xmlapi_t *ourfa_get_xmlapi(ourfa_t *ourfa)
    return ourfa ? ourfa->xmlapi : NULL;
 }
 
-
+ourfa_conn_t *ourfa_get_conn(ourfa_t *ourfa)
+{
+   return ourfa ? ourfa->conn : NULL;
+}
 
