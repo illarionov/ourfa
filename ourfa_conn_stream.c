@@ -104,6 +104,7 @@ static ourfa_conn_t *conn_new(char *err_str, size_t err_str_size)
    conn->err_msg[0] = '\0';
    conn->sockfd = 0;
    conn->term_pkt_in_tail = 0;
+   conn->debug_stream = NULL;
    pktlist_init(conn);
 
    return conn;
@@ -122,6 +123,7 @@ ourfa_conn_t *ourfa_conn_open(
       unsigned login_type,
       unsigned timeout_s,
       unsigned use_ssl,
+      FILE *debug_stream,
       char *err_str,
       size_t err_str_size)
 {
@@ -177,6 +179,7 @@ ourfa_conn_t *ourfa_conn_open(
       return NULL;
    conn->ssl  = use_ssl;
    conn->timeout = timeout_s;
+   conn->debug_stream = debug_stream;
 
    /* Connect */
    tv.tv_sec = timeout_s;
@@ -715,6 +718,7 @@ static void pktlist_init(ourfa_conn_t *conn)
 {
    conn->pktlist_head = NULL;
    conn->pktlist_tail = NULL;
+   conn->cur_attr = NULL;
 }
 
 static int pktlist_insert (ourfa_conn_t *conn, ourfa_pkt_t *pkt)

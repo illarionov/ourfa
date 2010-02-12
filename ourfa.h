@@ -286,6 +286,7 @@ ourfa_conn_t *ourfa_conn_open(
       unsigned login_type,
       unsigned timeout_s,
       unsigned use_ssl,
+      FILE *debug_stream,
       char *err_str,
       size_t err_str_size);
 

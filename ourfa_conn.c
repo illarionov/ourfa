@@ -255,16 +255,13 @@ int ourfa_connect(ourfa_t *ourfa)
 	 ourfa->login_type,
 	 ourfa->timeout,
 	 ourfa->ssl,
+	 ourfa->debug_stream,
 	 ourfa->err_msg,
 	 sizeof(ourfa->err_msg)
 	 );
 
    if (ourfa->conn == NULL) {
       return -1;
-   }
-
-   if (ourfa->debug_stream) {
-      ourfa_conn_set_debug_stream(ourfa->conn, ourfa->debug_stream);
    }
 
    return 0;
