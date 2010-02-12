@@ -39,15 +39,13 @@
 #define NEED_newSVpvn_flags
 #define NEED_sv_2pv_flags
 
-ourfa_xmlapi_t *ourfa_get_xmlapi(ourfa_t *ourfa);
-
 static int node_func(const char *node_type, const char *node_name, const char *arr_index , void *ctx);
 static int start_for_func(const char *node_name, unsigned from, unsigned cnt, void *ctx);
 static int start_for_item(void *ctx);
 static int end_for_item(void *ctx);
 static int end_for(void *ctx);
 
-static const ourfa_traverse_funcs_t ourfah2hv_funcs = {
+static const ourfa_traverse_funcs_t hooks = {
    node_func,
    start_for_func,
    NULL,
@@ -58,8 +56,6 @@ static const ourfa_traverse_funcs_t ourfah2hv_funcs = {
 
 #define OURFA2HV_S_SIZE 20
 struct ourfah2hv_ctx {
-   ourfa_xmlapi_t *api;
-   ourfa_xmlapictx_t *xmlapi_ctx;
    ourfa_hash_t *h;
    HV *res_h;
    int err_code;
@@ -75,7 +71,7 @@ struct t_idx_list {
 };
 
 
-int init_idx_list_s(struct t_idx_list *t)
+void init_idx_list_s(struct t_idx_list *t)
 {
    if (t->cnt == 0) {
       t->idx_list_s[0]='0';
@@ -89,7 +85,8 @@ int init_idx_list_s(struct t_idx_list *t)
       snprintf(t->idx_list_s, sizeof(t->idx_list_s), "%u,%u,%u",
 	    t->list[0], t->list[1], t->list[2]);
    }else {
-      int p, i;
+      int p;
+      unsigned i;
       p = snprintf(t->idx_list_s, sizeof(t->idx_list_s), "%u", t->list[0]);
       for (i=1; i<t->cnt; i++) {
 	 p += snprintf(t->idx_list_s+p, sizeof(t->idx_list_s)-p, ",%u", t->list[i]);
@@ -247,51 +244,63 @@ int hv2ourfah(HV *hv, ourfa_hash_t **h)
    return 1;
 }
 
-int ourfah2hv(ourfa_t *ourfa, const char *func_name,
-   ourfa_hash_t *h, HV **res)
+int ourfa_exec(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, HV **res)
 {
    struct ourfah2hv_ctx my_ctx;
-   int err_code;
+   ourfa_xmlapi_t *xmlapi;
+   ourfa_conn_t *conn;
+   ourfa_hash_t *h;
+   void *loadresp_ctx;
 
-   if (!ourfa || !func_name || !h || !res)
+   if (!ourfa || !func_name || !res)
       return -1;
 
-   my_ctx.api = ourfa_get_xmlapi(ourfa);
-   my_ctx.err_code=0;
-   my_ctx.h = h;
+   xmlapi = ourfa_get_xmlapi(ourfa);
+   conn = ourfa_get_conn(ourfa);
    my_ctx.res_h=newHV();
 
-   if (!my_ctx.res_h)
-      return -1;
+   if (!xmlapi || !conn || !my_ctx.res_h)
+      return -2;
+
+   if (ourfa_start_call(ourfa, func_name, in) < 0)
+      return -2;
 
    my_ctx.s[0]=(SV *)my_ctx.res_h;
    my_ctx.top_idx=0;
 
-   my_ctx.xmlapi_ctx = ourfa_xmlapictx_new(my_ctx.api,
-	 func_name, 0, &ourfah2hv_funcs, my_ctx.h, 1, &my_ctx);
-   if (!my_ctx.xmlapi_ctx) {
+   loadresp_ctx = ourfa_xmlapictx_load_resp_init(
+	 xmlapi,
+	 func_name,
+	 conn,
+	 &hooks,
+	 &my_ctx
+	 );
+
+   if (loadresp_ctx == NULL) {
       hv_undef(my_ctx.res_h);
-      return -1;
+      return -3;
    }
 
-   ourfa_xmlapictx_traverse_start(my_ctx.xmlapi_ctx);
-   err_code = ourfa_xmlapictx_traverse(my_ctx.xmlapi_ctx);
+   my_ctx.h = ourfa_loadrespctx_get_h(loadresp_ctx);
 
-   if (err_code != 0) {
+   h = ourfa_xmlapictx_load_resp(loadresp_ctx);
+
+   if (h == NULL) {
       hv_undef(my_ctx.res_h);
-   }else {
-      *res = my_ctx.res_h;
+      return -3;
    }
 
-   ourfa_xmlapictx_free(my_ctx.xmlapi_ctx);
-   return err_code;
+   ourfa_hash_free(h);
+   *res = my_ctx.res_h;
+
+   return 0;
 }
 
 static int node_func(const char *node_type, const char *node_name, const char *arr_index , void *ctx)
 {
    struct ourfah2hv_ctx *my_ctx;
    HV *h;
-   SV *tmp, *sv;
+   SV *sv;
    int ret_code=0;
 
    my_ctx = ctx;
@@ -400,7 +409,6 @@ static int start_for_item(void *ctx)
    struct ourfah2hv_ctx *my_ctx;
    HV *h0;
    SV *sv, *rvhv;
-   SV **res;
    AV *av;
 
    my_ctx = ctx;
@@ -610,13 +618,11 @@ call(self, func_name, in)
    SV *in
    PREINIT:
       SV *    sv;
-      SV **   sv0;
       HV *    res_h;
       ourfa_t *ourfa;
-      ourfa_hash_t *ourfa_in, *ourfa_out;
+      ourfa_hash_t *ourfa_in;
       int res;
       const char *err_str;
-      const char *tmp;
    PPCODE:
       /*   printf("Ourfa::call\n"); */
       err_str=NULL;
@@ -645,20 +651,17 @@ call(self, func_name, in)
       }
 
       /*  ourfa_hash_dump(ourfa_in, stdout, "func %s. INPUT parameters:\n", func_name); */
-      ourfa_out = NULL;
-      if (ourfa_call(ourfa, func_name, ourfa_in, &ourfa_out) != 0) {
-	 /* printf("error: %s\n", ourfa_last_err_str(ourfa)); */
-	 sv = newSVpv(ourfa_last_err_str(ourfa),0);
-	 EXTEND(SP, 2);
-	 PUSHs(&PL_sv_undef);
-	 mPUSHs(sv);
-	 XSRETURN(2);
-      }
-
-      /* /ourfa_hash_dump(ourfa_out, stdout, "OUTPUT:\n"); */
-      if (ourfah2hv(ourfa, func_name, ourfa_out, &res_h)) {
+      if ((res = ourfa_exec(ourfa, func_name, ourfa_in, &res_h))) {
 	 /* /printf("error: %s\n", ourfa_last_err_str(ourfa)); */
-	 sv = newSVpv(ourfa_last_err_str(ourfa),0);
+	 if (res == -3) {
+	    ourfa_xmlapi_t *xmlapi;
+	    xmlapi = ourfa_get_xmlapi(ourfa);
+	    sv = newSVpv(ourfa_xmlapi_last_err_str(xmlapi),0);
+	 }else if (res == -2) {
+	    sv = newSVpv(ourfa_last_err_str(ourfa),0);
+	 }else {
+	    sv = newSVpv("Unknown error",0);
+	 }
 	 EXTEND(SP, 2);
 	 PUSHs(&PL_sv_undef);
 	 mPUSHs(sv);
@@ -666,7 +669,6 @@ call(self, func_name, in)
       }
 
       ourfa_hash_free(ourfa_in);
-      ourfa_hash_free(ourfa_out);
 
       sv = newRV_noinc((SV *)res_h);
 
