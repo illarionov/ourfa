@@ -58,9 +58,14 @@ struct ourfa_conn_t {
    struct pktlist_elm_t *pktlist_head;
    struct pktlist_elm_t *pktlist_tail;
 
+   const ourfa_attr_hdr_t *cur_attr;
+
    FILE *debug_stream;
 
    int	sockfd;
+
+   int term_pkt_in_tail;
+
 #define OURFA_IS_CONNECTED(_ourfa_conn) ((_ourfa_conn)->sockfd >= 0)
 };
 
@@ -98,6 +103,7 @@ static ourfa_conn_t *conn_new(char *err_str, size_t err_str_size)
    conn->err_code = 0;
    conn->err_msg[0] = '\0';
    conn->sockfd = 0;
+   conn->term_pkt_in_tail = 0;
    pktlist_init(conn);
 
    return conn;
@@ -279,7 +285,6 @@ unsigned ourfa_is_valid_login_type(unsigned login_type)
 {
    return ourfa_logint_type2str(login_type) != NULL;
 }
-
 
 
 static int login(ourfa_conn_t *conn,
@@ -535,6 +540,177 @@ static int set_err(ourfa_conn_t *conn, int err_code, const char *fmt, ...)
    return -1;
 }
 
+static int pktlist_read_pkt(ourfa_conn_t *conn)
+{
+   ssize_t recvd_bytes;
+   ourfa_pkt_t *pkt;
+   const ourfa_attr_hdr_t *attr_list;
+
+   if (!conn || !OURFA_IS_CONNECTED(conn))
+      return -1;
+
+   if (conn->term_pkt_in_tail)
+      return 0;
+
+   recvd_bytes = ourfa_conn_recv_packet(conn, &pkt);
+
+   if (recvd_bytes < 0)
+      return -1;
+
+   ourfa_pkt_dump(pkt, conn->debug_stream, "RECIVED FUNC OUTPUT PKT ...\n");
+
+   if (pktlist_insert(conn, pkt) != 0) {
+      set_err(conn, -1, "Cannot insert packet to queue");
+      ourfa_pkt_free(pkt);
+      return -1;
+   }
+
+   /* Check for termination attribute */
+   attr_list = ourfa_pkt_get_attrs_list(pkt, OURFA_ATTR_TERMINATION);
+   if (attr_list != NULL) {
+      conn->term_pkt_in_tail = 1;
+   }
+
+   return recvd_bytes;
+}
+
+static int get_next_attr(ourfa_conn_t *conn)
+{
+   ssize_t recvd_bytes;
+
+   if (conn == NULL)
+      return -1;
+
+   if (conn->pktlist_head == NULL) {
+      assert(conn->cur_attr == NULL);
+      assert(conn->pktlist_head == NULL);
+
+      conn->term_pkt_in_tail = 0;
+
+      recvd_bytes = pktlist_read_pkt(conn);
+      if (recvd_bytes < 0)
+	 return -1;
+      assert(conn->cur_attr != NULL);
+   }else {
+      assert(conn->cur_attr != NULL);
+      conn->cur_attr = conn->cur_attr->next;
+   }
+
+   assert(conn->pktlist_head);
+
+   /* No more attributes in packet  */
+   if (conn->cur_attr == NULL) {
+      int is_eodata;
+
+      if ((conn->pktlist_head == conn->pktlist_tail)
+	    && conn->term_pkt_in_tail)
+	 is_eodata = 1;
+      else
+	 is_eodata = 0;
+
+      ourfa_pkt_free(pktlist_remove_head(conn));
+      if (is_eodata)
+	 return 1;
+
+      if (conn->cur_attr == NULL) {
+	 recvd_bytes = pktlist_read_pkt(conn);
+	 if (recvd_bytes < 0)
+	    return -1;
+	 assert(conn->cur_attr != NULL);
+      }
+   }
+
+   return 0;
+}
+
+int ourfa_istream_load_full(ourfa_conn_t *conn)
+{
+   int recvd_bytes;
+
+   if (!conn)
+      return -1;
+
+   do {
+      recvd_bytes=pktlist_read_pkt(conn);
+   }while (recvd_bytes>0);
+
+   return recvd_bytes > 0 ? 1 : recvd_bytes;
+}
+
+int ourfa_istream_flush(ourfa_conn_t *conn)
+{
+  int res;
+  int is_term;
+  ourfa_pkt_t *pkt;
+  const ourfa_attr_hdr_t *attr_list;
+
+  is_term = conn->term_pkt_in_tail;
+
+  pktlist_free(conn);
+
+  if (!is_term) {
+     do {
+	res = ourfa_conn_recv_packet(conn, &pkt);
+	if (res > 0) {
+	 ourfa_pkt_dump(pkt, conn->debug_stream,
+	       "FLUSHED PKT ...\n");
+	   attr_list = ourfa_pkt_get_attrs_list(pkt, OURFA_ATTR_TERMINATION);
+	   if (attr_list != NULL)
+	      res=-1;
+	   ourfa_pkt_free(pkt);
+	}
+     }while (res > 0);
+  }
+
+  assert(conn->term_pkt_in_tail == 0);
+
+  return 0;
+}
+
+/*
+ *  error codes:
+ *  < 1 - error
+ *  0 - OK
+ *  1 - no more data
+ *
+ */
+
+int ourfa_istream_get_next_attr(ourfa_conn_t *conn, const ourfa_attr_hdr_t **res)
+{
+   int res0;
+   res0 = get_next_attr(conn);
+   if (res0 == 0) {
+      if (res)
+	 *res = conn->cur_attr;
+   }
+   return res0;
+}
+
+int ourfa_istream_get_int(ourfa_conn_t *conn, int *res)
+{
+   return conn->cur_attr ? ourfa_pkt_get_int(conn->cur_attr, res) : -1;
+}
+
+int ourfa_istream_get_long(ourfa_conn_t *conn, long *res)
+{
+   return conn->cur_attr ? ourfa_pkt_get_long(conn->cur_attr, res) : -1;
+}
+
+int ourfa_istream_get_double(ourfa_conn_t *conn, double *res)
+{
+   return conn->cur_attr ? ourfa_pkt_get_double(conn->cur_attr, res) : -1;
+}
+
+int ourfa_istream_get_ip(ourfa_conn_t *conn, in_addr_t *res)
+{
+   return conn->cur_attr ? ourfa_pkt_get_ip(conn->cur_attr, res) : -1;
+}
+
+int ourfa_istream_get_string(ourfa_conn_t *conn, char **res)
+{
+   return conn->cur_attr ? ourfa_pkt_get_string(conn->cur_attr, res) : -1;
+}
+
 static void pktlist_init(ourfa_conn_t *conn)
 {
    conn->pktlist_head = NULL;
@@ -555,6 +731,7 @@ static int pktlist_insert (ourfa_conn_t *conn, ourfa_pkt_t *pkt)
       assert(conn->pktlist_tail == NULL);
       conn->pktlist_head = elm;
       conn->pktlist_tail = elm;
+      conn->cur_attr = ourfa_pkt_get_attrs_list(pkt, OURFA_ATTR_DATA);
    }else {
       assert(conn->pktlist_tail != NULL);
       conn->pktlist_tail->next = elm;
@@ -572,10 +749,15 @@ static ourfa_pkt_t *pktlist_remove_head(ourfa_conn_t *conn)
       return NULL;
 
    elm = conn->pktlist_head;
-   if (conn->pktlist_head->next == NULL)
+   if (conn->pktlist_head->next == NULL) {
       conn->pktlist_head = conn->pktlist_tail = NULL;
-   else
+      conn->cur_attr = NULL;
+      conn->term_pkt_in_tail = 0;
+   }else {
       conn->pktlist_head = conn->pktlist_head->next;
+      conn->cur_attr = ourfa_pkt_get_attrs_list(conn->pktlist_head->pkt,
+	    OURFA_ATTR_DATA);
+   }
 
    pkt = elm->pkt;
    free(elm);

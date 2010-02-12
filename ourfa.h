@@ -271,12 +271,8 @@ const char *ourfa_xmlapictx_last_err_str(ourfa_xmlapictx_t *ctx);
 
 int ourfa_xmlapictx_get_req_pkt(ourfa_xmlapictx_t *ctx,
       ourfa_hash_t *in, ourfa_pkt_t **out);
-
-void *ourfa_xmlapictx_load_resp_pkt_start(
-      struct ourfa_xmlapi_t *api,
-      const char *func_name);
-int ourfa_xmlapictx_load_resp_pkt(void *resp_pkt_ctx, ourfa_pkt_t *pkt);
-ourfa_hash_t *ourfa_xmlapictx_load_resp_pkt_end(void *resp_pkt_ctx);
+ourfa_hash_t *ourfa_xmlapictx_load_resp_pkt(struct ourfa_xmlapi_t *api,
+      const char *func_name, ourfa_conn_t *conn);
 
 const char *ourfa_xmlapi_last_err_str(ourfa_xmlapi_t *api);
 
@@ -295,6 +291,15 @@ void ourfa_conn_close(ourfa_conn_t *conn);
 ssize_t ourfa_conn_send_packet(ourfa_conn_t *conn, const ourfa_pkt_t *pkt);
 ssize_t ourfa_conn_recv_packet(ourfa_conn_t *conn, ourfa_pkt_t **res);
 int ourfa_conn_start_func_call(ourfa_conn_t *conn, int func_code);
+
+int ourfa_istream_get_next_attr(ourfa_conn_t *conn, const ourfa_attr_hdr_t **res);
+int ourfa_istream_get_int(ourfa_conn_t *conn, int *res);
+int ourfa_istream_get_long(ourfa_conn_t *conn, long *res);
+int ourfa_istream_get_double(ourfa_conn_t *conn, double *res);
+int ourfa_istream_get_ip(ourfa_conn_t *conn, in_addr_t *res);
+int ourfa_istream_get_string(ourfa_conn_t *conn, char **res);
+int ourfa_istream_load_full(ourfa_conn_t *conn);
+int ourfa_istream_flush(ourfa_conn_t *conn);
 
 int ourfa_conn_set_debug_stream(ourfa_conn_t *conn, FILE *stream);
 const char *ourfa_conn_last_err_str(ourfa_conn_t *conn);

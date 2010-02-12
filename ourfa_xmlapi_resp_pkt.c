@@ -45,7 +45,7 @@
 struct load_resp_pkt_ctx {
    ourfa_xmlapi_t *api;
    ourfa_xmlapictx_t *xmlapi_ctx;
-   const ourfa_attr_hdr_t *attr;
+   ourfa_conn_t *conn;
 
    ourfa_hash_t *res_h;
    int err_code;
@@ -64,12 +64,13 @@ static const struct ourfa_traverse_funcs_t load_resp_pkt_funcs = {
    NULL
 };
 
-void *ourfa_xmlapictx_load_resp_pkt_start(struct ourfa_xmlapi_t *api,
-      const char *func_name)
+ourfa_hash_t *ourfa_xmlapictx_load_resp_pkt(struct ourfa_xmlapi_t *api,
+      const char *func_name, ourfa_conn_t *conn)
 {
    struct load_resp_pkt_ctx *my_ctx;
+   ourfa_hash_t *res_h;
 
-   if (api==NULL || func_name==NULL)
+   if (api==NULL || func_name==NULL || conn == NULL)
       return NULL;
 
    ourfa_xmlapi_set_err(api, "");
@@ -96,55 +97,21 @@ void *ourfa_xmlapictx_load_resp_pkt_start(struct ourfa_xmlapi_t *api,
    }
    my_ctx->api = api;
    my_ctx->err_code=0;
+   my_ctx->conn = conn;
 
    ourfa_xmlapictx_traverse_start(my_ctx->xmlapi_ctx);
-
-   return (void *)my_ctx;
-}
-
-ourfa_hash_t *ourfa_xmlapictx_load_resp_pkt_end(void *resp_pkt_ctx)
-{
-   struct load_resp_pkt_ctx *my_ctx;
-   ourfa_hash_t *res;
-
-   if (!resp_pkt_ctx)
-      return NULL;
-
-   my_ctx = resp_pkt_ctx;
-
-   if (my_ctx->err_code < 0) {
-      res = NULL;
+   if (ourfa_xmlapictx_traverse(my_ctx->xmlapi_ctx) != 0) {
+      res_h = NULL;
       ourfa_hash_free(my_ctx->res_h);
    }else {
-      res = my_ctx->res_h;
+      res_h = my_ctx->res_h;
    }
+
+   ourfa_istream_flush(conn);
    ourfa_xmlapictx_free(my_ctx->xmlapi_ctx);
    free(my_ctx);
-   return res;
-}
 
-
-/*
- * ret:
- *    -1 - error
- *    0 - OK (end of data)
- *    1 - end of current packet
- */
-int ourfa_xmlapictx_load_resp_pkt(void *resp_pkt_ctx,
-      ourfa_pkt_t *pkt)
-{
-   int ret_code;
-
-   struct load_resp_pkt_ctx *my_ctx;
-
-   if (!resp_pkt_ctx)
-      return -1;
-
-   my_ctx = resp_pkt_ctx;
-   my_ctx->attr = ourfa_pkt_get_attrs_list(pkt, OURFA_ATTR_DATA);
-
-   ret_code = ourfa_xmlapictx_traverse(my_ctx->xmlapi_ctx);
-   return ret_code;
+   return res_h;
 }
 
 
@@ -155,9 +122,14 @@ static int node_func(const char *node_type, const char *node_name, const char *a
 
    my_ctx = ctx;
 
-   if (my_ctx->attr == NULL) {
-      my_ctx->err_code = 1; /*  No data in packet for this node */
-      return 1;
+   if (my_ctx->conn == NULL) {
+      my_ctx->err_code = -1;
+      return 0;
+   }
+
+   if (ourfa_istream_get_next_attr(my_ctx->conn, NULL) != 0) {
+      my_ctx->err_code = -1;
+      return 0;
    }
 
    if (arr_index == NULL)
@@ -166,11 +138,10 @@ static int node_func(const char *node_type, const char *node_name, const char *a
    if (strcasecmp(node_type, "integer") == 0) {
       int val;
 
-      if (ourfa_pkt_get_int(my_ctx->attr, &val) != 0) {
+      if (ourfa_istream_get_int(my_ctx->conn, &val) != 0) {
 	 ret_code=ourfa_xmlapi_set_err(my_ctx->api, "Cannot get %s value for node '%s(%s)'",
 	       node_type, node_name, arr_index);
       }else {
-	 my_ctx->attr = my_ctx->attr->next;
 	 if (ourfa_hash_set_int(my_ctx->res_h, node_name,
 	       arr_index, val) != 0) {
 	    ret_code=ourfa_xmlapi_set_err(my_ctx->api, "Cannot set hash value to '%i' "
@@ -181,11 +152,10 @@ static int node_func(const char *node_type, const char *node_name, const char *a
    }else if (strcasecmp(node_type, "long") == 0) {
       long val;
 
-      if (ourfa_pkt_get_long(my_ctx->attr, &val) != 0) {
+      if (ourfa_istream_get_long(my_ctx->conn, &val) != 0) {
 	 ret_code=ourfa_xmlapi_set_err(my_ctx->api, "Cannot get %s value for node '%s(%s)'",
 	       node_type, node_name, arr_index);
       }else {
-	 my_ctx->attr = my_ctx->attr->next;
 	 if (ourfa_hash_set_long(my_ctx->res_h, node_name,
 	       arr_index, val) != 0) {
 	    ret_code=ourfa_xmlapi_set_err(my_ctx->api, "Cannot set hash value to '%i' "
@@ -196,11 +166,10 @@ static int node_func(const char *node_type, const char *node_name, const char *a
    }else if (strcasecmp(node_type, "double") == 0) {
       double val;
 
-      if (ourfa_pkt_get_double(my_ctx->attr, &val) != 0) {
+      if (ourfa_istream_get_double(my_ctx->conn, &val) != 0) {
 	 ret_code=ourfa_xmlapi_set_err(my_ctx->api, "Cannot get %s value for node '%s(%s)'",
 	       node_type, node_name, arr_index);
       }else {
-	 my_ctx->attr = my_ctx->attr->next;
 	 if (ourfa_hash_set_double(my_ctx->res_h, node_name,
 	       arr_index, val) != 0) {
 	    ret_code=ourfa_xmlapi_set_err(my_ctx->api, "Cannot set hash value to '%i' "
@@ -211,11 +180,10 @@ static int node_func(const char *node_type, const char *node_name, const char *a
    }else if (strcasecmp(node_type, "string") == 0) {
       char *val;
       val = NULL;
-      if (ourfa_pkt_get_string(my_ctx->attr, &val) != 0) {
+      if (ourfa_istream_get_string(my_ctx->conn, &val) != 0) {
 	 ret_code=ourfa_xmlapi_set_err(my_ctx->api, "Cannot get %s value for node '%s(%s)'",
 	       node_type, node_name, arr_index);
       }else {
-	 my_ctx->attr = my_ctx->attr->next;
 	 if (ourfa_hash_set_string(my_ctx->res_h, node_name,
 	       arr_index, val) != 0) {
 	    ret_code=ourfa_xmlapi_set_err(my_ctx->api, "Cannot set hash value to '%i' "
@@ -226,11 +194,10 @@ static int node_func(const char *node_type, const char *node_name, const char *a
       free(val);
    }else if (strcasecmp(node_type, "ip_address") == 0) {
       in_addr_t val;
-      if (ourfa_pkt_get_ip(my_ctx->attr, &val) != 0) {
+      if (ourfa_istream_get_ip(my_ctx->conn, &val) != 0) {
 	 ret_code=ourfa_xmlapi_set_err(my_ctx->api, "Cannot get %s value for node '%s(%s)'",
 	       node_type, node_name, arr_index);
       }else {
-	 my_ctx->attr = my_ctx->attr->next;
 	 if (ourfa_hash_set_ip(my_ctx->res_h, node_name,
 	       arr_index, val) != 0) {
 	    ret_code=ourfa_xmlapi_set_err(my_ctx->api, "Cannot set hash value to '%i' "

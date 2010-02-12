@@ -271,6 +271,10 @@ int ourfa_connect(ourfa_t *ourfa)
       return -1;
    }
 
+   if (ourfa->debug_stream) {
+      ourfa_conn_set_debug_stream(ourfa->conn, ourfa->debug_stream);
+   }
+
    return 0;
 }
 
@@ -318,17 +322,11 @@ ssize_t ourfa_recv_packet(ourfa_t *ourfa, ourfa_pkt_t **res)
    return res0;
 }
 
-int ourfa_call(ourfa_t *ourfa, const char *func,
-      ourfa_hash_t *in,
-      ourfa_hash_t **out)
+int ourfa_start_call(ourfa_t *ourfa, const char *func,
+      ourfa_hash_t *in)
 {
    ourfa_xmlapictx_t *ctx;
-   ourfa_pkt_t *pkt_in, *pkt_out;
-   ourfa_hash_t *res_h;
-   void *resp_ctx;
-   const ourfa_attr_hdr_t *attr_list;
-   int last_err;
-   ssize_t recvd_bytes;
+   ourfa_pkt_t *pkt_in;
 
    if ((ourfa == NULL) || (func == NULL))
       return -1;
@@ -342,7 +340,6 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
    if (ctx == NULL)
       return set_err(ourfa, "%s",
 	    ourfa_xmlapi_last_err_str(ourfa->xmlapi));
-
 
    pkt_in = NULL;
    if (ourfa_xmlapictx_have_input_parameters(ctx)) {
@@ -380,6 +377,23 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
       }
    }
    ourfa_pkt_free(pkt_in);
+   ourfa_xmlapictx_free(ctx);
+
+   return 0;
+}
+
+int ourfa_call(ourfa_t *ourfa, const char *func,
+      ourfa_hash_t *in,
+      ourfa_hash_t **out)
+{
+   ourfa_pkt_t *pkt_out;
+   ourfa_hash_t *res_h;
+   int last_err;
+
+   last_err = ourfa_start_call(ourfa, func, in);
+
+   if (last_err < 0)
+      return last_err;
 
    /* Recv and parse answer */
    /*
@@ -395,52 +409,12 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
    res_h = NULL;
    last_err=1;
 
-   resp_ctx = ourfa_xmlapictx_load_resp_pkt_start(ourfa->xmlapi, func);
-   if (!resp_ctx) {
-      set_err(ourfa, "Cannot init response context: %s",
-	    ourfa_xmlapi_last_err_str(ourfa->xmlapi));
-      ourfa_xmlapictx_free(ctx);
-      /* XXX: disconnect */
-      if (out)
-	 *out = NULL;
-      return 0;
-   }
+   res_h = ourfa_xmlapictx_load_resp_pkt(ourfa->xmlapi, func, ourfa->conn);
 
-   while ((recvd_bytes=ourfa_recv_packet(ourfa, &pkt_out)) > 0) {
-      ourfa_pkt_dump(pkt_out, ourfa->debug_stream, "RECIVED FUNC OUTPUT PKT ...\n");
-
-      /* Load packet */
-      if (last_err == 1) {
-	 last_err = ourfa_xmlapictx_load_resp_pkt(resp_ctx, pkt_out);
-      }
-
-      /* Check for termination attribute */
-      attr_list = ourfa_pkt_get_attrs_list(pkt_out, OURFA_ATTR_TERMINATION);
-      if (attr_list != NULL) {
-	 ourfa_pkt_free(pkt_out);
-	 break;
-      }
-
-      ourfa_pkt_free(pkt_out);
-   }
-
-   res_h = ourfa_xmlapictx_load_resp_pkt_end(resp_ctx);
-
-   /* Error while recvd packet  */
-   if (recvd_bytes <=0) {
-      ourfa_xmlapictx_free(ctx);
-      return -1;
-   }
-
-   if (last_err < 0 || (res_h == NULL)) {
+   if (res_h == NULL) {
       set_err(ourfa, "Unable to parse packet: %s", ourfa_xmlapi_last_err_str(ourfa->xmlapi));
-      ourfa_xmlapictx_free(ctx);
       return -1;
    }
-
-   if ((last_err == 1) && (ourfa->debug_stream != NULL))
-	 fprintf(ourfa->debug_stream, "Parser returns 'incomplete result' "
-	       "error (no enough imput data packets)\n");
 
    if (ourfa->debug_stream != NULL)
       ourfa_hash_dump(res_h, ourfa->debug_stream, "RECIVED HASH ...\n");
@@ -449,8 +423,6 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
       *out = res_h;
    else
       ourfa_hash_free(res_h);
-
-   ourfa_xmlapictx_free(ctx);
 
    return 0;
 }
