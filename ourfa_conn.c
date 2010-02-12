@@ -64,14 +64,6 @@ enum dump_format_t {
    DUMP_FORMAT_BATCH
 };
 
-/* From ourfa_xmlapi_dump.c */
-int ourfa_xmlapi_xml_dump(ourfa_xmlapi_t *api,
-      const char *func_name,
-      ourfa_hash_t *h, FILE *stream, unsigned is_input);
-int ourfa_xmlapi_batch_dump(ourfa_xmlapi_t *api,
-      const char *func_name,
-      ourfa_hash_t *h, FILE *stream, unsigned is_input);
-
 static int set_err(ourfa_t *ourfa, const char *fmt, ...);
 
 const char *ourfa_last_err_str(ourfa_t *ourfa)
@@ -428,61 +420,6 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
       ourfa_hash_free(res_h);
 
    return 0;
-}
-
-static int hash_dump_xml(ourfa_t *ourfa, const char *func_name,
-      ourfa_hash_t *h, FILE *stream, unsigned dump_input,
-      enum dump_format_t dump_format)
-{
-   int res;
-
-   if (ourfa == NULL)
-      return -1;
-
-   ourfa->err_msg[0]='\0';
-
-   if (ourfa->xmlapi == NULL)
-      return set_err(ourfa, "XML api not loaded");
-
-   if (func_name == NULL)
-      return set_err(ourfa, "Action not defined");
-
-   if (stream == NULL)
-      return 0;
-
-   res=0;
-   switch (dump_format) {
-      case DUMP_FORMAT_XML:
-	 res = ourfa_xmlapi_xml_dump(ourfa->xmlapi, func_name, h, stream, dump_input);
-	 break;
-      case DUMP_FORMAT_BATCH:
-	 res = ourfa_xmlapi_batch_dump(ourfa->xmlapi, func_name, h, stream, dump_input);
-	 break;
-      default:
-	 assert(0);
-	 break;
-   }
-
-   if (res != 0) {
-      set_err(ourfa, "%s",
-	    ourfa_xmlapi_last_err_str(ourfa->xmlapi));
-   }
-
-   return res;
-}
-
-int ourfa_hash_dump_xml(ourfa_t *ourfa, const char *func_name,
-      ourfa_hash_t *h, FILE *stream, unsigned dump_input)
-{
-   return hash_dump_xml(ourfa, func_name, h, stream, dump_input,
-	DUMP_FORMAT_XML);
-}
-
-int ourfa_hash_dump_batch(ourfa_t *ourfa, const char *func_name,
-      ourfa_hash_t *h, FILE *stream, unsigned dump_input)
-{
-   return hash_dump_xml(ourfa, func_name, h, stream, dump_input,
-	DUMP_FORMAT_BATCH);
 }
 
 ourfa_xmlapi_t *ourfa_get_xmlapi(ourfa_t *ourfa)

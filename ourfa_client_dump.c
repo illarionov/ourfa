@@ -44,6 +44,20 @@ enum dump_format_t {
    DUMP_FORMAT_BATCH
 };
 
+struct dump_pkt_ctx {
+   FILE *stream;
+   ourfa_hash_t *h;
+   int tab_cnt;
+   const char *func_name;
+   enum dump_format_t dump_format;
+
+   xmlDoc *tmp_doc;
+   xmlBuffer *tmp_buf;
+
+   int err_code;
+   char err_msg[200];
+};
+
 static int node_func(const char *node_type, const char *node_name, const char *arr_index , void *ctx);
 static int start_for_func(const char *node_name, unsigned from, unsigned cnt, void *ctx);
 static int err_node_func(const char *err_str, unsigned err_code, void *ctx);
@@ -51,20 +65,17 @@ static int start_for_item(void *ctx);
 static int end_for_item(void *ctx);
 static int end_for(void *ctx);
 
-static int dump_hash(struct ourfa_xmlapi_t *api,
-      const char *func_name,
-      ourfa_hash_t *h,
-      FILE *stream,
-      unsigned is_input,
-      enum dump_format_t dump_format);
-
 static int dump_hash_fprintf(FILE *stream, unsigned tab_cnt, const char *fmt, ...);
 static int batch_print_val(ourfa_hash_t *h, FILE *stream,
       const char *name, const char *arr_idx, const char *val);
 static int attrlist2str(unsigned *attr_list, size_t attr_list_cnt,
       char *dst, size_t dst_size);
+static int dump(struct ourfa_t *ourfa,
+      const char *func_name,
+      FILE *stream,
+      enum dump_format_t dump_format);
 
-static const ourfa_traverse_funcs_t dump_pkt_funcs = {
+static const ourfa_traverse_funcs_t dump_hooks = {
    node_func,
    start_for_func,
    err_node_func,
@@ -73,21 +84,107 @@ static const ourfa_traverse_funcs_t dump_pkt_funcs = {
    end_for
 };
 
-int ourfa_xmlapi_xml_dump(struct ourfa_xmlapi_t *api,
-      const char *func_name,
-      ourfa_hash_t *h, FILE *stream, unsigned is_input)
+int ourfa_dump_xml(ourfa_t *ourfa, const char *func_name, FILE *stream)
 {
-   return dump_hash(api, func_name, h, stream, is_input, DUMP_FORMAT_XML);
+   return dump(ourfa, func_name, stream, DUMP_FORMAT_XML);
 }
 
-int ourfa_xmlapi_batch_dump(
-      struct ourfa_xmlapi_t *api,
-      const char *func_name,
-      ourfa_hash_t *h,
-      FILE *stream,
-      unsigned is_input)
+int ourfa_dump_batch(ourfa_t *ourfa, const char *func_name, FILE *stream)
 {
-   return dump_hash(api, func_name, h, stream, is_input, DUMP_FORMAT_BATCH);
+   return dump(ourfa, func_name, stream, DUMP_FORMAT_BATCH);
+}
+
+static int dump(struct ourfa_t *ourfa,
+      const char *func_name,
+      FILE *stream,
+      enum dump_format_t dump_format)
+{
+   struct dump_pkt_ctx my_ctx;
+   ourfa_xmlapi_t *xmlapi;
+   ourfa_conn_t *conn;
+   ourfa_hash_t *h;
+   void *loadresp_ctx;
+
+   if (ourfa==NULL || func_name==NULL || stream == NULL)
+      return -1;
+
+   xmlapi = ourfa_get_xmlapi(ourfa);
+   conn = ourfa_get_conn(ourfa);
+   if (xmlapi == NULL || (conn == NULL))
+      return -1;
+
+   my_ctx.stream = stream;
+   my_ctx.tab_cnt=1;
+   my_ctx.err_code=0;
+   my_ctx.err_msg[0]='\0';
+   my_ctx.func_name = func_name;
+   my_ctx.dump_format = dump_format;
+
+   my_ctx.tmp_doc = xmlNewDoc(NULL);
+   if (my_ctx.tmp_doc == NULL)
+      return -1;
+
+   my_ctx.tmp_doc->encoding=(const xmlChar *)strdup("UTF-8");
+
+   my_ctx.tmp_buf = xmlBufferCreate();
+   if (my_ctx.tmp_buf == NULL) {
+      xmlFreeDoc(my_ctx.tmp_doc);
+      return -1;
+   }
+
+   loadresp_ctx = ourfa_xmlapictx_load_resp_init(
+	 xmlapi,
+	 func_name,
+	 conn,
+	 &dump_hooks,
+	 &my_ctx
+	 );
+
+   if (loadresp_ctx == NULL) {
+      fputs(ourfa_xmlapi_last_err_str(xmlapi), stream);
+      return -1;
+   }
+
+   my_ctx.h = ourfa_loadrespctx_get_h(loadresp_ctx);
+
+   switch (dump_format) {
+      case DUMP_FORMAT_XML:
+	 fprintf(stream, "<call function=\"%s\">\n <output>\n",
+	       (const char *)func_name);
+	 break;
+      case DUMP_FORMAT_BATCH:
+	 fprintf(stream, "FUNCTION %s output\n",
+	       (const char *)func_name);
+	 break;
+      default:
+	 assert(0);
+	 break;
+   }
+
+   h = ourfa_xmlapictx_load_resp(loadresp_ctx);
+
+   switch (dump_format) {
+      case DUMP_FORMAT_XML:
+	 fputs(" </output>\n</call>\n", stream);
+	 break;
+      case DUMP_FORMAT_BATCH:
+	 fputs("\n", stream);
+	 break;
+      default:
+	 assert(0);
+	 break;
+   }
+
+   if (h == NULL) {
+      fputs(ourfa_xmlapi_last_err_str(xmlapi), stream);
+      return -1;
+   }
+
+   ourfa_hash_free(h);
+   xmlFreeDoc(my_ctx.tmp_doc);
+   xmlBufferFree(my_ctx.tmp_buf);
+
+   return 0;
 }
 
 static int dump_hash_fprintf(FILE *stream, unsigned tab_cnt, const char *fmt, ...)
@@ -245,110 +342,6 @@ static int batch_print_val(ourfa_hash_t *h, FILE *stream,
    free(escaped_val);
 
    return 0;
-}
-
-
-
-struct dump_pkt_ctx {
-   ourfa_xmlapictx_t *xmlapi_ctx;
-   FILE *stream;
-   ourfa_hash_t *h;
-   int tab_cnt;
-   const char *func_name;
-   enum dump_format_t dump_format;
-
-   xmlDoc *tmp_doc;
-   xmlBuffer *tmp_buf;
-
-   int err_code;
-   char err_msg[200];
-};
-
-
-static int dump_hash(struct ourfa_xmlapi_t *api,
-      const char *func_name,
-      ourfa_hash_t *h,
-      FILE *stream,
-      unsigned is_input,
-      enum dump_format_t dump_format)
-{
-   struct dump_pkt_ctx my_ctx;
-
-   if (api==NULL || func_name==NULL || h==NULL || stream == NULL)
-      return -1;
-
-   my_ctx.stream = stream;
-   my_ctx.h = h;
-   my_ctx.tab_cnt=1;
-   my_ctx.err_code=0;
-   my_ctx.err_msg[0]='\0';
-   my_ctx.func_name = func_name;
-   my_ctx.dump_format = dump_format;
-
-   my_ctx.tmp_doc = xmlNewDoc(NULL);
-   if (my_ctx.tmp_doc == NULL)
-      return -1;
-
-   my_ctx.tmp_doc->encoding=(const xmlChar *)strdup("UTF-8");
-
-   my_ctx.tmp_buf = xmlBufferCreate();
-   if (my_ctx.tmp_buf == NULL) {
-      xmlFreeDoc(my_ctx.tmp_doc);
-      return -1;
-   }
-
-   my_ctx.xmlapi_ctx = ourfa_xmlapictx_new(api,
-	 func_name,
-	 is_input,
-	 &dump_pkt_funcs,
-	 my_ctx.h,
-	 1,
-	 &my_ctx);
-
-   if (my_ctx.xmlapi_ctx == NULL) {
-      xmlFreeDoc(my_ctx.tmp_doc);
-      ourfa_xmlapictx_free(my_ctx.xmlapi_ctx);
-      return -1;
-   }
-
-   ourfa_xmlapictx_traverse_start(my_ctx.xmlapi_ctx);
-
-   switch (dump_format) {
-      case DUMP_FORMAT_XML:
-	 fprintf(stream, "<call function=\"%s\">\n <%s>\n",
-	       (const char *)func_name,
-	       is_input ? "input" : "output");
-	 break;
-      case DUMP_FORMAT_BATCH:
-	 fprintf(stream, "FUNCTION %s %s\n",
-	       (const char *)func_name,
-	       is_input ? "input" : "output");
-	 break;
-      default:
-	 assert(0);
-	 break;
-   }
-
-   ourfa_xmlapictx_traverse(my_ctx.xmlapi_ctx);
-
-   switch (dump_format) {
-      case DUMP_FORMAT_XML:
-	 fputs(is_input ? " </input>\n</call>\n" : " </output>\n</call>\n", stream);
-	 break;
-      case DUMP_FORMAT_BATCH:
-	 fputs("\n", stream);
-	 break;
-      default:
-	 assert(0);
-	 break;
-   }
-
-   xmlFreeDoc(my_ctx.tmp_doc);
-   xmlBufferFree(my_ctx.tmp_buf);
-   ourfa_xmlapictx_free(my_ctx.xmlapi_ctx);
-
-   return 0;
-
 }
 
 static int node_func(const char *node_type, const char *node_name, const char *arr_index , void *ctx)

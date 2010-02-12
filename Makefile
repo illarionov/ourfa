@@ -19,11 +19,11 @@ all: ourfa_client
 clean:
 	rm -f *.o ourfa_client
 
-ourfa_client: ourfa_inout.c ourfa_xmlapi.c ourfa_pkt.c ourfa_conn_stream.c ourfa_conn.c ourfa_client.c ourfa_xmlapi_dump.c ourfa_xmlapi_resp_pkt.c
+ourfa_client: ourfa_inout.c ourfa_xmlapi.c ourfa_pkt.c ourfa_conn_stream.c ourfa_conn.c ourfa_client_dump.c ourfa_client.c ourfa_xmlapi_resp.c
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) $(LDFLAGS) $(XML2_LIBS) \
 	-DOURFA_VERSION=${OURFA_VERSION} ourfa_inout.c \
 	    ourfa_conn_stream.c ourfa_conn.c ourfa_pkt.c ourfa_xmlapi.c \
-	    ourfa_xmlapi_dump.c ourfa_xmlapi_resp_pkt.c ourfa_client.c \
+	    ourfa_xmlapi_resp.c ourfa_client_dump.c ourfa_client.c \
 	    -o ourfa_client
 
 install:

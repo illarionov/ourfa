@@ -13,6 +13,5 @@ ourfa/ourfa_conn_stream.c
 ourfa/ourfa_inout.c
 ourfa/ourfa_pkt.c
 ourfa/ourfa_xmlapi.c
-ourfa/ourfa_xmlapi_dump.c
-ourfa/ourfa_xmlapi_resp_pkt.c
+ourfa/ourfa_xmlapi_resp.c
 

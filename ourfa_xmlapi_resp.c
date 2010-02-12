@@ -42,13 +42,13 @@
 
 #include "ourfa.h"
 
-struct load_resp_pkt_ctx {
+struct load_resp_ctx {
    ourfa_xmlapi_t *api;
    ourfa_xmlapictx_t *xmlapi_ctx;
    ourfa_conn_t *conn;
 
    ourfa_hash_t *res_h;
-   ourfa_traverse_funcs_t *user_hooks;
+   const ourfa_traverse_funcs_t *user_hooks;
    void *user_ctx;
    int err_code;
 };
@@ -62,7 +62,7 @@ static int end_for_hook(void *ctx);
 
 int ourfa_xmlapi_set_err(ourfa_xmlapi_t *api, const char *fmt, ...);
 
-static const struct ourfa_traverse_funcs_t load_resp_pkt_funcs = {
+static const struct ourfa_traverse_funcs_t load_resp_hooks = {
    node_hook,
    start_for_hook,
    err_node_hook,
@@ -74,15 +74,15 @@ static const struct ourfa_traverse_funcs_t load_resp_pkt_funcs = {
 void *ourfa_xmlapictx_load_resp_init(struct ourfa_xmlapi_t *api,
       const char *func_name,
       ourfa_conn_t *conn,
-      ourfa_traverse_funcs_t *user_hooks,
+      const ourfa_traverse_funcs_t *user_hooks,
       void *user_ctx)
 {
-   struct load_resp_pkt_ctx *my_ctx;
+   struct load_resp_ctx *my_ctx;
 
    if (api==NULL || func_name==NULL || conn == NULL)
       return NULL;
 
-   my_ctx = (struct load_resp_pkt_ctx *)malloc(sizeof(*my_ctx));
+   my_ctx = (struct load_resp_ctx *)malloc(sizeof(*my_ctx));
    if (!my_ctx) {
       ourfa_xmlapi_set_err(api, "Canot initialize context");
       return NULL;
@@ -99,7 +99,7 @@ void *ourfa_xmlapictx_load_resp_init(struct ourfa_xmlapi_t *api,
    my_ctx->user_ctx = user_ctx;
 
    my_ctx->xmlapi_ctx = ourfa_xmlapictx_new(api, func_name, 0,
-	 &load_resp_pkt_funcs, my_ctx->res_h, 0, my_ctx);
+	 &load_resp_hooks, my_ctx->res_h, 0, my_ctx);
    if (!my_ctx->xmlapi_ctx) {
       ourfa_hash_free(my_ctx->res_h);
       free(my_ctx);
@@ -116,7 +116,7 @@ void *ourfa_xmlapictx_load_resp_init(struct ourfa_xmlapi_t *api,
 
 ourfa_hash_t *ourfa_loadrespctx_get_h(void *load_resp_ctx)
 {
-   struct load_resp_pkt_ctx *my_ctx = load_resp_ctx;
+   struct load_resp_ctx *my_ctx = load_resp_ctx;
 
    if (my_ctx == NULL)
       return NULL;
@@ -126,7 +126,7 @@ ourfa_hash_t *ourfa_loadrespctx_get_h(void *load_resp_ctx)
 ourfa_hash_t *ourfa_xmlapictx_load_resp(void *load_resp_ctx)
 {
    ourfa_hash_t *res_h;
-   struct load_resp_pkt_ctx *my_ctx = load_resp_ctx;
+   struct load_resp_ctx *my_ctx = load_resp_ctx;
 
    if (my_ctx == NULL)
       return NULL;
@@ -148,7 +148,7 @@ ourfa_hash_t *ourfa_xmlapictx_load_resp(void *load_resp_ctx)
 
 static int node_hook(const char *node_type, const char *node_name, const char *arr_index , void *ctx)
 {
-   struct load_resp_pkt_ctx *my_ctx;
+   struct load_resp_ctx *my_ctx;
    int ret_code=0;
 
    my_ctx = ctx;
@@ -255,7 +255,7 @@ node_hook_end:
 static int start_for_hook(const char *node_name, unsigned from, unsigned cnt, void *ctx)
 {
    int ret_code=0;
-   struct load_resp_pkt_ctx *my_ctx;
+   struct load_resp_ctx *my_ctx;
 
    my_ctx = ctx;
 
@@ -269,7 +269,7 @@ static int start_for_hook(const char *node_name, unsigned from, unsigned cnt, vo
 static int err_node_hook(const char *err_str, unsigned err_code, void *ctx)
 {
    int ret_code=0;
-   struct load_resp_pkt_ctx *my_ctx;
+   struct load_resp_ctx *my_ctx;
 
    my_ctx = ctx;
 
@@ -283,7 +283,7 @@ static int err_node_hook(const char *err_str, unsigned err_code, void *ctx)
 static int start_for_item_hook(void *ctx)
 {
    int ret_code=0;
-   struct load_resp_pkt_ctx *my_ctx;
+   struct load_resp_ctx *my_ctx;
 
    my_ctx = ctx;
 
@@ -297,7 +297,7 @@ static int start_for_item_hook(void *ctx)
 static int end_for_item_hook(void *ctx)
 {
    int ret_code=0;
-   struct load_resp_pkt_ctx *my_ctx;
+   struct load_resp_ctx *my_ctx;
 
    my_ctx = ctx;
 
@@ -311,7 +311,7 @@ static int end_for_item_hook(void *ctx)
 static int end_for_hook(void *ctx)
 {
    int ret_code=0;
-   struct load_resp_pkt_ctx *my_ctx;
+   struct load_resp_ctx *my_ctx;
 
    my_ctx = ctx;
 

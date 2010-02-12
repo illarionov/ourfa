@@ -125,6 +125,8 @@ int ourfa_connect(ourfa_t *ourfa);
 int ourfa_disconnect(ourfa_t *ourfa);
 int ourfa_call(ourfa_t *ourfa, const char *func, ourfa_hash_t *in,
       ourfa_hash_t **out);
+int ourfa_start_call(ourfa_t *ourfa, const char *func,
+      ourfa_hash_t *in);
 
 ssize_t ourfa_send_packet(ourfa_t *ourfa, const ourfa_pkt_t *pkt);
 ssize_t ourfa_recv_packet(ourfa_t *ourfa, ourfa_pkt_t **res);
@@ -134,11 +136,6 @@ const char *ourfa_login_type2str(unsigned login_type);
 unsigned    ourfa_is_valid_login_type(unsigned login_type);
 
 int ourfa_set_debug_stream(ourfa_t *ourfa, FILE *stream);
-
-int ourfa_hash_dump_xml(ourfa_t *ourfa, const char *func_name,
-      ourfa_hash_t *h, FILE *stream, unsigned dump_input);
-int ourfa_hash_dump_batch(ourfa_t *ourfa, const char *func_name,
-      ourfa_hash_t *h, FILE *stream, unsigned dump_input);
 
 ourfa_xmlapi_t *ourfa_get_xmlapi(ourfa_t *ourfa);
 ourfa_conn_t *ourfa_get_conn(ourfa_t *conn);
@@ -274,7 +271,7 @@ int ourfa_xmlapictx_get_req_pkt(ourfa_xmlapictx_t *ctx,
 void *ourfa_xmlapictx_load_resp_init(struct ourfa_xmlapi_t *api,
       const char *func_name,
       ourfa_conn_t *conn,
-      ourfa_traverse_funcs_t *user_hooks,
+      const ourfa_traverse_funcs_t *user_hooks,
       void *user_ctx);
 ourfa_hash_t *ourfa_loadrespctx_get_h(void *load_resp_ctx);
 ourfa_hash_t *ourfa_xmlapictx_load_resp(void *load_resp_ctx);

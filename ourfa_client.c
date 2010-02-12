@@ -45,6 +45,10 @@ enum output_format_t {
    OUTPUT_FORMAT_BATCH
 };
 
+/* ourfa_client_dump.c */
+int ourfa_dump_xml(ourfa_t *ourfa, const char *func_name, FILE *stream);
+int ourfa_dump_batch(ourfa_t *ourfa, const char *func_name, FILE *stream);
+
 
 static int usage()
 {
@@ -350,27 +354,33 @@ int main(int argc, char **argv)
       return 1;
    }
 
-   if (ourfa_call(ourfa, params.action, in, &out) != 0) {
-      fprintf(stderr, "%s\n", ourfa_last_err_str(ourfa));
-      return 1;
-   }
+   if (params.output_format == OUTPUT_FORMAT_HASH) {
+      if (ourfa_call(ourfa, params.action, in, &out) != 0) {
+	 fprintf(stderr, "%s\n", ourfa_last_err_str(ourfa));
+	 return 1;
+      }
+      ourfa_hash_dump(out, stdout, "Function: %s. OUTPUT HASH:\n", params.action);
+      return 0;
+   }else {
+      int last_err;
+      last_err = ourfa_start_call(ourfa, params.action, in);
 
-   switch (params.output_format) {
-      case OUTPUT_FORMAT_XML:
-	 res = ourfa_hash_dump_xml(ourfa, params.action, out, stdout, 0);
-	 break;
-      case OUTPUT_FORMAT_HASH:
-	 ourfa_hash_dump(out, stdout, "Function: %s. OUTPUT HASH:\n", params.action);
-	 res=0;
-	 break;
-      case OUTPUT_FORMAT_BATCH:
-	 res = ourfa_hash_dump_batch(ourfa, params.action, out, stdout, 0);
-	 break;
-      default:
-	 assert(0);
-	 break;
+      if (last_err < 0) {
+	 fprintf(stderr, "%s\n", ourfa_last_err_str(ourfa));
+	 return 1;
+      }
+      switch (params.output_format) {
+	 case OUTPUT_FORMAT_XML:
+	    res = ourfa_dump_xml(ourfa, params.action, stdout);
+	    break;
+	 case OUTPUT_FORMAT_BATCH:
+	    res = ourfa_dump_batch(ourfa, params.action, stdout);
+	    break;
+	 default:
+	    assert(0);
+	    break;
+      }
    }
-
 
    return res;
 }
