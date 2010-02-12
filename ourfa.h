@@ -271,8 +271,13 @@ const char *ourfa_xmlapictx_last_err_str(ourfa_xmlapictx_t *ctx);
 
 int ourfa_xmlapictx_get_req_pkt(ourfa_xmlapictx_t *ctx,
       ourfa_hash_t *in, ourfa_pkt_t **out);
-ourfa_hash_t *ourfa_xmlapictx_load_resp_pkt(struct ourfa_xmlapi_t *api,
-      const char *func_name, ourfa_conn_t *conn);
+void *ourfa_xmlapictx_load_resp_init(struct ourfa_xmlapi_t *api,
+      const char *func_name,
+      ourfa_conn_t *conn,
+      ourfa_traverse_funcs_t *user_hooks,
+      void *user_ctx);
+ourfa_hash_t *ourfa_loadrespctx_get_h(void *load_resp_ctx);
+ourfa_hash_t *ourfa_xmlapictx_load_resp(void *load_resp_ctx);
 
 const char *ourfa_xmlapi_last_err_str(ourfa_xmlapi_t *api);
 

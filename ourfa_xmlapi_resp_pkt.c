@@ -48,32 +48,39 @@ struct load_resp_pkt_ctx {
    ourfa_conn_t *conn;
 
    ourfa_hash_t *res_h;
+   ourfa_traverse_funcs_t *user_hooks;
+   void *user_ctx;
    int err_code;
 };
 
-static int node_func(const char *node_type, const char *node_name, const char *arr_index , void *ctx);
+static int node_hook(const char *node_type, const char *node_name, const char *arr_index , void *ctx);
+static int start_for_hook(const char *node_name, unsigned from, unsigned cnt, void *ctx);
+static int err_node_hook(const char *err_str, unsigned err_code, void *ctx);
+static int start_for_item_hook(void *ctx);
+static int end_for_item_hook(void *ctx);
+static int end_for_hook(void *ctx);
 
 int ourfa_xmlapi_set_err(ourfa_xmlapi_t *api, const char *fmt, ...);
 
 static const struct ourfa_traverse_funcs_t load_resp_pkt_funcs = {
-   node_func,
-   NULL,
-   NULL,
-   NULL,
-   NULL,
-   NULL
+   node_hook,
+   start_for_hook,
+   err_node_hook,
+   start_for_item_hook,
+   end_for_item_hook,
+   end_for_hook
 };
 
-ourfa_hash_t *ourfa_xmlapictx_load_resp_pkt(struct ourfa_xmlapi_t *api,
-      const char *func_name, ourfa_conn_t *conn)
+void *ourfa_xmlapictx_load_resp_init(struct ourfa_xmlapi_t *api,
+      const char *func_name,
+      ourfa_conn_t *conn,
+      ourfa_traverse_funcs_t *user_hooks,
+      void *user_ctx)
 {
    struct load_resp_pkt_ctx *my_ctx;
-   ourfa_hash_t *res_h;
 
    if (api==NULL || func_name==NULL || conn == NULL)
       return NULL;
-
-   ourfa_xmlapi_set_err(api, "");
 
    my_ctx = (struct load_resp_pkt_ctx *)malloc(sizeof(*my_ctx));
    if (!my_ctx) {
@@ -88,6 +95,9 @@ ourfa_hash_t *ourfa_xmlapictx_load_resp_pkt(struct ourfa_xmlapi_t *api,
       return NULL;
    }
 
+   my_ctx->user_hooks = user_hooks;
+   my_ctx->user_ctx = user_ctx;
+
    my_ctx->xmlapi_ctx = ourfa_xmlapictx_new(api, func_name, 0,
 	 &load_resp_pkt_funcs, my_ctx->res_h, 0, my_ctx);
    if (!my_ctx->xmlapi_ctx) {
@@ -100,6 +110,27 @@ ourfa_hash_t *ourfa_xmlapictx_load_resp_pkt(struct ourfa_xmlapi_t *api,
    my_ctx->conn = conn;
 
    ourfa_xmlapictx_traverse_start(my_ctx->xmlapi_ctx);
+
+   return my_ctx;
+}
+
+ourfa_hash_t *ourfa_loadrespctx_get_h(void *load_resp_ctx)
+{
+   struct load_resp_pkt_ctx *my_ctx = load_resp_ctx;
+
+   if (my_ctx == NULL)
+      return NULL;
+   return my_ctx->res_h;
+}
+
+ourfa_hash_t *ourfa_xmlapictx_load_resp(void *load_resp_ctx)
+{
+   ourfa_hash_t *res_h;
+   struct load_resp_pkt_ctx *my_ctx = load_resp_ctx;
+
+   if (my_ctx == NULL)
+      return NULL;
+
    if (ourfa_xmlapictx_traverse(my_ctx->xmlapi_ctx) != 0) {
       res_h = NULL;
       ourfa_hash_free(my_ctx->res_h);
@@ -107,7 +138,7 @@ ourfa_hash_t *ourfa_xmlapictx_load_resp_pkt(struct ourfa_xmlapi_t *api,
       res_h = my_ctx->res_h;
    }
 
-   ourfa_istream_flush(conn);
+   ourfa_istream_flush(my_ctx->conn);
    ourfa_xmlapictx_free(my_ctx->xmlapi_ctx);
    free(my_ctx);
 
@@ -115,7 +146,7 @@ ourfa_hash_t *ourfa_xmlapictx_load_resp_pkt(struct ourfa_xmlapi_t *api,
 }
 
 
-static int node_func(const char *node_type, const char *node_name, const char *arr_index , void *ctx)
+static int node_hook(const char *node_type, const char *node_name, const char *arr_index , void *ctx)
 {
    struct load_resp_pkt_ctx *my_ctx;
    int ret_code=0;
@@ -124,12 +155,12 @@ static int node_func(const char *node_type, const char *node_name, const char *a
 
    if (my_ctx->conn == NULL) {
       my_ctx->err_code = -1;
-      return 0;
+      goto node_hook_end;
    }
 
    if (ourfa_istream_get_next_attr(my_ctx->conn, NULL) != 0) {
       my_ctx->err_code = -1;
-      return 0;
+      goto node_hook_end;
    }
 
    if (arr_index == NULL)
@@ -209,7 +240,84 @@ static int node_func(const char *node_type, const char *node_name, const char *a
       assert(0);
    }
 
+node_hook_end:
+   if (my_ctx->user_hooks && my_ctx->user_hooks->node) {
+      ret_code = my_ctx->user_hooks->node(node_type, node_name, arr_index,
+	    my_ctx->user_ctx);
+   }
+
    my_ctx->err_code = ret_code;
+
+   return ret_code;
+}
+
+
+static int start_for_hook(const char *node_name, unsigned from, unsigned cnt, void *ctx)
+{
+   int ret_code=0;
+   struct load_resp_pkt_ctx *my_ctx;
+
+   my_ctx = ctx;
+
+   if (my_ctx->user_hooks && my_ctx->user_hooks->start_for) {
+      ret_code = my_ctx->user_hooks->start_for(node_name, from, cnt, my_ctx->user_ctx);
+   }
+
+   return ret_code;
+}
+
+static int err_node_hook(const char *err_str, unsigned err_code, void *ctx)
+{
+   int ret_code=0;
+   struct load_resp_pkt_ctx *my_ctx;
+
+   my_ctx = ctx;
+
+   if (my_ctx->user_hooks && my_ctx->user_hooks->err_node) {
+      ret_code = my_ctx->user_hooks->err_node(err_str, err_code, my_ctx->user_ctx);
+   }
+
+   return ret_code;
+}
+
+static int start_for_item_hook(void *ctx)
+{
+   int ret_code=0;
+   struct load_resp_pkt_ctx *my_ctx;
+
+   my_ctx = ctx;
+
+   if (my_ctx->user_hooks && my_ctx->user_hooks->start_for_item) {
+      ret_code = my_ctx->user_hooks->start_for_item(my_ctx->user_ctx);
+   }
+
+   return ret_code;
+}
+
+static int end_for_item_hook(void *ctx)
+{
+   int ret_code=0;
+   struct load_resp_pkt_ctx *my_ctx;
+
+   my_ctx = ctx;
+
+   if (my_ctx->user_hooks && my_ctx->user_hooks->end_for_item) {
+      ret_code = my_ctx->user_hooks->end_for_item(my_ctx->user_ctx);
+   }
+
+   return ret_code;
+}
+
+static int end_for_hook(void *ctx)
+{
+   int ret_code=0;
+   struct load_resp_pkt_ctx *my_ctx;
+
+   my_ctx = ctx;
+
+   if (my_ctx->user_hooks && my_ctx->user_hooks->end_for) {
+      ret_code = my_ctx->user_hooks->end_for(my_ctx->user_ctx);
+   }
 
    return ret_code;
 }

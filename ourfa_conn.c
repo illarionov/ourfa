@@ -388,6 +388,7 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
 {
    ourfa_pkt_t *pkt_out;
    ourfa_hash_t *res_h;
+   void *loadresp_ctx;
    int last_err;
 
    last_err = ourfa_start_call(ourfa, func, in);
@@ -396,21 +397,23 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
       return last_err;
 
    /* Recv and parse answer */
-   /*
-   if (!ourfa_xmlapictx_have_output_parameters(ctx)) {
-	 ourfa_xmlapictx_free(ctx);
-	 if (out)
-	    *out = NULL;
-	 return 0;
-   }
-   */
-
    pkt_out = NULL;
    res_h = NULL;
    last_err=1;
 
-   res_h = ourfa_xmlapictx_load_resp_pkt(ourfa->xmlapi, func, ourfa->conn);
+   loadresp_ctx = ourfa_xmlapictx_load_resp_init(
+	 ourfa->xmlapi,
+	 func,
+	 ourfa->conn,
+	 NULL,
+	 NULL
+	 );
 
+   if (loadresp_ctx == NULL) {
+      set_err(ourfa, "Unable to parse packet: %s", ourfa_xmlapi_last_err_str(ourfa->xmlapi));
+      return -1;
+   }
+   res_h = ourfa_xmlapictx_load_resp(loadresp_ctx);
    if (res_h == NULL) {
       set_err(ourfa, "Unable to parse packet: %s", ourfa_xmlapi_last_err_str(ourfa->xmlapi));
       return -1;
