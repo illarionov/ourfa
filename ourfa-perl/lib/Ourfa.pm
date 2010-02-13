@@ -38,7 +38,9 @@ sub AUTOLOAD {
 
     if ($constname =~ /^rpcf_/) {
        my ($self, %params) = @_;
-       return $self->call($constname, \%params);
+       my ($res, $error) = $self->call($constname, \%params);
+       if ($error) {croak $error;}
+       return $res;
     }
 
     my ($error, $val) = constant($constname);
@@ -61,6 +63,13 @@ XSLoader::load('Ourfa', $VERSION);
 
 
 # Preloaded methods go here.
+
+sub new {
+   my ($class, %params) = @_;
+   my ($res, $error) = Ourfa::new0(\%params);
+   if ($error) { croak $error};
+   return $res;
+}
 
 # Autoload methods go after =cut, and are processed by the autosplit program.
 

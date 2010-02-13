@@ -485,7 +485,7 @@ MODULE = Ourfa		PACKAGE = Ourfa
 INCLUDE: const-xs.inc
 
 void
-new(...)
+new0(...)
    PREINIT:
       SV *    sv;
       HV *    params;
