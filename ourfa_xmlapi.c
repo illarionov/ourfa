@@ -592,7 +592,9 @@ static int exec_error_node(ourfa_xmlapictx_t *ctx, xmlNodePtr cur_node, ourfa_ha
 }
 
 static int get_for_props(ourfa_xmlapictx_t *ctx, xmlNodePtr cur_node,
-      ourfa_hash_t *params, long *from, long *count, xmlChar **cnt_name)
+      ourfa_hash_t *params, long *from, long *count,
+      xmlChar **cnt_name,
+      xmlChar **array_name)
 {
    if (get_long_prop_val(ctx, params, cur_node,
 	    (const xmlChar *)"from", NULL, from) != 0)
@@ -608,6 +610,22 @@ static int get_for_props(ourfa_xmlapictx_t *ctx, xmlNodePtr cur_node,
       xmlFree(*cnt_name);
       return set_ctx_err(ctx, "Wrong 'from'(%i) or 'count'(%i) parameter "
 	    "of 'for' node", from, count);
+   }
+
+   if (array_name) {
+      if (get_prop_val(ctx, cur_node,
+	       (const xmlChar *)"array_name", NULL, array_name) != 0) {
+	 char *name;
+	 unsigned i = 0;
+	 for (; cur_node; cur_node = cur_node->prev) {
+	    if ((cur_node->type != XML_ELEMENT_NODE)
+		  || (cur_node->name == NULL)) {
+	    }else if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"for") == 0)
+	       i++;
+	 }
+	 asprintf(&name, "array-%u",i);
+	 *array_name = (xmlChar *)name;
+      }
    }
 
    return 0;
@@ -877,7 +895,7 @@ static int req_pkt_add_atts(ourfa_xmlapictx_t *ctx,
 	 xmlChar *cnt_name;
 	 long from, count, i;
 
-	 if (get_for_props(ctx, cur_node, params, &from, &count, &cnt_name) != 0)
+	 if (get_for_props(ctx, cur_node, params, &from, &count, &cnt_name, NULL) != 0)
 	    return -1;
 
 	 for (i=from; i < from+count; i++) {
@@ -1022,9 +1040,11 @@ int ourfa_xmlapictx_traverse(ourfa_xmlapictx_t *ctx)
       /* FOR  */
       }else if (xmlStrcasecmp(ctx->cur_node->name, (const xmlChar *)"for") == 0){
 	 xmlChar *cnt_name;
+	 xmlChar *array_name;
 	 long from, count;
 
-	 if (get_for_props(ctx, ctx->cur_node, ctx->data_h, &from, &count, &cnt_name) != 0) {
+	 if (get_for_props(ctx, ctx->cur_node, ctx->data_h, &from, &count, &cnt_name,
+		  &array_name) != 0) {
 	    ret_code=-1;
 	    break;
 	 }
@@ -1035,10 +1055,17 @@ int ourfa_xmlapictx_traverse(ourfa_xmlapictx_t *ctx)
 	    break;
 	 }
 	 if (ctx->traverse_funcs.start_for) {
-	    ret_code = ctx->traverse_funcs.start_for((const char *)cnt_name, from, count, ctx->user_ctx);
+	    ret_code = ctx->traverse_funcs.start_for(
+		  (const char *)array_name,
+		  (const char *)cnt_name,
+		  from,
+		  count,
+		  ctx->user_ctx
+		  );
 	 }
 
 	 xmlFree(cnt_name);
+	 xmlFree(array_name);
 	 if ((count != 0) && (ctx->cur_node->children != NULL)) {
 	    if (ctx->traverse_funcs.start_for_item && (ret_code >= 0)) {
 	       ret_code = ctx->traverse_funcs.start_for_item(ctx->user_ctx);
@@ -1094,7 +1121,8 @@ get_next_node:
 		  ret_code = ctx->traverse_funcs.end_for_item(ctx->user_ctx);
 	       }
 
-	       if ((get_for_props(ctx, ctx->cur_node, ctx->data_h, &from, &count, &cnt_name) != 0)
+	       if ((get_for_props(ctx, ctx->cur_node, ctx->data_h, &from, &count,
+			   &cnt_name, NULL) != 0)
 		     || (ourfa_hash_get_long(ctx->data_h, (const char *)cnt_name, NULL, &i) != 0)) {
 		  ret_code=-1;
 		  break;

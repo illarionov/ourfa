@@ -95,7 +95,8 @@ typedef struct ourfa_attr_hdr_t {
 
 struct ourfa_traverse_funcs_t {
    int (* node)(const char *node_type, const char *node_name, const char *arr_index , void *ctx);
-   int (* start_for)(const char *node_name, unsigned from, unsigned cnt, void *ctx);
+   int (* start_for)(const char *array_name, const char *node_name,
+	 unsigned from, unsigned cnt, void *ctx);
    int (* err_node)(const char *err_str, unsigned err_code, void *ctx);
    int (* start_for_item)(void *ctx);
    int (* end_for_item)(void *ctx);

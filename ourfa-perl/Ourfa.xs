@@ -40,7 +40,8 @@
 #define NEED_sv_2pv_flags
 
 static int node_func(const char *node_type, const char *node_name, const char *arr_index , void *ctx);
-static int start_for_func(const char *node_name, unsigned from, unsigned cnt, void *ctx);
+static int start_for_func(const char *array_name,
+   const char *node_name, unsigned from, unsigned cnt, void *ctx);
 static int start_for_item(void *ctx);
 static int end_for_item(void *ctx);
 static int end_for(void *ctx);
@@ -378,7 +379,8 @@ static int node_func(const char *node_type, const char *node_name, const char *a
 }
 
 
-static int start_for_func(const char *node_name, unsigned from, unsigned cnt, void *ctx)
+static int start_for_func(const char *array_name,
+   const char *node_name, unsigned from, unsigned cnt, void *ctx)
 {
    struct ourfah2hv_ctx *my_ctx;
    HV *h;
@@ -386,7 +388,7 @@ static int start_for_func(const char *node_name, unsigned from, unsigned cnt, vo
    SV *rvav;
    SV **res;
 
-   if (from) {};
+   if (from || node_name) {};
 
    my_ctx = ctx;
    /* printf("start_fot_func: '%s' from: %u cnt: %u\n", node_name, from, cnt); */
@@ -409,7 +411,7 @@ static int start_for_func(const char *node_name, unsigned from, unsigned cnt, vo
       return -1;
    }
 
-   if ((res = hv_store(h, node_name, strlen(node_name), rvav, 0))==NULL) {
+   if ((res = hv_store(h, array_name, strlen(array_name), rvav, 0))==NULL) {
       SvREFCNT_dec(rvav);
       return -1;
    }

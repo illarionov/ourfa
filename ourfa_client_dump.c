@@ -59,7 +59,8 @@ struct dump_pkt_ctx {
 };
 
 static int node_func(const char *node_type, const char *node_name, const char *arr_index , void *ctx);
-static int start_for_func(const char *node_name, unsigned from, unsigned cnt, void *ctx);
+static int start_for_func(const char *array_name,
+      const char *node_name, unsigned from, unsigned cnt, void *ctx);
 static int err_node_func(const char *err_str, unsigned err_code, void *ctx);
 static int start_for_item(void *ctx);
 static int end_for_item(void *ctx);
@@ -391,23 +392,24 @@ static int node_func(const char *node_type, const char *node_name, const char *a
    return 0;
 }
 
-static int start_for_func(const char *node_name, unsigned from, unsigned cnt, void *ctx)
+static int start_for_func(const char *array_name,
+      const char *node_name, unsigned from, unsigned cnt, void *ctx)
 {
    struct dump_pkt_ctx *my_ctx;
 
    my_ctx = ctx;
-   if (from) {};
+   if (from || node_name) {};
 
    if (my_ctx->dump_format != DUMP_FORMAT_XML)
       return 0;
 
    if (cnt != 0) {
       dump_hash_fprintf(my_ctx->stream, my_ctx->tab_cnt,
-	    "<array name=\"%s\">\n", node_name);
+	    "<array name=\"%s\">\n", array_name);
       my_ctx->tab_cnt++;
    }else {
       dump_hash_fprintf(my_ctx->stream, my_ctx->tab_cnt,
-	    "<array name=\"%s\" />\n", node_name);
+	    "<array name=\"%s\" />\n", array_name);
    }
 
    return 0;

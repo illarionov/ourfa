@@ -56,7 +56,8 @@ struct load_resp_ctx {
 };
 
 static int node_hook(const char *node_type, const char *node_name, const char *arr_index , void *ctx);
-static int start_for_hook(const char *node_name, unsigned from, unsigned cnt, void *ctx);
+static int start_for_hook(const char *array_name,
+      const char *node_name, unsigned from, unsigned cnt, void *ctx);
 static int err_node_hook(const char *err_str, unsigned err_code, void *ctx);
 static int start_for_item_hook(void *ctx);
 static int end_for_item_hook(void *ctx);
@@ -266,8 +267,8 @@ node_hook_end:
    return ret_code;
 }
 
-
-static int start_for_hook(const char *node_name, unsigned from, unsigned cnt, void *ctx)
+static int start_for_hook(const char *array_name,
+      const char *node_name, unsigned from, unsigned cnt, void *ctx)
 {
    int ret_code=0;
    struct load_resp_ctx *my_ctx;
@@ -275,7 +276,8 @@ static int start_for_hook(const char *node_name, unsigned from, unsigned cnt, vo
    my_ctx = ctx;
 
    if (my_ctx->user_hooks && my_ctx->user_hooks->start_for) {
-      ret_code = my_ctx->user_hooks->start_for(node_name, from, cnt, my_ctx->user_ctx);
+      ret_code = my_ctx->user_hooks->start_for(array_name,
+	    node_name, from, cnt, my_ctx->user_ctx);
    }
 
    return ret_code;
