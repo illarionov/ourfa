@@ -244,7 +244,8 @@ int hv2ourfah(HV *hv, ourfa_hash_t **h)
    return 1;
 }
 
-int ourfa_exec(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, HV **res)
+int ourfa_exec(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, HV **res,
+   char *err_msg, size_t err_msg_size)
 {
    struct ourfah2hv_ctx my_ctx;
    ourfa_xmlapi_t *xmlapi;
@@ -252,18 +253,30 @@ int ourfa_exec(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, HV **res
    ourfa_hash_t *h;
    void *loadresp_ctx;
 
-   if (!ourfa || !func_name || !res)
-      return -1;
+   if (!ourfa || !func_name || !res) {
+      if (err_msg) {
+	 snprintf(err_msg, err_msg_size, "Wrong parameter");
+      }
+      return -2;
+   }
 
    xmlapi = ourfa_get_xmlapi(ourfa);
    conn = ourfa_get_conn(ourfa);
    my_ctx.res_h=newHV();
 
-   if (!xmlapi || !conn || !my_ctx.res_h)
+   if (!xmlapi || !conn || !my_ctx.res_h) {
+      if (err_msg) {
+	 snprintf(err_msg, err_msg_size, "Wrong parameter");
+      }
       return -2;
+   }
 
-   if (ourfa_start_call(ourfa, func_name, in) < 0)
+   if (ourfa_start_call(ourfa, func_name, in) < 0) {
+      if (err_msg) {
+	 snprintf(err_msg, err_msg_size, "%s", ourfa_last_err_str(ourfa));
+      }
       return -2;
+   }
 
    my_ctx.s[0]=(SV *)my_ctx.res_h;
    my_ctx.top_idx=0;
@@ -273,6 +286,8 @@ int ourfa_exec(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, HV **res
 	 func_name,
 	 conn,
 	 &hooks,
+	 err_msg,
+	 err_msg_size,
 	 &my_ctx
 	 );
 
@@ -623,6 +638,7 @@ call(self, func_name, in)
       ourfa_hash_t *ourfa_in;
       int res;
       const char *err_str;
+      char err_msg[500];
    PPCODE:
       /*   printf("Ourfa::call\n"); */
       err_str=NULL;
@@ -650,18 +666,12 @@ call(self, func_name, in)
 	 XSRETURN(2);
       }
 
+      snprintf(err_msg, sizeof(err_msg), "Unknown error");
       /*  ourfa_hash_dump(ourfa_in, stdout, "func %s. INPUT parameters:\n", func_name); */
-      if ((res = ourfa_exec(ourfa, func_name, ourfa_in, &res_h))) {
-	 /* /printf("error: %s\n", ourfa_last_err_str(ourfa)); */
-	 if (res == -3) {
-	    ourfa_xmlapi_t *xmlapi;
-	    xmlapi = ourfa_get_xmlapi(ourfa);
-	    sv = newSVpv(ourfa_xmlapi_last_err_str(xmlapi),0);
-	 }else if (res == -2) {
-	    sv = newSVpv(ourfa_last_err_str(ourfa),0);
-	 }else {
-	    sv = newSVpv("Unknown error",0);
-	 }
+      if ((res = ourfa_exec(ourfa, func_name, ourfa_in, &res_h,
+	    err_msg, sizeof(err_msg)))) {
+	 /* /printf("error: %s\n", err_msg); */
+	 sv = newSVpv(err_msg,0);
 	 EXTEND(SP, 2);
 	 PUSHs(&PL_sv_undef);
 	 mPUSHs(sv);

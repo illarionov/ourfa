@@ -325,15 +325,14 @@ int ourfa_start_call(ourfa_t *ourfa, const char *func,
    if (ourfa->xmlapi == NULL)
       return set_err(ourfa, "XML api not loaded");
 
-   ctx = ourfa_xmlapictx_new(ourfa->xmlapi, func, 0, NULL, NULL, 0, NULL);
+   ctx = ourfa_xmlapictx_new(ourfa->xmlapi, func, 0, NULL, NULL, 0, NULL, 
+	 ourfa->err_msg, sizeof(ourfa->err_msg));
    if (ctx == NULL)
-      return set_err(ourfa, "%s",
-	    ourfa_xmlapi_last_err_str(ourfa->xmlapi));
+      return 01;
 
    pkt_in = NULL;
    if (ourfa_xmlapictx_have_input_parameters(ctx)) {
       if (ourfa_xmlapictx_get_req_pkt(ctx, in, &pkt_in) != 0) {
-	 set_err(ourfa, "%s", ourfa_xmlapictx_last_err_str(ctx));
 	 ourfa_xmlapictx_free(ctx);
 	 return -1;
       }
@@ -395,18 +394,16 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
 	 func,
 	 ourfa->conn,
 	 NULL,
+	 ourfa->err_msg,
+	 sizeof(ourfa->err_msg),
 	 NULL
 	 );
 
-   if (loadresp_ctx == NULL) {
-      set_err(ourfa, "Unable to parse packet: %s", ourfa_xmlapi_last_err_str(ourfa->xmlapi));
+   if (loadresp_ctx == NULL)
       return -1;
-   }
    res_h = ourfa_xmlapictx_load_resp(loadresp_ctx);
-   if (res_h == NULL) {
-      set_err(ourfa, "Unable to parse packet: %s", ourfa_xmlapi_last_err_str(ourfa->xmlapi));
+   if (res_h == NULL)
       return -1;
-   }
 
    if (ourfa->debug_stream != NULL)
       ourfa_hash_dump(res_h, ourfa->debug_stream, "RECIVED HASH ...\n");

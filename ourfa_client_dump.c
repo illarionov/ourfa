@@ -137,11 +137,13 @@ static int dump(struct ourfa_t *ourfa,
 	 func_name,
 	 conn,
 	 &dump_hooks,
+	 my_ctx.err_msg,
+	 sizeof(my_ctx.err_msg),
 	 &my_ctx
 	 );
 
    if (loadresp_ctx == NULL) {
-      fputs(ourfa_xmlapi_last_err_str(xmlapi), stream);
+      fputs(my_ctx.err_msg, stream);
       return -1;
    }
 
@@ -176,7 +178,7 @@ static int dump(struct ourfa_t *ourfa,
    }
 
    if (h == NULL) {
-      fputs(ourfa_xmlapi_last_err_str(xmlapi), stream);
+      fputs(my_ctx.err_msg, stream);
       return -1;
    }
 

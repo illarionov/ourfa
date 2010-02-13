@@ -603,8 +603,10 @@ static int get_next_attr(ourfa_conn_t *conn)
       is_eodata = conn->term_pkt_in_tail;
    }
 
-   if (conn->cur_attr == NULL)
+   if (conn->cur_attr == NULL) {
+      set_err(conn, 1, "No more data");
       return 1;
+   }
 
    return 0;
 }

@@ -52,14 +52,6 @@
 #define DEFAULT_API_XML_FILE "api.xml"
 #define DEFAULT_API_XML_DIR "xml"
 
-struct ourfa_xmlapi_t {
-   char *api_dir;
-   char *api_file;
-
-   xmlDoc *api;
-   char	 err_msg[200];
-};
-
 struct ourfa_xmlapictx_t {
    ourfa_xmlapi_t *api;
    /* function id  */
@@ -82,7 +74,8 @@ struct ourfa_xmlapictx_t {
    /* XXX Ugly hack */
    unsigned use_unset;
 
-   char	 err_msg[200];
+   char *user_err_str;
+   size_t user_err_str_size;
 };
 
 struct err_str_params_t {
@@ -90,7 +83,6 @@ struct err_str_params_t {
    size_t err_str_size;
 };
 
-int ourfa_xmlapi_set_err(ourfa_xmlapi_t *api, const char *fmt, ...);
 static int set_ctx_err(ourfa_xmlapictx_t *api, const char *fmt, ...);
 static void xml_generic_error_func(void *ctx, const char *msg, ...);
 static void init_traverse_funcs(ourfa_xmlapictx_t *ctx, const ourfa_traverse_funcs_t *t);
@@ -108,44 +100,14 @@ ourfa_xmlapi_t *ourfa_xmlapi_new(const char *xml_dir, const char *xml_file,
    err_params.err_str = err_str;
    err_params.err_str_size = err_str_size;
 
-   res = malloc(sizeof(struct ourfa_xmlapi_t));
-
-   if (res == NULL) {
-      xml_generic_error_func(&err_params, "Cannot allocate memory for xml api");
-      return NULL;
-   }
-
-   if (xml_dir != NULL) {
-      res->api_dir = strdup(xml_dir);
-      if (res->api_dir == NULL) {
-	 free(res);
-	 xml_generic_error_func(&err_params, "Cannot allocate memory for xml api");
-	 return NULL;
-      }
-   }else
-      res->api_dir = NULL;
-
-   if (xml_file != NULL){
-      res->api_file = strdup(xml_file);
-      if (res->api_file == NULL) {
-	 free(res->api_dir);
-	 free(res);
-	 xml_generic_error_func(&err_params, "Cannot allocate memory for xml api");
-	 return NULL;
-      }
-   }else
-      res->api_file = NULL;
-
-   if ((res->api_dir == NULL) && res->api_file != NULL)
-      xmlapi_file = strdup(res->api_file);
+   if ((xml_dir == NULL) && xml_file != NULL)
+      xmlapi_file = strdup(xml_file);
    else
       asprintf(&xmlapi_file, "%s/%s",
-	    res->api_dir ? res->api_dir : DEFAULT_API_XML_DIR,
-	    res->api_file ? res->api_file : DEFAULT_API_XML_FILE);
+	    xml_dir ? xml_dir : DEFAULT_API_XML_DIR,
+	    xml_file ? xml_file : DEFAULT_API_XML_FILE);
 
    if (xmlapi_file == NULL) {
-      free(res->api_dir);
-      free(res->api_file);
       free(res);
       xml_generic_error_func(&err_params, "Cannot allocate memory for xml api");
       return NULL;
@@ -153,13 +115,10 @@ ourfa_xmlapi_t *ourfa_xmlapi_new(const char *xml_dir, const char *xml_file,
 
    xmlSetGenericErrorFunc(&err_params, xml_generic_error_func);
 
-   res->api = xmlReadFile(xmlapi_file, NULL, XML_PARSE_COMPACT);
-   if (res->api == NULL) {
+   res = xmlReadFile(xmlapi_file, NULL, XML_PARSE_COMPACT);
+   if (res == NULL) {
       xmlSetGenericErrorFunc(NULL, NULL);
       free(xmlapi_file);
-      free(res->api_dir);
-      free(res->api_file);
-      free(res);
       return NULL;
    }
 
@@ -173,50 +132,51 @@ void ourfa_xmlapi_free(ourfa_xmlapi_t *api)
 {
    if (api == NULL)
       return;
-   free(api->api_dir);
-   free(api->api_file);
-   xmlFreeDoc(api->api);
-   free(api);
+   xmlFreeDoc(api);
 }
 
-ourfa_xmlapictx_t *ourfa_xmlapictx_new(struct ourfa_xmlapi_t *api, const char *func_name,
+ourfa_xmlapictx_t *ourfa_xmlapictx_new(ourfa_xmlapi_t *api, const char *func_name,
       unsigned traverse_in,
       const ourfa_traverse_funcs_t *funcs,
       ourfa_hash_t *data_h,
       unsigned use_unset,
-      void *user_ctx)
+      void *user_ctx,
+      char *user_err_str,
+      size_t user_err_str_size
+      )
 {
    xmlNode *urfa_root;
    xmlNode *cur_node;
    ourfa_xmlapictx_t *res;
-
-   api->err_msg[0]='\0';
 
    res = NULL;
 
    if (api == NULL || func_name == NULL || func_name[0]=='\0')
       return NULL;
 
-   urfa_root = xmlDocGetRootElement(api->api);
+   res=malloc(sizeof(ourfa_xmlapictx_t));
+   if (res == NULL)
+      return NULL;
+   res->user_err_str = user_err_str;
+   res->user_err_str_size = user_err_str_size;
+
+   urfa_root = xmlDocGetRootElement(api);
    if (urfa_root == NULL) {
-      ourfa_xmlapi_set_err(api, "No root element");
+      set_ctx_err(res, "No root element");
+      free(res);
       return NULL;
    }
 
    if (xmlStrcasecmp(urfa_root->name, (const xmlChar *) "urfa") != 0) {
-      ourfa_xmlapi_set_err(api, "Document of the wrong type, root node != urfa");
+      set_ctx_err(res, "Document of the wrong type, root node != urfa");
+      free(res);
       return NULL;
    }
-
-   res=malloc(sizeof(ourfa_xmlapictx_t));
-   if (res == NULL)
-      return NULL;
 
    res->api = api;
    res->id = 0;
    res->name = NULL;
    res->func = res->in = res->out = NULL;
-   res->err_msg[0]='\0';
 
    for (cur_node=urfa_root->children; cur_node; cur_node = cur_node->next) {
       xmlChar *prop_func_name, *prop_func_id;
@@ -247,13 +207,13 @@ ourfa_xmlapictx_t *ourfa_xmlapictx_new(struct ourfa_xmlapi_t *api, const char *f
       prop_func_id = xmlGetProp(cur_node, (const xmlChar *)"id");
       if (prop_func_id == NULL || prop_func_id[0]=='\0') {
 	 xmlFree(prop_func_name);
+	 set_ctx_err(res, "ID of function '%s' not defined", func_name);
 	 free(res);
-	 ourfa_xmlapi_set_err(api, "ID of function '%s' not defined", func_name);
 	 return NULL;
       }
       tmp = strtol((const char *)prop_func_id, &p_end, 0);
       if ((*p_end != '\0') || errno == ERANGE) {
-	 ourfa_xmlapi_set_err(api, "Wrong ID '%s' of function '%s'", prop_func_id, func_name);
+	 set_ctx_err(res, "Wrong ID '%s' of function '%s'", prop_func_id, func_name);
 	 xmlFree(prop_func_name);
 	 xmlFree(prop_func_id);
 	 free(res);
@@ -275,9 +235,9 @@ ourfa_xmlapictx_t *ourfa_xmlapictx_new(struct ourfa_xmlapi_t *api, const char *f
 	    res->out = n;
 	 else {
 	    xmlFree((xmlChar *)res->name);
-	    free(res);
-	    ourfa_xmlapi_set_err(api, "Unknown node name '%s' in function '%s' "
+	    set_ctx_err(res, "Unknown node name '%s' in function '%s' "
 		  "definition", n->name, res->name);
+	    free(res);
 	    return NULL;
 	 } /* else */
       } /* for */
@@ -286,20 +246,20 @@ ourfa_xmlapictx_t *ourfa_xmlapictx_new(struct ourfa_xmlapi_t *api, const char *f
 
    if (res->func == NULL) {
       xmlFree(res->name);
+      set_ctx_err(res, "Function '%s' not found in API", func_name);
       free(res);
-      ourfa_xmlapi_set_err(api, "Function '%s' not found in API", func_name);
       return NULL;
    }
    if (res->in == NULL) {
       xmlFree(res->name);
+      set_ctx_err(res, "Input parameters of function '%s' not found", func_name);
       free(res);
-      ourfa_xmlapi_set_err(api, "Input parameters of function '%s' not found", func_name);
       return NULL;
    }
    if (res->out == NULL) {
       xmlFree(res->name);
+      set_ctx_err(res, "Ouput parameters of function '%s' not found", func_name);
       free(res);
-      ourfa_xmlapi_set_err(api, "Ouput parameters of function '%s' not found", func_name);
       return NULL;
    }
 
@@ -621,7 +581,8 @@ static int exec_error_node(ourfa_xmlapictx_t *ctx, xmlNodePtr cur_node, ourfa_ha
 	 variable ? " " : "",
 	 variable ? s1 : "");
 
-   ourfa_hash_set_string(h, "_error", NULL, ctx->err_msg);
+   ourfa_hash_set_string(h, "_error", NULL,
+	 ctx->user_err_str ? ctx->user_err_str : "");
 
    xmlFree(comment);
    xmlFree(variable);
@@ -957,8 +918,6 @@ int ourfa_xmlapictx_get_req_pkt(ourfa_xmlapictx_t *ctx,
    if (ctx==NULL || in==NULL || res==NULL)
       return -1;
 
-   ctx->err_msg[0]='\0';
-
    if (*res == NULL) {
       *res = ourfa_pkt_new(OURFA_PKT_SESSION_DATA, NULL);
       if (*res == NULL)
@@ -983,7 +942,6 @@ int ourfa_xmlapictx_traverse_start(ourfa_xmlapictx_t *ctx)
    if (ctx==NULL)
       return -1;
 
-   ctx->err_msg[0]='\0';
    if (ctx->traverse_in) {
       assert(ctx->in != NULL);
       ctx->end_node = ctx->in;
@@ -1111,7 +1069,7 @@ int ourfa_xmlapictx_traverse(ourfa_xmlapictx_t *ctx)
 	 ret_code = exec_error_node(ctx, ctx->cur_node, ctx->data_h);
 
 	 if (ctx->traverse_funcs.err_node) {
-	    ret_code = ctx->traverse_funcs.err_node(ctx->err_msg, ret_code, ctx->user_ctx);
+	    ret_code = ctx->traverse_funcs.err_node(ctx->user_err_str, ret_code, ctx->user_ctx);
 	 }
 
 	 break;
@@ -1179,25 +1137,15 @@ get_next_node:
    return ret_code;
 }
 
-
-int ourfa_xmlapi_set_err(ourfa_xmlapi_t *api, const char *fmt, ...)
-{
-   va_list ap;
-
-   va_start(ap, fmt);
-   vsnprintf(api->err_msg, sizeof(api->err_msg), fmt, ap);
-   va_end(ap);
-
-   return -1;
-}
-
 static int set_ctx_err(ourfa_xmlapictx_t *ctx, const char *fmt, ...)
 {
    va_list ap;
 
-   va_start(ap, fmt);
-   vsnprintf(ctx->err_msg, sizeof(ctx->err_msg), fmt, ap);
-   va_end(ap);
+   if (ctx->user_err_str) {
+      va_start(ap, fmt);
+      vsnprintf(ctx->user_err_str, ctx->user_err_str_size, fmt, ap);
+      va_end(ap);
+   }
 
    return -1;
 }
@@ -1217,19 +1165,4 @@ static void xml_generic_error_func(void *ctx, const char *msg, ...)
    vsnprintf(err->err_str, err->err_str_size, msg, ap);
    va_end(ap);
 }
-
-const char *ourfa_xmlapi_last_err_str(ourfa_xmlapi_t *api)
-{
-   if (api == NULL)
-      return NULL;
-   return api->err_msg;
-}
-
-const char *ourfa_xmlapictx_last_err_str(ourfa_xmlapictx_t *ctx)
-{
-   if (ctx == NULL)
-      return NULL;
-   return ctx->err_msg;
-}
-
 

@@ -81,7 +81,7 @@ typedef struct ourfa_pkt_t ourfa_pkt_t;
 typedef xmlHashTable ourfa_hash_t;
 typedef struct ourfa_array_t ourfa_array_t;
 typedef struct ourfa_conn_t ourfa_conn_t;
-typedef struct ourfa_xmlapi_t ourfa_xmlapi_t;
+typedef xmlDoc ourfa_xmlapi_t;
 typedef struct ourfa_xmlapictx_t ourfa_xmlapictx_t;
 
 
@@ -247,14 +247,15 @@ ourfa_xmlapi_t *ourfa_xmlapi_new(
       size_t err_str_size);
 void ourfa_xmlapi_free(ourfa_xmlapi_t *api);
 
-ourfa_xmlapictx_t *ourfa_xmlapictx_new(
-      ourfa_xmlapi_t *api,
-      const char *func_name,
+ourfa_xmlapictx_t *ourfa_xmlapictx_new(ourfa_xmlapi_t *api, const char *func_name,
       unsigned traverse_in,
       const ourfa_traverse_funcs_t *funcs,
       ourfa_hash_t *data_h,
       unsigned use_unset,
-      void *user_ctx);
+      void *user_ctx,
+      char *user_err_str,
+      size_t user_err_str_size
+      );
 void ourfa_xmlapictx_free(ourfa_xmlapictx_t *ctx);
 
 int ourfa_xmlapictx_func_id(ourfa_xmlapictx_t *ctx);
@@ -264,19 +265,18 @@ int ourfa_xmlapictx_have_output_parameters(ourfa_xmlapictx_t *ctx);
 int ourfa_xmlapictx_traverse_start(ourfa_xmlapictx_t *ctx);
 int ourfa_xmlapictx_traverse(ourfa_xmlapictx_t *ctx);
 
-const char *ourfa_xmlapictx_last_err_str(ourfa_xmlapictx_t *ctx);
-
 int ourfa_xmlapictx_get_req_pkt(ourfa_xmlapictx_t *ctx,
       ourfa_hash_t *in, ourfa_pkt_t **out);
-void *ourfa_xmlapictx_load_resp_init(struct ourfa_xmlapi_t *api,
+
+void *ourfa_xmlapictx_load_resp_init(ourfa_xmlapi_t *api,
       const char *func_name,
       ourfa_conn_t *conn,
       const ourfa_traverse_funcs_t *user_hooks,
+      char *user_err_str,
+      size_t user_err_str_size,
       void *user_ctx);
 ourfa_hash_t *ourfa_loadrespctx_get_h(void *load_resp_ctx);
 ourfa_hash_t *ourfa_xmlapictx_load_resp(void *load_resp_ctx);
-
-const char *ourfa_xmlapi_last_err_str(ourfa_xmlapi_t *api);
 
 /* Connection  */
 ourfa_conn_t *ourfa_conn_open(
