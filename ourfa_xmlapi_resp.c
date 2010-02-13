@@ -241,7 +241,7 @@ static int node_hook(const char *node_type, const char *node_name, const char *a
    }
 
 node_hook_end:
-   if (my_ctx->user_hooks && my_ctx->user_hooks->node) {
+   if (my_ctx->user_hooks && my_ctx->user_hooks->node && (ret_code == 0)) {
       ret_code = my_ctx->user_hooks->node(node_type, node_name, arr_index,
 	    my_ctx->user_ctx);
    }

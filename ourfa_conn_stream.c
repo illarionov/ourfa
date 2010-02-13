@@ -580,48 +580,31 @@ static int pktlist_read_pkt(ourfa_conn_t *conn)
 static int get_next_attr(ourfa_conn_t *conn)
 {
    ssize_t recvd_bytes;
+   int is_eodata;
 
    if (conn == NULL)
       return -1;
 
-   if (conn->pktlist_head == NULL) {
-      assert(conn->cur_attr == NULL);
-      assert(conn->pktlist_head == NULL);
-
-      conn->term_pkt_in_tail = 0;
-
-      recvd_bytes = pktlist_read_pkt(conn);
-      if (recvd_bytes < 0)
-	 return -1;
-      assert(conn->cur_attr != NULL);
-   }else {
-      assert(conn->cur_attr != NULL);
+   if (conn->cur_attr != NULL) {
       conn->cur_attr = conn->cur_attr->next;
+      if (conn->cur_attr != NULL)
+	 return 0;
    }
 
-   assert(conn->pktlist_head);
-
-   /* No more attributes in packet  */
-   if (conn->cur_attr == NULL) {
-      int is_eodata;
-
-      if ((conn->pktlist_head == conn->pktlist_tail)
-	    && conn->term_pkt_in_tail)
-	 is_eodata = 1;
-      else
-	 is_eodata = 0;
-
-      ourfa_pkt_free(pktlist_remove_head(conn));
-      if (is_eodata)
-	 return 1;
-
-      if (conn->cur_attr == NULL) {
+   is_eodata=0;
+   while ((!is_eodata) && (conn->cur_attr == NULL)) {
+      if (conn->pktlist_head != NULL) {
+	 ourfa_pkt_free(pktlist_remove_head(conn));
+      }else {
 	 recvd_bytes = pktlist_read_pkt(conn);
 	 if (recvd_bytes < 0)
 	    return -1;
-	 assert(conn->cur_attr != NULL);
       }
+      is_eodata = conn->term_pkt_in_tail;
    }
+
+   if (conn->cur_attr == NULL)
+      return 1;
 
    return 0;
 }
@@ -643,15 +626,11 @@ int ourfa_istream_load_full(ourfa_conn_t *conn)
 int ourfa_istream_flush(ourfa_conn_t *conn)
 {
   int res;
-  int is_term;
   ourfa_pkt_t *pkt;
   const ourfa_attr_hdr_t *attr_list;
 
-  is_term = conn->term_pkt_in_tail;
-
   pktlist_free(conn);
-
-  if (!is_term) {
+  if (!conn->term_pkt_in_tail) {
      do {
 	res = ourfa_conn_recv_packet(conn, &pkt);
 	if (res > 0) {
@@ -665,7 +644,7 @@ int ourfa_istream_flush(ourfa_conn_t *conn)
      }while (res > 0);
   }
 
-  assert(conn->term_pkt_in_tail == 0);
+  conn->term_pkt_in_tail = 0;
 
   return 0;
 }
@@ -756,7 +735,6 @@ static ourfa_pkt_t *pktlist_remove_head(ourfa_conn_t *conn)
    if (conn->pktlist_head->next == NULL) {
       conn->pktlist_head = conn->pktlist_tail = NULL;
       conn->cur_attr = NULL;
-      conn->term_pkt_in_tail = 0;
    }else {
       conn->pktlist_head = conn->pktlist_head->next;
       conn->cur_attr = ourfa_pkt_get_attrs_list(conn->pktlist_head->pkt,
