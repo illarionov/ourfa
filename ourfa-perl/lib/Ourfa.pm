@@ -35,6 +35,12 @@ sub AUTOLOAD {
     our $AUTOLOAD;
     ($constname = $AUTOLOAD) =~ s/.*:://;
     croak "&Ourfa::constant not defined" if $constname eq 'constant';
+
+    if ($constname =~ /^rpcf_/) {
+       my ($self, %params) = @_;
+       return $self->call($constname, \%params);
+    }
+
     my ($error, $val) = constant($constname);
     if ($error) { croak $error; }
     {

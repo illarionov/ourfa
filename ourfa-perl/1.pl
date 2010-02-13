@@ -20,11 +20,9 @@ if ($error) {
    die("Cannot connect: $error");
 }
 
-#my ($res, $error) = $ourfa->call("rpcf_get_userinfo", {user_id=>1});
-my ($res, $error) = $ourfa->call("rpcf_liburfa_list", {user_id=>1});
-#my ($res, $error) = $ourfa->call("rpcf_get_stats", {type=>0});
+my ($res, $error) = $ourfa->rpcf_get_userinfo(user_id=>1);
+die($error) if ($error);
 
-print Dumper($res) . Dumper($error);
+print Dumper($res);
 
-#print $res->{full_name} . "\n";
 

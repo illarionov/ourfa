@@ -631,7 +631,7 @@ call(self, func_name, in)
       else if (!sv_isa(self, "Ourfa"))
 	 err_str="Wrong reference type";
       else if (!SvROK(in) || (SvTYPE(SvRV(in)) != SVt_PVHV))
-	 err_str = "Wring input parameters";
+	 err_str = "Wrong input parameters";
 
       if (err_str) {
          sv = sv_2mortal(newSVpv(err_str,0));
