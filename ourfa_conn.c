@@ -371,15 +371,14 @@ int ourfa_start_call(ourfa_t *ourfa, const char *func,
 }
 
 int ourfa_call(ourfa_t *ourfa, const char *func,
-      ourfa_hash_t *in,
-      ourfa_hash_t **out)
+      ourfa_hash_t *globals)
 {
    ourfa_pkt_t *pkt_out;
    ourfa_hash_t *res_h;
    void *loadresp_ctx;
    int last_err;
 
-   last_err = ourfa_start_call(ourfa, func, in);
+   last_err = ourfa_start_call(ourfa, func, globals);
 
    if (last_err < 0)
       return last_err;
@@ -396,7 +395,8 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
 	 NULL,
 	 ourfa->err_msg,
 	 sizeof(ourfa->err_msg),
-	 NULL
+	 NULL,
+	 globals
 	 );
 
    if (loadresp_ctx == NULL)
@@ -407,11 +407,6 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
 
    if (ourfa->debug_stream != NULL)
       ourfa_hash_dump(res_h, ourfa->debug_stream, "RECIVED HASH ...\n");
-
-   if (out)
-      *out = res_h;
-   else
-      ourfa_hash_free(res_h);
 
    return 0;
 }

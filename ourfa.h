@@ -124,8 +124,7 @@ int ourfa_set_conf(
 
 int ourfa_connect(ourfa_t *ourfa);
 int ourfa_disconnect(ourfa_t *ourfa);
-int ourfa_call(ourfa_t *ourfa, const char *func, ourfa_hash_t *in,
-      ourfa_hash_t **out);
+int ourfa_call(ourfa_t *ourfa, const char *func, ourfa_hash_t *globals);
 int ourfa_start_call(ourfa_t *ourfa, const char *func,
       ourfa_hash_t *in);
 
@@ -275,8 +274,9 @@ void *ourfa_xmlapictx_load_resp_init(ourfa_xmlapi_t *api,
       const ourfa_traverse_funcs_t *user_hooks,
       char *user_err_str,
       size_t user_err_str_size,
-      void *user_ctx);
-ourfa_hash_t *ourfa_loadrespctx_get_h(void *load_resp_ctx);
+      void *user_ctx,
+      ourfa_hash_t *res_h
+      );
 ourfa_hash_t *ourfa_xmlapictx_load_resp(void *load_resp_ctx);
 
 /* Connection  */

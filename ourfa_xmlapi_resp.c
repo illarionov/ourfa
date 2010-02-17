@@ -79,7 +79,8 @@ void *ourfa_xmlapictx_load_resp_init(ourfa_xmlapi_t *api,
       const ourfa_traverse_funcs_t *user_hooks,
       char *user_err_str,
       size_t user_err_str_size,
-      void *user_ctx)
+      void *user_ctx,
+      ourfa_hash_t *res_h)
 {
    struct load_resp_ctx *my_ctx;
 
@@ -102,7 +103,7 @@ void *ourfa_xmlapictx_load_resp_init(ourfa_xmlapi_t *api,
    my_ctx->user_err_str = user_err_str;
    my_ctx->user_err_str_size = user_err_str_size;
 
-   my_ctx->res_h = ourfa_hash_new(0);
+   my_ctx->res_h = res_h;
    if (!my_ctx->res_h) {
       set_err(my_ctx, "Cannot initialize output hash");
       free(my_ctx);
@@ -124,15 +125,6 @@ void *ourfa_xmlapictx_load_resp_init(ourfa_xmlapi_t *api,
    ourfa_xmlapictx_traverse_start(my_ctx->xmlapi_ctx);
 
    return my_ctx;
-}
-
-ourfa_hash_t *ourfa_loadrespctx_get_h(void *load_resp_ctx)
-{
-   struct load_resp_ctx *my_ctx = load_resp_ctx;
-
-   if (my_ctx == NULL)
-      return NULL;
-   return my_ctx->res_h;
 }
 
 ourfa_hash_t *ourfa_xmlapictx_load_resp(void *load_resp_ctx)

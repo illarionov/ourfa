@@ -74,7 +74,8 @@ static int attrlist2str(unsigned *attr_list, size_t attr_list_cnt,
 static int dump(struct ourfa_t *ourfa,
       const char *func_name,
       FILE *stream,
-      enum dump_format_t dump_format);
+      enum dump_format_t dump_format,
+      ourfa_hash_t *in);
 
 static const ourfa_traverse_funcs_t dump_hooks = {
    node_func,
@@ -85,20 +86,21 @@ static const ourfa_traverse_funcs_t dump_hooks = {
    end_for
 };
 
-int ourfa_dump_xml(ourfa_t *ourfa, const char *func_name, FILE *stream)
+int ourfa_dump_xml(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, FILE *stream)
 {
-   return dump(ourfa, func_name, stream, DUMP_FORMAT_XML);
+   return dump(ourfa, func_name, stream, DUMP_FORMAT_XML, in);
 }
 
-int ourfa_dump_batch(ourfa_t *ourfa, const char *func_name, FILE *stream)
+int ourfa_dump_batch(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, FILE *stream)
 {
-   return dump(ourfa, func_name, stream, DUMP_FORMAT_BATCH);
+   return dump(ourfa, func_name, stream, DUMP_FORMAT_BATCH, in);
 }
 
 static int dump(struct ourfa_t *ourfa,
       const char *func_name,
       FILE *stream,
-      enum dump_format_t dump_format)
+      enum dump_format_t dump_format,
+      ourfa_hash_t *in)
 {
    struct dump_pkt_ctx my_ctx;
    ourfa_xmlapi_t *xmlapi;
@@ -140,7 +142,8 @@ static int dump(struct ourfa_t *ourfa,
 	 &dump_hooks,
 	 my_ctx.err_msg,
 	 sizeof(my_ctx.err_msg),
-	 &my_ctx
+	 &my_ctx,
+	 in
 	 );
 
    if (loadresp_ctx == NULL) {
@@ -148,7 +151,7 @@ static int dump(struct ourfa_t *ourfa,
       return -1;
    }
 
-   my_ctx.h = ourfa_loadrespctx_get_h(loadresp_ctx);
+   my_ctx.h = in;
 
    switch (dump_format) {
       case DUMP_FORMAT_XML:
@@ -183,7 +186,6 @@ static int dump(struct ourfa_t *ourfa,
       return -1;
    }
 
-   ourfa_hash_free(h);
    xmlFreeDoc(my_ctx.tmp_doc);
    xmlBufferFree(my_ctx.tmp_buf);
 

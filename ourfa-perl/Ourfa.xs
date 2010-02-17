@@ -289,7 +289,8 @@ int ourfa_exec(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, HV **res
 	 &hooks,
 	 err_msg,
 	 err_msg_size,
-	 &my_ctx
+	 &my_ctx,
+	 in
 	 );
 
    if (loadresp_ctx == NULL) {
@@ -297,7 +298,7 @@ int ourfa_exec(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, HV **res
       return -3;
    }
 
-   my_ctx.h = ourfa_loadrespctx_get_h(loadresp_ctx);
+   my_ctx.h = in;
 
    h = ourfa_xmlapictx_load_resp(loadresp_ctx);
 
@@ -306,7 +307,6 @@ int ourfa_exec(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, HV **res
       return -3;
    }
 
-   ourfa_hash_free(h);
    *res = my_ctx.res_h;
 
    return 0;
@@ -669,10 +669,11 @@ call(self, func_name, in)
       }
 
       snprintf(err_msg, sizeof(err_msg), "Unknown error");
-      /*  ourfa_hash_dump(ourfa_in, stdout, "func %s. INPUT parameters:\n", func_name); */
+      /* ourfa_hash_dump(ourfa_in, stdout, "func %s. INPUT parameters:\n", func_name); */
       if ((res = ourfa_exec(ourfa, func_name, ourfa_in, &res_h,
 	    err_msg, sizeof(err_msg)))) {
 	 /* /printf("error: %s\n", err_msg); */
+	 ourfa_hash_free(ourfa_in);
 	 sv = newSVpv(err_msg,0);
 	 EXTEND(SP, 2);
 	 PUSHs(&PL_sv_undef);

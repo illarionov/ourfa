@@ -46,8 +46,8 @@ enum output_format_t {
 };
 
 /* ourfa_client_dump.c */
-int ourfa_dump_xml(ourfa_t *ourfa, const char *func_name, FILE *stream);
-int ourfa_dump_batch(ourfa_t *ourfa, const char *func_name, FILE *stream);
+int ourfa_dump_xml(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, FILE *stream);
+int ourfa_dump_batch(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, FILE *stream);
 
 
 static int usage()
@@ -96,7 +96,7 @@ int main(int argc, char **argv)
 {
    int i, res;
    ourfa_t *ourfa;
-   ourfa_hash_t *in, *out;
+   ourfa_hash_t *in;
 
    struct {
       const char *host;
@@ -355,11 +355,11 @@ int main(int argc, char **argv)
    }
 
    if (params.output_format == OUTPUT_FORMAT_HASH) {
-      if (ourfa_call(ourfa, params.action, in, &out) != 0) {
+      if (ourfa_call(ourfa, params.action, in) != 0) {
 	 fprintf(stderr, "%s\n", ourfa_last_err_str(ourfa));
 	 return 1;
       }
-      ourfa_hash_dump(out, stdout, "Function: %s. OUTPUT HASH:\n", params.action);
+      ourfa_hash_dump(in, stdout, "Function: %s. OUTPUT HASH:\n", params.action);
       return 0;
    }else {
       int last_err;
@@ -371,10 +371,10 @@ int main(int argc, char **argv)
       }
       switch (params.output_format) {
 	 case OUTPUT_FORMAT_XML:
-	    res = ourfa_dump_xml(ourfa, params.action, stdout);
+	    res = ourfa_dump_xml(ourfa, params.action, in, stdout);
 	    break;
 	 case OUTPUT_FORMAT_BATCH:
-	    res = ourfa_dump_batch(ourfa, params.action, stdout);
+	    res = ourfa_dump_batch(ourfa, params.action, in, stdout);
 	    break;
 	 default:
 	    assert(0);
