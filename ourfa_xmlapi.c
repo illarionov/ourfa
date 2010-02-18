@@ -787,7 +787,7 @@ static int req_pkt_add_atts(ourfa_xmlapictx_t *ctx,
 	 xmlFree(name);
 	 xmlFree(arr_idx);
 	 /*  XXX */
-	 if (ourfa_pkt_add_data_long(pkt, val) != 0)
+	 if (ourfa_pkt_add_data_double(pkt, val) != 0)
 	    break;
 
       /* STRING */
