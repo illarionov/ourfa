@@ -206,7 +206,19 @@ int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct t_idx_l
 	 }
 	 break;
       default:
-        if (SvPOK(sv)) {
+        if (SvIOK(sv)) {
+	    long val;
+	    val = SvIV(sv);
+	    /*  printf("adding key: %s idx: %s long: %d\n", key, idx->idx_list_s, val); */
+	    if (ourfa_hash_set_long(res, key, idx->idx_list_s, val) != 0)
+	       err = -1;
+        }else if (SvNOK(sv)) {
+	    double val;
+	    val = SvNV(sv);
+	    /*   printf("adding key: %s idx: %s double: %d\n", key, idx->idx_list_s, val); */
+	    if (ourfa_hash_set_double(res, key, idx->idx_list_s, val) != 0)
+	       err = -1;
+        }else if (SvPOK(sv)) {
             char *str;
             str = SvPV_nolen(sv);
             /*  printf("adding key: %s idx: %s str: %s\n", key, idx->idx_list_s, str); */
