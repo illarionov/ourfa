@@ -368,7 +368,7 @@ static int builtin_func(ourfa_hash_t *globals, const xmlChar *func, int *res)
       if (sscanf((const char *)func, "size(%40[a-zA-Z0-9_-])", arr_name) != 1)
 	 return -1;
       if (ourfa_hash_get_arr_size(globals, arr_name, NULL, &u_res) != 0)
-	 return -1;
+	 u_res = 0;
       *res = (int)u_res;
    }
 
