@@ -137,7 +137,6 @@ ourfa_hash_t *ourfa_xmlapictx_load_resp(void *load_resp_ctx)
 
    if (ourfa_xmlapictx_traverse(my_ctx->xmlapi_ctx) != 0) {
       res_h = NULL;
-      ourfa_hash_free(my_ctx->res_h);
       /* XXX: error  */
    }else {
       res_h = my_ctx->res_h;
