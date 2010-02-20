@@ -208,6 +208,7 @@ static struct hash_val_t *findncreate_arr_by_idx(ourfa_hash_t *h,
 
 int ourfa_hash_set_int(ourfa_hash_t *h, const char *key, const char *idx, int val)
 {
+   int res;
    unsigned last_idx;
    unsigned i;
    struct hash_val_t *arr;
@@ -220,21 +221,45 @@ int ourfa_hash_set_int(ourfa_hash_t *h, const char *key, const char *idx, int va
    if (arr == NULL)
       return -1;
 
-   assert(arr->data_pool_size > last_idx);
+   res = 0;
+   switch (arr->type) {
+      case OURFA_INOUT_INT:
+	 assert(arr->data_pool_size > last_idx);
 
-   ((int *)arr->data)[last_idx] = val;
+	 ((int *)arr->data)[last_idx] = val;
 
-   if (last_idx >=  arr->elm_cnt) {
-      for (i=arr->elm_cnt; i < last_idx; i++)
-	 ((int *)arr->data)[i] = 0;
-      arr->elm_cnt = last_idx+1;
+	 if (last_idx >=  arr->elm_cnt) {
+	    for (i=arr->elm_cnt; i < last_idx; i++)
+	       ((int *)arr->data)[i] = 0;
+	    arr->elm_cnt = last_idx+1;
+	 }
+	 break;
+      case OURFA_INOUT_LONG:
+	 res = ourfa_hash_set_long(h, key, idx, val);
+	 break;
+      case OURFA_INOUT_DOUBLE:
+	 res = ourfa_hash_set_double(h, key, idx, val);
+	 break;
+      case OURFA_INOUT_STRING:
+	 {
+	    char str[80];
+	    snprintf(str, sizeof(str), "%i", val);
+	    res = ourfa_hash_set_string(h, key, idx, str);
+	 }
+	 break;
+      case OURFA_INOUT_ARRAY:
+      case OURFA_INOUT_HASH:
+      case OURFA_INOUT_IP:
+      default:
+	 return -1;
    }
 
-   return 0;
+   return res;
 }
 
 int ourfa_hash_set_long(ourfa_hash_t *h, const char *key, const char *idx, long val)
 {
+   int res;
    unsigned last_idx;
    unsigned i;
    struct hash_val_t *arr;
@@ -247,21 +272,46 @@ int ourfa_hash_set_long(ourfa_hash_t *h, const char *key, const char *idx, long 
    if (arr == NULL)
       return -1;
 
-   assert(arr->data_pool_size > last_idx);
+   res = 0;
+   switch (arr->type) {
+      case OURFA_INOUT_INT:
+	 /* XXX */
+	 res = ourfa_hash_set_int(h, key, idx, (int)val);
+	 break;
+      case OURFA_INOUT_LONG:
+	 assert(arr->data_pool_size > last_idx);
 
-   ((long *)arr->data)[last_idx] = val;
+	 ((long *)arr->data)[last_idx] = val;
 
-   if (last_idx >=  arr->elm_cnt) {
-      for (i=arr->elm_cnt; i < last_idx; i++)
-	 ((long *)arr->data)[i] = 0;
-      arr->elm_cnt = last_idx+1;
+	 if (last_idx >=  arr->elm_cnt) {
+	    for (i=arr->elm_cnt; i < last_idx; i++)
+	       ((long *)arr->data)[i] = 0;
+	    arr->elm_cnt = last_idx+1;
+	 }
+	 break;
+      case OURFA_INOUT_DOUBLE:
+	 res = ourfa_hash_set_double(h, key, idx, val);
+	 break;
+      case OURFA_INOUT_STRING:
+	 {
+	    char str[80];
+	    snprintf(str, sizeof(str), "%li", val);
+	    res = ourfa_hash_set_string(h, key, idx, str);
+	 }
+	 break;
+      case OURFA_INOUT_ARRAY:
+      case OURFA_INOUT_HASH:
+      case OURFA_INOUT_IP:
+      default:
+	 return -1;
    }
 
-   return 0;
+   return res;
 }
 
 int ourfa_hash_set_double(ourfa_hash_t *h, const char *key, const char *idx, double val)
 {
+   int res;
    unsigned last_idx;
    unsigned i;
    struct hash_val_t *arr;
@@ -274,17 +324,36 @@ int ourfa_hash_set_double(ourfa_hash_t *h, const char *key, const char *idx, dou
    if (arr == NULL)
       return -1;
 
-   assert(arr->data_pool_size > last_idx);
+   res = 0;
+   switch (arr->type) {
+      case OURFA_INOUT_DOUBLE:
+	 assert(arr->data_pool_size > last_idx);
 
-   ((double *)arr->data)[last_idx] = val;
+	 ((double *)arr->data)[last_idx] = val;
 
-   if (last_idx >=  arr->elm_cnt) {
-      for (i=arr->elm_cnt; i < last_idx; i++)
-	 ((double *)arr->data)[i] = 0;
-      arr->elm_cnt = last_idx+1;
+	 if (last_idx >=  arr->elm_cnt) {
+	    for (i=arr->elm_cnt; i < last_idx; i++)
+	       ((double *)arr->data)[i] = 0;
+	    arr->elm_cnt = last_idx+1;
+	 }
+	 break;
+      case OURFA_INOUT_STRING:
+	 {
+	    char str[80];
+	    snprintf(str, sizeof(str), "%f", val);
+	    res = ourfa_hash_set_string(h, key, idx, str);
+	 }
+	 break;
+      case OURFA_INOUT_INT:
+      case OURFA_INOUT_LONG:
+      case OURFA_INOUT_ARRAY:
+      case OURFA_INOUT_HASH:
+      case OURFA_INOUT_IP:
+      default:
+	 return -1;
    }
 
-   return 0;
+   return res;
 }
 
 int ourfa_hash_set_string(ourfa_hash_t *h, const char *key, const char *idx, const char *val)
@@ -308,6 +377,9 @@ int ourfa_hash_set_string(ourfa_hash_t *h, const char *key, const char *idx, con
       return -1;
    }
 
+   if (arr->type != OURFA_INOUT_STRING)
+      return -1;
+
    assert(arr->data_pool_size > last_idx);
 
    if (last_idx >=  arr->elm_cnt) {
@@ -324,6 +396,7 @@ int ourfa_hash_set_string(ourfa_hash_t *h, const char *key, const char *idx, con
 
 int ourfa_hash_set_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr_t val)
 {
+   int res;
    unsigned last_idx;
    unsigned i;
    struct hash_val_t *arr;
@@ -336,14 +409,34 @@ int ourfa_hash_set_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr
    if (arr == NULL)
       return -1;
 
-   assert(arr->data_pool_size > last_idx);
+   res = 0;
+   switch (arr->type) {
+      case OURFA_INOUT_IP:
+	 assert(arr->data_pool_size > last_idx);
 
-   ((in_addr_t *)arr->data)[last_idx] = val;
+	 ((in_addr_t *)arr->data)[last_idx] = val;
 
-   if (last_idx >=  arr->elm_cnt) {
-      for (i=arr->elm_cnt; i < last_idx; i++)
-	 ((in_addr_t *)arr->data)[i] = 0;
-      arr->elm_cnt = last_idx+1;
+	 if (last_idx >=  arr->elm_cnt) {
+	    for (i=arr->elm_cnt; i < last_idx; i++)
+	       ((in_addr_t *)arr->data)[i] = 0;
+	    arr->elm_cnt = last_idx+1;
+	 }
+	 break;
+      case OURFA_INOUT_STRING:
+	 {
+	    char ip[INET_ADDRSTRLEN+1];
+	    inet_ntop(AF_INET, &val, ip, INET_ADDRSTRLEN);
+	    ip[INET_ADDRSTRLEN]='\0';
+	    res = ourfa_hash_set_string(h, key, idx, ip);
+	 }
+	 break;
+      case OURFA_INOUT_DOUBLE:
+      case OURFA_INOUT_INT:
+      case OURFA_INOUT_LONG:
+      case OURFA_INOUT_ARRAY:
+      case OURFA_INOUT_HASH:
+      default:
+	 return -1;
    }
 
    return 0;
@@ -629,10 +722,8 @@ int ourfa_hash_get_string(ourfa_hash_t *h,
 	    *res = malloc(INET_ADDRSTRLEN+1);
 	    if (*res != NULL) {
 	       struct in_addr in;
-	       const char *inetntoa;
 	       in.s_addr = ((in_addr_t *)arr->data)[last_idx];
-	       inetntoa = inet_ntoa(in);
-	       strncpy(*res, inetntoa, INET_ADDRSTRLEN+1);
+	       inet_ntop(AF_INET, &in, *res, INET_ADDRSTRLEN);
 	       (*res)[INET_ADDRSTRLEN]='\0';
 	       retval = 0;
 	    }
