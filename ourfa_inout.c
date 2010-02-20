@@ -539,6 +539,14 @@ int ourfa_hash_get_double(ourfa_hash_t *h, const char *key, const char *idx, dou
       return -1;
 
    switch  (arr->type) {
+      case OURFA_INOUT_INT:
+	 if (res != NULL)
+	    *res = ((int *)arr->data)[last_idx];
+	 break;
+      case OURFA_INOUT_LONG:
+	 if (res != NULL)
+	    *res = ((long *)arr->data)[last_idx];
+	 break;
       case OURFA_INOUT_DOUBLE:
 	 if (res != NULL)
 	    *res = ((double *)arr->data)[last_idx];
