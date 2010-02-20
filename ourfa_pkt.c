@@ -889,7 +889,31 @@ static int increase_pkt_data_pool_size(ourfa_pkt_t *pkt, size_t add_size)
       return set_err(pkt, "Cannot increase data pool size");
 
    pkt->data_pool_size = new_pool_size;
-   pkt->data_pool = ptr;
+
+   if (pkt->data_pool != ptr) {
+      unsigned i,j;
+      for(i=0; i < pkt->attrs.all.cnt; i++) {
+	 ourfa_attr_hdr_t *h = &(pkt->attrs.all.data_pool[i]);
+	 if (h->data) {
+	    int32_t offset;
+	    offset = (uint8_t *)h->data - (uint8_t *)pkt->data_pool;
+	    h->data = ptr + offset;
+	 }
+      }
+
+      for (i=0; i<sizeof(pkt->attrs.type)/sizeof(pkt->attrs.type[0]); i++) {
+	 for(j=0; j < pkt->attrs.type[i].cnt; i++) {
+	    ourfa_attr_hdr_t *h = &pkt->attrs.type[i].data_pool[j];
+	    if (h->data) {
+	       int32_t offset;
+	       offset = (uint8_t *)h->data - (uint8_t *)pkt->data_pool;
+	       h->data = (uint8_t *)ptr + offset;
+	    }
+	 }
+      }
+
+      pkt->data_pool = ptr;
+   }
 
    return 0;
 }
