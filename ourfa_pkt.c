@@ -902,7 +902,7 @@ static int increase_pkt_data_pool_size(ourfa_pkt_t *pkt, size_t add_size)
       }
 
       for (i=0; i<sizeof(pkt->attrs.type)/sizeof(pkt->attrs.type[0]); i++) {
-	 for(j=0; j < pkt->attrs.type[i].cnt; i++) {
+	 for(j=0; j < pkt->attrs.type[i].cnt; j++) {
 	    ourfa_attr_hdr_t *h = &pkt->attrs.type[i].data_pool[j];
 	    if (h->data) {
 	       int32_t offset;

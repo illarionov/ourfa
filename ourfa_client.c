@@ -360,7 +360,6 @@ int main(int argc, char **argv)
 	 return 1;
       }
       ourfa_hash_dump(in, stdout, "Function: %s. OUTPUT HASH:\n", params.action);
-      return 0;
    }else {
       int last_err;
       last_err = ourfa_start_call(ourfa, params.action, in);
@@ -381,6 +380,8 @@ int main(int argc, char **argv)
 	    break;
       }
    }
+   ourfa_hash_free(in);
+   ourfa_free(ourfa);
 
    return res;
 }
