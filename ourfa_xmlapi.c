@@ -380,11 +380,11 @@ static int get_long_prop_val(ourfa_xmlapictx_t *ctx,
       xmlNode *cur_node,
       const xmlChar *prop,
       const xmlChar *parameter_name,
-      long *res)
+      long long *res)
 {
    xmlChar *res_s;
    char *p_end;
-   long val;
+   long long val;
 
    if (get_prop_val(ctx, cur_node, prop, parameter_name, &res_s) != 0)
       return -1;
@@ -560,7 +560,7 @@ static int exec_set_node(ourfa_xmlapictx_t *ctx, xmlNodePtr cur_node, ourfa_hash
 
 static int exec_error_node(ourfa_xmlapictx_t *ctx, xmlNodePtr cur_node, ourfa_hash_t *h)
 {
-   long ret_val;
+   long long ret_val;
 
    xmlChar *comment, *variable;
 
@@ -592,7 +592,7 @@ static int exec_error_node(ourfa_xmlapictx_t *ctx, xmlNodePtr cur_node, ourfa_ha
 }
 
 static int get_for_props(ourfa_xmlapictx_t *ctx, xmlNodePtr cur_node,
-      ourfa_hash_t *params, long *from, long *count,
+      ourfa_hash_t *params, long long *from, long long *count,
       xmlChar **cnt_name,
       xmlChar **array_name)
 {
@@ -696,7 +696,7 @@ static int req_pkt_add_atts(ourfa_xmlapictx_t *ctx,
       /* LONG */
       }else if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"long") == 0){
 	 xmlChar *name, *arr_idx;
-	 long val;
+	 long long val;
 
 	 if (get_prop_val(ctx, cur_node,
 		  (const xmlChar *)"name", NULL, &name) != 0)
@@ -717,7 +717,7 @@ static int req_pkt_add_atts(ourfa_xmlapictx_t *ctx,
 	       return -1;
 	    }
 
-	    val = strtol((const char *)defval, &p_end, 0);
+	    val = strtoll((const char *)defval, &p_end, 0);
 	    if ((*p_end != '\0') || errno == ERANGE) {
 	       int func_res;
 	       if (builtin_func(params, defval, &func_res) != 0) {
@@ -893,7 +893,7 @@ static int req_pkt_add_atts(ourfa_xmlapictx_t *ctx,
       /* FOR  */
       }else if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"for") == 0){
 	 xmlChar *cnt_name;
-	 long from, count, i;
+	 long long from, count, i;
 
 	 if (get_for_props(ctx, cur_node, params, &from, &count, &cnt_name, NULL) != 0)
 	    return -1;
@@ -1041,7 +1041,7 @@ int ourfa_xmlapictx_traverse(ourfa_xmlapictx_t *ctx)
       }else if (xmlStrcasecmp(ctx->cur_node->name, (const xmlChar *)"for") == 0){
 	 xmlChar *cnt_name;
 	 xmlChar *array_name;
-	 long from, count;
+	 long long from, count;
 
 	 if (get_for_props(ctx, ctx->cur_node, ctx->data_h, &from, &count, &cnt_name,
 		  &array_name) != 0) {
@@ -1115,7 +1115,7 @@ get_next_node:
 	    /* FOR node: check for next iteration */
 	    if (xmlStrcasecmp(ctx->cur_node->name, (const xmlChar *)"for") == 0){
 	       xmlChar *cnt_name;
-	       long from, count, i;
+	       long long from, count, i;
 
 	       if (ctx->traverse_funcs.end_for_item) {
 		  ret_code = ctx->traverse_funcs.end_for_item(ctx->user_ctx);

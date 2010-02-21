@@ -109,7 +109,7 @@ int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct t_idx_l
    switch (SvTYPE(sv)) {
       case SVt_IV:
 	 {
-	    long val;
+	    long long val;
 	    val = SvIV(sv);
 	    /*  printf("adding key: %s idx: %s long: %d\n", key, idx->idx_list_s, val); */
 	    if (ourfa_hash_set_long(res, key, idx->idx_list_s, val) != 0)
@@ -207,7 +207,7 @@ int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct t_idx_l
 	 break;
       default:
         if (SvIOK(sv)) {
-	    long val;
+	    long long val;
 	    val = SvIV(sv);
 	    /*  printf("adding key: %s idx: %s long: %d\n", key, idx->idx_list_s, val); */
 	    if (ourfa_hash_set_long(res, key, idx->idx_list_s, val) != 0)
@@ -346,7 +346,7 @@ static int node_func(const char *node_type, const char *node_name, const char *a
 
    if (strcasecmp(node_type, "integer") == 0
 	 || (strcasecmp(node_type, "long") == 0)) {
-      long val;
+      long long val;
       SV *tmp;
       if (ourfa_hash_get_long(my_ctx->h, node_name, arr_index, &val) == 0 ) {
 	 /* printf("node_func: integer: '%s'('%s')=%li\n", node_name, arr_index, val); */

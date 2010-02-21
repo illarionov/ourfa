@@ -188,7 +188,7 @@ static int node_hook(const char *node_type, const char *node_name, const char *a
 	 }
       }
    }else if (strcasecmp(node_type, "long") == 0) {
-      long val;
+      long long val;
 
       if (ourfa_istream_get_long(my_ctx->conn, &val) != 0) {
 	 ret_code=set_err(my_ctx, "Cannot get %s value for node '%s(%s)'",

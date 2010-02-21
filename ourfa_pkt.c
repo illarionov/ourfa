@@ -246,14 +246,14 @@ static inline int ourfa_pkt_add_string(ourfa_pkt_t *pkt, unsigned type, const ch
    return ourfa_pkt_add_attr(pkt, type, len, (const void *)val);
 }
 
-static inline int ourfa_pkt_add_long(ourfa_pkt_t *pkt, unsigned type, long val)
+static inline int ourfa_pkt_add_long(ourfa_pkt_t *pkt, unsigned type, long long val)
 {
-   uint64_t v;
+   int64_t v;
 
    if (pkt == NULL)
       return -1;
 
-   v = (unsigned long)val;
+   v = (int64_t)val;
    v = htobe64(v);
 
    return ourfa_pkt_add_attr(pkt, type, 8, (const void *)&v);
@@ -290,7 +290,7 @@ int ourfa_pkt_add_data_str(ourfa_pkt_t *pkt, const char *val)
    return ourfa_pkt_add_string(pkt, OURFA_ATTR_DATA, val);
 }
 
-int ourfa_pkt_add_data_long(ourfa_pkt_t *pkt, long val)
+int ourfa_pkt_add_data_long(ourfa_pkt_t *pkt, long long val)
 {
    return ourfa_pkt_add_long(pkt, OURFA_ATTR_DATA, val);
 }
@@ -681,7 +681,7 @@ int ourfa_pkt_get_string(const ourfa_attr_hdr_t *attr, char **res)
    return ourfa_pkt_get_attr(attr, OURFA_ATTR_DATA_STRING, res);
 }
 
-int ourfa_pkt_get_long(const ourfa_attr_hdr_t *attr, long *res)
+int ourfa_pkt_get_long(const ourfa_attr_hdr_t *attr, long long *res)
 {
    return ourfa_pkt_get_attr(attr, OURFA_ATTR_DATA_LONG, res);
 }

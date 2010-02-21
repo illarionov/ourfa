@@ -257,7 +257,7 @@ int ourfa_hash_set_int(ourfa_hash_t *h, const char *key, const char *idx, int va
    return res;
 }
 
-int ourfa_hash_set_long(ourfa_hash_t *h, const char *key, const char *idx, long val)
+int ourfa_hash_set_long(ourfa_hash_t *h, const char *key, const char *idx, long long val)
 {
    int res;
    unsigned last_idx;
@@ -281,11 +281,11 @@ int ourfa_hash_set_long(ourfa_hash_t *h, const char *key, const char *idx, long 
       case OURFA_INOUT_LONG:
 	 assert(arr->data_pool_size > last_idx);
 
-	 ((long *)arr->data)[last_idx] = val;
+	 ((long long *)arr->data)[last_idx] = val;
 
 	 if (last_idx >=  arr->elm_cnt) {
 	    for (i=arr->elm_cnt; i < last_idx; i++)
-	       ((long *)arr->data)[i] = 0;
+	       ((long long *)arr->data)[i] = 0;
 	    arr->elm_cnt = last_idx+1;
 	 }
 	 break;
@@ -295,7 +295,7 @@ int ourfa_hash_set_long(ourfa_hash_t *h, const char *key, const char *idx, long 
       case OURFA_INOUT_STRING:
 	 {
 	    char str[80];
-	    snprintf(str, sizeof(str), "%li", val);
+	    snprintf(str, sizeof(str), "%lli", val);
 	    res = ourfa_hash_set_string(h, key, idx, str);
 	 }
 	 break;
@@ -452,7 +452,7 @@ void ourfa_hash_unset(ourfa_hash_t *h, const char *key)
 
 int ourfa_hash_get_int(ourfa_hash_t *h, const char *key, const char *idx, int *res)
 {
-   long tmp;
+   long long tmp;
 
 
    if (ourfa_hash_get_long(h, key, idx, &tmp) != 0)
@@ -463,7 +463,7 @@ int ourfa_hash_get_int(ourfa_hash_t *h, const char *key, const char *idx, int *r
    return 0;
 }
 
-int ourfa_hash_get_long(ourfa_hash_t *h, const char *key, const char *idx, long *res)
+int ourfa_hash_get_long(ourfa_hash_t *h, const char *key, const char *idx, long long *res)
 {
    struct hash_val_t *arr;
    unsigned last_idx;
@@ -486,24 +486,24 @@ int ourfa_hash_get_long(ourfa_hash_t *h, const char *key, const char *idx, long 
 	 *res = (long)(((int *)arr->data)[last_idx]);
 	 break;
       case OURFA_INOUT_LONG:
-	 *res = ((long *)arr->data)[last_idx];
+	 *res = ((long long *)arr->data)[last_idx];
 	 break;
       case OURFA_INOUT_DOUBLE:
-	 *res = (long)(((double *)arr->data)[last_idx]);
+	 *res = (long long)(((double *)arr->data)[last_idx]);
 	 break;
       case OURFA_INOUT_IP:
-	 *res = (long)(((in_addr_t *)arr->data)[last_idx]);
+	 *res = (long long)(((in_addr_t *)arr->data)[last_idx]);
 	 break;
       case OURFA_INOUT_STRING:
 	 {
 	    char *s, *p_end;
-	    long tmp;
+	    long long tmp;
 
 	    s = ((char **)arr->data)[last_idx];
 	    if ((s == NULL) || (s[0]=='\0'))
 	       retval=-1;
 	    else {
-	       tmp = strtol(s, &p_end, 0);
+	       tmp = strtoll(s, &p_end, 0);
 	       if ((*p_end != '\0') || errno == ERANGE)
 		  retval = -1;
 	       else
@@ -545,7 +545,7 @@ int ourfa_hash_get_double(ourfa_hash_t *h, const char *key, const char *idx, dou
 	 break;
       case OURFA_INOUT_LONG:
 	 if (res != NULL)
-	    *res = ((long *)arr->data)[last_idx];
+	    *res = ((long long *)arr->data)[last_idx];
 	 break;
       case OURFA_INOUT_DOUBLE:
 	 if (res != NULL)
@@ -597,7 +597,7 @@ int ourfa_hash_copy_val(ourfa_hash_t *h, const char *dst_key, const char *dst_id
 	 res = ourfa_hash_set_long(h, dst_key, dst_idx, ((int *)src_arr->data)[last_idx]);
 	 break;
       case OURFA_INOUT_LONG:
-	 res = ourfa_hash_set_long(h, dst_key, dst_idx, ((long *)src_arr->data)[last_idx]);
+	 res = ourfa_hash_set_long(h, dst_key, dst_idx, ((long long *)src_arr->data)[last_idx]);
 	 break;
       case OURFA_INOUT_DOUBLE:
 	 res = ourfa_hash_set_double(h, dst_key, dst_idx, ((double *)src_arr->data)[last_idx]);
@@ -706,7 +706,7 @@ int ourfa_hash_get_string(ourfa_hash_t *h,
 	    retval = 0;
 	 break;
       case OURFA_INOUT_LONG:
-	 asprintf(res, "%li", ((long *)arr->data)[last_idx]);
+	 asprintf(res, "%lli", ((long long *)arr->data)[last_idx]);
 	 if (*res != NULL)
 	    retval = 0;
 	 break;
@@ -772,8 +772,8 @@ static void hash_dump_0(void *payload, void *data, xmlChar *name)
 		  ((int *)arr->data)[idx]);
 	    break;
 	 case OURFA_INOUT_LONG:
-	    fprintf(stream, "%-7s %-18s %lu\n", "LONG", name0,
-		  ((long *)arr->data)[idx]);
+	    fprintf(stream, "%-7s %-18s %llu\n", "LONG", name0,
+		  ((long long *)arr->data)[idx]);
 	    break;
 	 case OURFA_INOUT_DOUBLE:
 	    fprintf(stream, "%-7s %-18s %.4f\n", "DOUBLE", name0,
@@ -922,7 +922,7 @@ static int idx_list_add(ourfa_hash_t *h, const char *idx,
       if (end_p[0] != '\0')
 	 return -1;
    }else {
-      long tmp;
+      long long tmp;
       if (ourfa_hash_get_long(h, idx, NULL, &tmp) !=0)
 	 return -1;
       res[cnt] = (unsigned)tmp;

@@ -675,7 +675,7 @@ int ourfa_istream_get_int(ourfa_conn_t *conn, int *res)
    return conn->cur_attr ? ourfa_pkt_get_int(conn->cur_attr, res) : -1;
 }
 
-int ourfa_istream_get_long(ourfa_conn_t *conn, long *res)
+int ourfa_istream_get_long(ourfa_conn_t *conn, long long *res)
 {
    return conn->cur_attr ? ourfa_pkt_get_long(conn->cur_attr, res) : -1;
 }

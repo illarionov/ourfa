@@ -151,7 +151,7 @@ int ourfa_pkt_add_attr(ourfa_pkt_t *pkt,
       const void *data);
 int ourfa_pkt_add_data_int(ourfa_pkt_t *pkt, int val);
 int ourfa_pkt_add_data_str(ourfa_pkt_t *pkt, const char *val);
-int ourfa_pkt_add_data_long(ourfa_pkt_t *pkt, long val);
+int ourfa_pkt_add_data_long(ourfa_pkt_t *pkt, long long val);
 int ourfa_pkt_add_data_double(ourfa_pkt_t *pkt, double val);
 int ourfa_pkt_add_data_ip(ourfa_pkt_t *pkt, in_addr_t ip);
 
@@ -194,7 +194,7 @@ int ourfa_pkt_get_attr(const ourfa_attr_hdr_t *attr,
       ourfa_attr_data_type_t type,
       void *res);
 int ourfa_pkt_get_int    (const ourfa_attr_hdr_t *attr, int *res);
-int ourfa_pkt_get_long   (const ourfa_attr_hdr_t *attr, long *res);
+int ourfa_pkt_get_long   (const ourfa_attr_hdr_t *attr, long long *res);
 int ourfa_pkt_get_double (const ourfa_attr_hdr_t *attr, double *res);
 int ourfa_pkt_get_string (const ourfa_attr_hdr_t *attr, char **res);
 int ourfa_pkt_get_ip     (const ourfa_attr_hdr_t *attr, in_addr_t *res);
@@ -221,7 +221,7 @@ void ourfa_pkt_dump(const ourfa_pkt_t *pkt, FILE *stream, const char *annotation
 ourfa_hash_t *ourfa_hash_new(int size);
 void ourfa_hash_free(ourfa_hash_t *h);
 int ourfa_hash_set_int(ourfa_hash_t *h, const char *key, const char *idx, int val);
-int ourfa_hash_set_long(ourfa_hash_t *h, const char *key, const char *idx, long val);
+int ourfa_hash_set_long(ourfa_hash_t *h, const char *key, const char *idx, long long val);
 int ourfa_hash_set_double(ourfa_hash_t *h, const char *key, const char *idx, double val);
 int ourfa_hash_set_string(ourfa_hash_t *h, const char *key, const char *idx, const char *val);
 int ourfa_hash_set_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr_t val);
@@ -230,7 +230,7 @@ int ourfa_hash_copy_val(ourfa_hash_t *h, const char *dst_key, const char *dst_id
 void ourfa_hash_unset(ourfa_hash_t *h, const char *key);
 
 int ourfa_hash_get_int(ourfa_hash_t *h, const char *key, const char *idx, int *res);
-int ourfa_hash_get_long(ourfa_hash_t *h, const char *key, const char *idx, long *res);
+int ourfa_hash_get_long(ourfa_hash_t *h, const char *key, const char *idx, long long *res);
 int ourfa_hash_get_double(ourfa_hash_t *h, const char *key, const char *idx, double *res);
 int ourfa_hash_get_string(ourfa_hash_t *h, const char *key, const char *idx, char **res);
 int ourfa_hash_get_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr_t *res);
@@ -298,7 +298,7 @@ int ourfa_conn_start_func_call(ourfa_conn_t *conn, int func_code);
 
 int ourfa_istream_get_next_attr(ourfa_conn_t *conn, const ourfa_attr_hdr_t **res);
 int ourfa_istream_get_int(ourfa_conn_t *conn, int *res);
-int ourfa_istream_get_long(ourfa_conn_t *conn, long *res);
+int ourfa_istream_get_long(ourfa_conn_t *conn, long long *res);
 int ourfa_istream_get_double(ourfa_conn_t *conn, double *res);
 int ourfa_istream_get_ip(ourfa_conn_t *conn, in_addr_t *res);
 int ourfa_istream_get_string(ourfa_conn_t *conn, char **res);
