@@ -256,7 +256,7 @@ static inline int ourfa_pkt_add_long(ourfa_pkt_t *pkt, unsigned type, long val)
    v = (unsigned long)val;
    v = htobe64(v);
 
-   return ourfa_pkt_add_attr(pkt, type, 8, (const void *)&val);
+   return ourfa_pkt_add_attr(pkt, type, 8, (const void *)&v);
 }
 
 static inline int ourfa_pkt_add_double(ourfa_pkt_t *pkt, int type, double val)
