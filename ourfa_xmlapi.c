@@ -647,8 +647,7 @@ static int req_pkt_add_atts(ourfa_xmlapictx_t *ctx,
 
       /*  INTEGER  */
       if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"integer") == 0){
-	 xmlChar *name, *arr_idx, *defval;
-	 char *p_end;
+	 xmlChar *name, *arr_idx;
 	 int val;
 
 	 if (get_prop_val(ctx, cur_node, (const xmlChar *)"name",
@@ -657,34 +656,40 @@ static int req_pkt_add_atts(ourfa_xmlapictx_t *ctx,
 
 	 arr_idx = xmlGetProp(cur_node, (const xmlChar *)"array_index");
 
-	 /*  Get user value */
+	 /*  Integer value */
 	 if (ourfa_hash_get_int(params, (const char *)name,
 		  (const char *)arr_idx, &val) != 0) {
-
-	    /*  Get default value */
-	    if (get_prop_val(ctx, cur_node,
-		     (const xmlChar *)"default", name, &defval) != 0) {
-	       xmlFree(name);
-	       xmlFree(arr_idx);
-	       return -1;
+	    char *s;
+	    if (ourfa_hash_get_string(params, (const char *)name,
+		     (const char *)arr_idx, &s) == 0) {
+	       /* Builtin function */
+	       if (!builtin_func(params, (const xmlChar *)s, &val)) {
+		  set_ctx_err(ctx, "Wrong input parameter '%s' of function '%s'",
+			(const char *)name, ctx->name);
+		  xmlFree(name);
+		  xmlFree(arr_idx);
+		  free(s);
+		  return -1;
+	       }
+	       free(s);
+	    }else {
+	       /* Default value */
+	       long long defval;
+	       if (get_long_prop_val(ctx, params, cur_node,
+			(const xmlChar *)"default", name, &defval) >= 0) {
+		  val = (int)defval;
+	       }else {
+		  set_ctx_err(ctx, "Wrong input parameter '%s' of function '%s'",
+			(const char *)name, ctx->name);
+		  xmlFree(arr_idx);
+		  xmlFree(name);
+		  return -1;
+	       }
 	    }
-
-	    val = strtol((const char *)defval, &p_end, 0);
-	    if (((*p_end != '\0') || (errno == ERANGE))
-		  && (builtin_func(params, defval, &val) != 0)) {
-	       set_ctx_err(ctx, "Wrong input parameter '%s' of function '%s' ('%s')",
-		     (const char *)name,
-		     ctx->name,
-		     (const char *)defval);
-	       xmlFree(defval);
-	       xmlFree(name);
-	       xmlFree(arr_idx);
-	       return -1;
-	    }
-	    xmlFree(defval);
-	    if (ourfa_hash_set_int(params, (const char *)name, (const char *)arr_idx, val) != 0)
-	       return -1;
 	 }
+
+	 if (ourfa_hash_set_int(params, (const char *)name, (const char *)arr_idx, val) != 0)
+	    return -1;
 
 	 xmlFree(arr_idx);
 	 xmlFree(name);
@@ -703,38 +708,41 @@ static int req_pkt_add_atts(ourfa_xmlapictx_t *ctx,
 	    return -1;
 
 	 arr_idx = xmlGetProp(cur_node, (const xmlChar *)"array_index");
+
 	 /*  Get user value */
 	 if (ourfa_hash_get_long(params, (const char *)name,
 		  (const char *)arr_idx, &val) != 0) {
-	    char *p_end;
-	    xmlChar *defval;
-
-	    /*  Get default value */
-	    if (get_prop_val(ctx, cur_node,
-		     (const xmlChar *)"default", name, &defval) != 0) {
-	       xmlFree(name);
-	       xmlFree(arr_idx);
-	       return -1;
-	    }
-
-	    val = strtoll((const char *)defval, &p_end, 0);
-	    if ((*p_end != '\0') || errno == ERANGE) {
-	       int func_res;
-	       if (builtin_func(params, defval, &func_res) != 0) {
-		  set_ctx_err(ctx, "Wrong input parameter '%s' of function '%s' ('%s')",
-			name,
-			ctx->name,
-			(const char *)defval);
-		  xmlFree(defval);
+	    char *s;
+	    int buildin_val;
+	    if (ourfa_hash_get_string(params, (const char *)name,
+		     (const char *)arr_idx, &s) == 0) {
+	       /* Builtin function */
+	       if (!builtin_func(params, (const xmlChar *)s, &buildin_val)) {
+		  set_ctx_err(ctx, "Wrong input parameter '%s' of function '%s'",
+			(const char *)name, ctx->name);
+		  xmlFree(name);
+		  xmlFree(arr_idx);
+		  free(s);
+		  return -1;
+	       }
+	       val = buildin_val;
+	       free(s);
+	    }else {
+	       /* Default value */
+	       if (get_long_prop_val(ctx, params, cur_node,
+			(const xmlChar *)"default", name, &val) < 0) {
+		  set_ctx_err(ctx, "Wrong input parameter '%s' of function '%s'",
+			(const char *)name, ctx->name);
 		  xmlFree(arr_idx);
 		  xmlFree(name);
 		  return -1;
-	       }else
-		  val = (long)func_res;
+	       }
 	    }
-	    xmlFree(defval);
-	    if (ourfa_hash_set_long(params, (const char *)name, (const char *)arr_idx, val) != 0)
+	    if (ourfa_hash_set_long(params, (const char *)name, (const char *)arr_idx, val) != 0) {
+	       xmlFree(arr_idx);
+	       xmlFree(name);
 	       return -1;
+	    }
 	 }
 
 	 xmlFree(name);
@@ -769,7 +777,10 @@ static int req_pkt_add_atts(ourfa_xmlapictx_t *ctx,
 
 	    /*  XXX: functions now(), max_time(), size() ??? */
 	    val = strtod((const char *)defval, &p_end);
-	    if ((*p_end != '\0') || errno == ERANGE) {
+	    if (((*p_end != '\0') || errno == ERANGE)
+		  /* Check for global variable */
+		  && (ourfa_hash_get_double(params, (const char *)defval,
+			NULL, &val) != 0)) {
 	       set_ctx_err(ctx, "Wrong input parameter '%s' of function '%s' ('%s')",
 		     cur_node->name,
 		     ctx->name,
@@ -780,8 +791,11 @@ static int req_pkt_add_atts(ourfa_xmlapictx_t *ctx,
 	       return -1;
 	    }
 	    xmlFree(defval);
-	    if (ourfa_hash_set_double(params, (const char *)name, (const char *)arr_idx, val) != 0)
+	    if (ourfa_hash_set_double(params, (const char *)name, (const char *)arr_idx, val) != 0) {
+	       xmlFree(name);
+	       xmlFree(arr_idx);
 	       return -1;
+	    }
 	 }
 
 	 xmlFree(name);
@@ -850,7 +864,9 @@ static int req_pkt_add_atts(ourfa_xmlapictx_t *ctx,
 	       return -1;
 	    }
 
-	    if (inet_aton((const char *)defval, &addr) == 0) {
+	    if ((inet_aton((const char *)defval, &addr) == 0)
+		  && (ourfa_hash_get_ip(params, (const char *)defval,
+			NULL, &val) != 0)) {
 	       set_ctx_err(ctx, "Wrong input parameter '%s' of function '%s' ('%s')",
 		     name,
 		     ctx->name,
