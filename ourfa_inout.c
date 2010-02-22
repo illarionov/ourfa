@@ -617,6 +617,44 @@ int ourfa_hash_copy_val(ourfa_hash_t *h, const char *dst_key, const char *dst_id
    return res;
 }
 
+
+int ourfa_hash_parse_ip(const char *str, struct in_addr *res)
+{
+   char *p_end;
+   long long_val;
+
+
+   if (str == NULL || (str[0]=='\0') || res == NULL)
+      return -1;
+
+   long_val = strtol(str, &p_end, 0);
+   /* Numeric?  */
+   if ((*p_end == '\0')) {
+      if (long_val == -1)
+	 res->s_addr = INADDR_NONE;
+      else
+	 res->s_addr = (in_addr_t)long_val;
+      return 0;
+   }
+
+   /* /mask */
+   if ((str[0]=='/') && (str[1] != '\0')) {
+      unsigned m;
+      long_val = strtol(&str[1], &p_end, 0);
+      if (long_val < 0 || long_val > 32)
+	 return -1;
+      m = 32-long_val;
+      res->s_addr = ((INADDR_NONE >> m) << m) & 0xffffffff;
+      return 0;
+   }
+
+   /* ip */
+   if (inet_pton(AF_INET, str, res) != 1)
+      return -1;
+
+   return 0;
+}
+
 int ourfa_hash_get_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr_t *res)
 {
    unsigned last_idx;
@@ -635,6 +673,14 @@ int ourfa_hash_get_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr
       return -1;
 
    switch  (arr->type) {
+      case OURFA_INOUT_INT:
+	 {
+	 }
+	 break;
+      case OURFA_INOUT_LONG:
+	 if (res != NULL)
+	    *res = ((long long *)arr->data)[last_idx];
+	 break;
       case OURFA_INOUT_IP:
 	 if (res != NULL)
 	    *res = ((in_addr_t *)arr->data)[last_idx];
@@ -647,15 +693,28 @@ int ourfa_hash_get_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr
 	    s = ((char **)arr->data)[last_idx];
 	    if ((s == NULL) || (s[0]=='\0'))
 	       return -1;
-
-	    if (inet_aton(s, &in) != 1)
+	    if (ourfa_hash_parse_ip(s, &in) != 0)
 	       return -1;
 	    if (res)
 	       *res = in.s_addr;
 	 }
 	 break;
       default:
-	 return -1;
+	 {
+	    int val;
+	    if (arr->type == OURFA_INOUT_INT) {
+	       val = ((int *)arr->data)[last_idx];
+	    }else if (arr->type == OURFA_INOUT_LONG) {
+	       val = (int)((long *)arr->data)[last_idx];
+	    }else
+	       return -1;
+	    if (res) {
+	       if (val == -1)
+		  *res = INADDR_NONE;
+	       else
+		  *res = (in_addr_t)val;
+	    }
+	 }
    }
 
    return 0;

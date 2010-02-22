@@ -83,6 +83,8 @@ struct err_str_params_t {
    size_t err_str_size;
 };
 
+int ourfa_hash_parse_ip(const char *str, struct in_addr *res);
+
 static int set_ctx_err(ourfa_xmlapictx_t *api, const char *fmt, ...);
 static void xml_generic_error_func(void *ctx, const char *msg, ...);
 static void init_traverse_funcs(ourfa_xmlapictx_t *ctx, const ourfa_traverse_funcs_t *t);
@@ -864,7 +866,7 @@ static int req_pkt_add_atts(ourfa_xmlapictx_t *ctx,
 	       return -1;
 	    }
 
-	    if ((inet_aton((const char *)defval, &addr) == 0)
+	    if ((ourfa_hash_parse_ip((const char *)defval, &addr) != 0)
 		  && (ourfa_hash_get_ip(params, (const char *)defval,
 			NULL, &val) != 0)) {
 	       set_ctx_err(ctx, "Wrong input parameter '%s' of function '%s' ('%s')",
