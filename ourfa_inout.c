@@ -673,14 +673,6 @@ int ourfa_hash_get_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr
       return -1;
 
    switch  (arr->type) {
-      case OURFA_INOUT_INT:
-	 {
-	 }
-	 break;
-      case OURFA_INOUT_LONG:
-	 if (res != NULL)
-	    *res = ((long long *)arr->data)[last_idx];
-	 break;
       case OURFA_INOUT_IP:
 	 if (res != NULL)
 	    *res = ((in_addr_t *)arr->data)[last_idx];
