@@ -1040,7 +1040,7 @@ static inline size_t elm_size_by_type(enum ourfa_inout_elm_type_t t)
 	 res = sizeof(int);
 	 break;
       case OURFA_INOUT_LONG:
-	 res = sizeof(long);
+	 res = sizeof(long long);
 	 break;
       case OURFA_INOUT_DOUBLE:
 	 res = sizeof(double);
