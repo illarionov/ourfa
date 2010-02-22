@@ -107,6 +107,8 @@ int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct t_idx_l
       sv = SvRV(sv);
 
    switch (SvTYPE(sv)) {
+      case SVt_NULL:
+	 break;
       case SVt_IV:
 	 {
 	    long long val;
