@@ -11,6 +11,7 @@ WriteMakefile(
    LIBS              => ["-lssl $xml2_libs"], # e.g., '-lm'
    DEFINE            => $xml2_includes, # e.g., '-DHAVE_SOMETHING'
    clean  => {'FILES' => 'libourfa$(LIB_EXT)'},
+   OPTIMIZE => '-O0 -g'
 );
 
 sub MY::top_targets {

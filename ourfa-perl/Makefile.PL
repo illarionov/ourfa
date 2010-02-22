@@ -16,7 +16,8 @@ WriteMakefile(
     LIBS              => ["-lssl $xml2_libs"], # e.g., '-lm'
     DEFINE            => $xml2_includes, # e.g., '-DHAVE_SOMETHING'
     INC               => '-I.', # e.g., '-I. -I/usr/include/other'
-    MYEXTLIB          => 'ourfa/libourfa$(LIB_EXT)'
+    MYEXTLIB          => 'ourfa/libourfa$(LIB_EXT)',
+    OPTIMIZE	      => '-O0 -g'
 	# Un-comment this if you add C files to link with later:
     # OBJECT            => '$(O_FILES)', # link all the C files too
 );

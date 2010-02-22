@@ -665,7 +665,7 @@ static int req_pkt_add_atts(ourfa_xmlapictx_t *ctx,
 	    if (ourfa_hash_get_string(params, (const char *)name,
 		     (const char *)arr_idx, &s) == 0) {
 	       /* Builtin function */
-	       if (!builtin_func(params, (const xmlChar *)s, &val)) {
+	       if (builtin_func(params, (const xmlChar *)s, &val) != 0) {
 		  set_ctx_err(ctx, "Wrong input parameter '%s' of function '%s'",
 			(const char *)name, ctx->name);
 		  xmlFree(name);
@@ -719,7 +719,7 @@ static int req_pkt_add_atts(ourfa_xmlapictx_t *ctx,
 	    if (ourfa_hash_get_string(params, (const char *)name,
 		     (const char *)arr_idx, &s) == 0) {
 	       /* Builtin function */
-	       if (!builtin_func(params, (const xmlChar *)s, &buildin_val)) {
+	       if (builtin_func(params, (const xmlChar *)s, &buildin_val) != 0) {
 		  set_ctx_err(ctx, "Wrong input parameter '%s' of function '%s'",
 			(const char *)name, ctx->name);
 		  xmlFree(name);
