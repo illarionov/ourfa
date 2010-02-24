@@ -332,13 +332,13 @@ int ourfa_start_call(ourfa_t *ourfa, const char *func,
 
    pkt_in = NULL;
    if (ourfa_xmlapictx_have_input_parameters(ctx)) {
+      if (ourfa->debug_stream != NULL)
+	 ourfa_hash_dump(in, ourfa->debug_stream,
+	       "FUNCTION INPUT PARAMETERS HASH ...\n");
       if (ourfa_xmlapictx_get_req_pkt(ctx, in, &pkt_in) != 0) {
 	 ourfa_xmlapictx_free(ctx);
 	 return -1;
       }
-      if (ourfa->debug_stream != NULL)
-	 ourfa_hash_dump(in, ourfa->debug_stream,
-	       "FUNCTION INPUT PARAMETERS HASH ...\n");
    }
 
    /* Start call */

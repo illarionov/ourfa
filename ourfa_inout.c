@@ -520,17 +520,17 @@ int ourfa_hash_get_long(ourfa_hash_t *h, const char *key, const char *idx, long 
       case OURFA_INOUT_STRING:
 	 {
 	    char *s, *p_end;
-	    long long tmp;
+	    double tmp;
 
 	    s = ((char **)arr->data)[last_idx];
 	    if ((s == NULL) || (s[0]=='\0'))
 	       retval=-1;
 	    else {
-	       tmp = strtoll(s, &p_end, 0);
+	       tmp = strtod(s, &p_end);
 	       if ((*p_end != '\0') || errno == ERANGE)
 		  retval = -1;
 	       else
-		  *res = tmp;
+		  *res = (long long)tmp;
 	    }
 	 }
 	 break;
