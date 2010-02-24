@@ -62,6 +62,7 @@ struct hash_val_t {
 
 static inline size_t elm_size_by_type(enum ourfa_inout_elm_type_t t);
 static struct hash_val_t *hash_val_new(enum ourfa_inout_elm_type_t type, size_t size);
+static int convert_hashval2string(struct hash_val_t *val);
 static int increase_pool_size(struct hash_val_t *ha, size_t add);
 static void hash_val_free(struct hash_val_t *val);
 static void hash_val_free_0(void * payload, xmlChar * name);
@@ -205,7 +206,6 @@ static struct hash_val_t *findncreate_arr_by_idx(ourfa_hash_t *h,
    return hval;
 }
 
-
 int ourfa_hash_set_int(ourfa_hash_t *h, const char *key, const char *idx, int val)
 {
    int res;
@@ -220,6 +220,10 @@ int ourfa_hash_set_int(ourfa_hash_t *h, const char *key, const char *idx, int va
 
    if (arr == NULL)
       return -1;
+   if (arr->type == OURFA_INOUT_IP) {
+      if (convert_hashval2string(arr) != 0)
+	 return -1;
+   }
 
    res = 0;
    switch (arr->type) {
@@ -247,9 +251,10 @@ int ourfa_hash_set_int(ourfa_hash_t *h, const char *key, const char *idx, int va
 	    res = ourfa_hash_set_string(h, key, idx, str);
 	 }
 	 break;
+      case OURFA_INOUT_IP:
+	 assert(0);
       case OURFA_INOUT_ARRAY:
       case OURFA_INOUT_HASH:
-      case OURFA_INOUT_IP:
       default:
 	 return -1;
    }
@@ -271,13 +276,14 @@ int ourfa_hash_set_long(ourfa_hash_t *h, const char *key, const char *idx, long 
 
    if (arr == NULL)
       return -1;
+   if ((arr->type == OURFA_INOUT_IP)
+	 || (arr->type == OURFA_INOUT_INT)) {
+      if (convert_hashval2string(arr) != 0)
+	 return -1;
+   }
 
    res = 0;
    switch (arr->type) {
-      case OURFA_INOUT_INT:
-	 /* XXX */
-	 res = ourfa_hash_set_int(h, key, idx, (int)val);
-	 break;
       case OURFA_INOUT_LONG:
 	 assert(arr->data_pool_size > last_idx);
 
@@ -299,9 +305,11 @@ int ourfa_hash_set_long(ourfa_hash_t *h, const char *key, const char *idx, long 
 	    res = ourfa_hash_set_string(h, key, idx, str);
 	 }
 	 break;
+      case OURFA_INOUT_IP:
+      case OURFA_INOUT_INT:
+	 assert(0);
       case OURFA_INOUT_ARRAY:
       case OURFA_INOUT_HASH:
-      case OURFA_INOUT_IP:
       default:
 	 return -1;
    }
@@ -323,6 +331,12 @@ int ourfa_hash_set_double(ourfa_hash_t *h, const char *key, const char *idx, dou
 
    if (arr == NULL)
       return -1;
+   if ((arr->type == OURFA_INOUT_IP)
+	 || (arr->type == OURFA_INOUT_INT)
+	 || (arr->type == OURFA_INOUT_LONG)) {
+      if (convert_hashval2string(arr) != 0)
+	 return -1;
+   }
 
    res = 0;
    switch (arr->type) {
@@ -346,9 +360,10 @@ int ourfa_hash_set_double(ourfa_hash_t *h, const char *key, const char *idx, dou
 	 break;
       case OURFA_INOUT_INT:
       case OURFA_INOUT_LONG:
+      case OURFA_INOUT_IP:
+	 assert(0);
       case OURFA_INOUT_ARRAY:
       case OURFA_INOUT_HASH:
-      case OURFA_INOUT_IP:
       default:
 	 return -1;
    }
@@ -377,7 +392,8 @@ int ourfa_hash_set_string(ourfa_hash_t *h, const char *key, const char *idx, con
       return -1;
    }
 
-   if (arr->type != OURFA_INOUT_STRING)
+   if ((arr->type != OURFA_INOUT_STRING)
+      && (convert_hashval2string(arr) != 0))
       return -1;
 
    assert(arr->data_pool_size > last_idx);
@@ -408,6 +424,12 @@ int ourfa_hash_set_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr
 
    if (arr == NULL)
       return -1;
+   if ((arr->type == OURFA_INOUT_DOUBLE)
+	 || (arr->type == OURFA_INOUT_INT)
+	 || (arr->type == OURFA_INOUT_LONG)) {
+      if (convert_hashval2string(arr) != 0)
+	 return -1;
+   }
 
    res = 0;
    switch (arr->type) {
@@ -433,6 +455,7 @@ int ourfa_hash_set_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr
       case OURFA_INOUT_DOUBLE:
       case OURFA_INOUT_INT:
       case OURFA_INOUT_LONG:
+	 assert(0);
       case OURFA_INOUT_ARRAY:
       case OURFA_INOUT_HASH:
       default:
@@ -943,6 +966,72 @@ static void hash_val_free(struct hash_val_t *val)
 
    return;
 }
+
+static int convert_hashval2string(struct hash_val_t *val)
+{
+   struct hash_val_t *tmp;
+
+   switch (val->type) {
+      case OURFA_INOUT_STRING:
+	 return 0;
+      case OURFA_INOUT_INT:
+      case OURFA_INOUT_LONG:
+      case OURFA_INOUT_DOUBLE:
+      case OURFA_INOUT_IP:
+	 break;
+      case OURFA_INOUT_ARRAY:
+      case OURFA_INOUT_HASH:
+      default:
+	 assert(0);
+   }
+
+   tmp = hash_val_new(OURFA_INOUT_STRING, val->elm_cnt);
+   if (tmp == NULL)
+      return -1;
+
+   assert(tmp->data_pool_size >= val->elm_cnt);
+
+   while (tmp->elm_cnt < val->elm_cnt) {
+      char *str;
+      switch (val->type) {
+	 case OURFA_INOUT_INT:
+	    asprintf(&str, "%i", ((int *)val->data)[tmp->elm_cnt]);
+	    break;
+	 case OURFA_INOUT_LONG:
+	    asprintf(&str, "%lli", ((long long *)val->data)[tmp->elm_cnt]);
+	    break;
+	 case OURFA_INOUT_DOUBLE:
+	    asprintf(&str, "%f", ((double *)val->data)[tmp->elm_cnt]);
+	    break;
+	 case OURFA_INOUT_IP:
+	    str = malloc(INET_ADDRSTRLEN+1);
+	    if (str != NULL) {
+	       struct in_addr in;
+	       in.s_addr = ((in_addr_t *)val->data)[tmp->elm_cnt];
+	       inet_ntop(AF_INET, &in, str, INET_ADDRSTRLEN);
+	       str[INET_ADDRSTRLEN]='\0';
+	    }
+	    break;
+	 default:
+	    assert(0);
+      }
+      if (!str) {
+	 hash_val_free(tmp);
+	 return -1;
+      }
+      ((char **)tmp->data)[tmp->elm_cnt] = str;
+      tmp->elm_cnt++;
+   }
+
+   free(val->data);
+   val->type = OURFA_INOUT_STRING;
+   val->data = tmp->data;
+   val->data_pool_size = tmp->data_pool_size;
+   free(tmp);
+
+   return 0;
+}
+
 
 static int increase_pool_size(struct hash_val_t *ha, size_t add)
 {
