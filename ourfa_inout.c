@@ -483,7 +483,7 @@ int ourfa_hash_get_long(ourfa_hash_t *h, const char *key, const char *idx, long 
    retval = 0;
    switch (arr->type) {
       case OURFA_INOUT_INT:
-	 *res = (long)(((int *)arr->data)[last_idx]);
+	 *res = (((int *)arr->data)[last_idx]);
 	 break;
       case OURFA_INOUT_LONG:
 	 *res = ((long long *)arr->data)[last_idx];
@@ -697,7 +697,7 @@ int ourfa_hash_get_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr
 	    if (arr->type == OURFA_INOUT_INT) {
 	       val = ((int *)arr->data)[last_idx];
 	    }else if (arr->type == OURFA_INOUT_LONG) {
-	       val = (int)((long *)arr->data)[last_idx];
+	       val = (int)((long long *)arr->data)[last_idx];
 	    }else
 	       return -1;
 	    if (res) {

@@ -608,10 +608,17 @@ static int get_for_props(ourfa_xmlapictx_t *ctx, xmlNodePtr cur_node,
 	    (const xmlChar *)"name", NULL, cnt_name) != 0)
       return -1;
 
-   if (*from < 0 || *count < 0) {
+   if ((*from < 0) || (*count < 0)) {
+      xmlChar *a, *b;
+      get_prop_val(ctx, cur_node, (const xmlChar *)"from", NULL, &a);
+      get_prop_val(ctx, cur_node, (const xmlChar *)"count", NULL, &b);
+
+      set_ctx_err(ctx, "Wrong 'from' (%s:%lli) or 'count'(%s:%lli) parameter "
+	    "of 'for' node. cnt_name: `%s`", a, *from, b, *count, *cnt_name);
+      xmlFree(a);
+      xmlFree(b);
       xmlFree(*cnt_name);
-      return set_ctx_err(ctx, "Wrong 'from'(%i) or 'count'(%i) parameter "
-	    "of 'for' node", from, count);
+      return -1;
    }
 
    if (array_name) {

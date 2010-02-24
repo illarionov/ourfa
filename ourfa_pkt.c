@@ -630,7 +630,7 @@ int ourfa_pkt_get_attr(const ourfa_attr_hdr_t *attr,
 	 {
 	    uint64_t res64;
 	    res64 = be64toh(*(uint64_t *)attr->data);
-	    *(long *)res = (long)res64;
+	    *(long long *)res = (long long)res64;
 	 }
 	 break;
       case OURFA_ATTR_DATA_DOUBLE:
