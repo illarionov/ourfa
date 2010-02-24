@@ -846,7 +846,7 @@ static void hash_dump_0(void *payload, void *data, xmlChar *name)
 		  ((int *)arr->data)[idx]);
 	    break;
 	 case OURFA_INOUT_LONG:
-	    fprintf(stream, "%-7s %-18s %llu\n", "LONG", name0,
+	    fprintf(stream, "%-7s %-18s %lli\n", "LONG", name0,
 		  ((long long *)arr->data)[idx]);
 	    break;
 	 case OURFA_INOUT_DOUBLE:

@@ -704,7 +704,7 @@ int ourfa_pkt_readd_attrs(ourfa_attr_hdr_t **head, const char *fmt, ...)
 
    int *arg_int_p;
    char **arg_string_p;
-   long *arg_long_p;
+   long long *arg_long_p;
    double *arg_double_p;
    in_addr_t *arg_ip_p;
 
@@ -747,7 +747,7 @@ int ourfa_pkt_readd_attrs(ourfa_attr_hdr_t **head, const char *fmt, ...)
 	       return attr_cnt;
 	    break;
 	 case 'l':
-	    arg_long_p = va_arg(ap, long *);
+	    arg_long_p = va_arg(ap, long long *);
 	    if (ourfa_pkt_get_attr(*head, OURFA_ATTR_DATA_LONG, arg_long_p) != 0)
 	       return attr_cnt;
 	    break;
