@@ -64,6 +64,7 @@ static inline size_t elm_size_by_type(enum ourfa_inout_elm_type_t t);
 static struct hash_val_t *hash_val_new(enum ourfa_inout_elm_type_t type, size_t size);
 static int convert_hashval2string(struct hash_val_t *val);
 static int increase_pool_size(struct hash_val_t *ha, size_t add);
+static void hash_val_clear(struct hash_val_t *val);
 static void hash_val_free(struct hash_val_t *val);
 static void hash_val_free_0(void * payload, xmlChar * name);
 
@@ -156,8 +157,15 @@ static struct hash_val_t *findncreate_arr_by_idx(ourfa_hash_t *h,
       unsigned cur_idx;
       cur_idx = idx_list[i];
 
-      if (hval->type != OURFA_INOUT_ARRAY)
-	 return NULL;
+      if (hval->type != OURFA_INOUT_ARRAY) {
+	 if (do_not_create)
+	    return NULL;
+	 /* Replace old value */
+	 hash_val_clear(hval);
+	 assert(hval->data == NULL);
+	 assert(hval->data_pool_size == 0);
+	 hval->type=OURFA_INOUT_ARRAY;
+      }
 
       /*  Increase data pool */
       if (hval->data_pool_size <= cur_idx) {
@@ -925,10 +933,9 @@ void ourfa_hash_free(ourfa_hash_t *h)
    xmlHashFree(h, hash_val_free_0);
 }
 
-static void hash_val_free(struct hash_val_t *val)
+static void hash_val_clear(struct hash_val_t *val)
 {
    unsigned i;
-
    if (val == NULL)
       return;
 
@@ -939,7 +946,8 @@ static void hash_val_free(struct hash_val_t *val)
 	    struct hash_val_t *val0;
 	    val0 = ((struct hash_val_t **)val->data)[i];
 	    /*  XXX: check for unlimited recursion */
-	    hash_val_free(val0);
+	    hash_val_clear(val0);
+	    free(val0);
 	 }
 	 break;
       case OURFA_INOUT_HASH:
@@ -960,8 +968,16 @@ static void hash_val_free(struct hash_val_t *val)
       default:
 	 break;
    }
-
    free(val->data);
+   val->data=NULL;
+   val->data_pool_size=0;
+   val->elm_cnt=0;
+}
+
+static void hash_val_free(struct hash_val_t *val)
+{
+
+   hash_val_clear(val);
    free(val);
 
    return;
