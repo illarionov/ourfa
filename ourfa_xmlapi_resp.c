@@ -196,7 +196,7 @@ static int node_hook(const char *node_type, const char *node_name, const char *a
       }else {
 	 if (ourfa_hash_set_long(my_ctx->res_h, node_name,
 	       arr_index, val) != 0) {
-	    ret_code=set_err(my_ctx, "Cannot set hash value to '%i' "
+	    ret_code=set_err(my_ctx, "Cannot set hash value to '%lld' "
 		  "for node '%s(%s)'",
 		  val, node_name, arr_index);
 	 }
@@ -210,7 +210,7 @@ static int node_hook(const char *node_type, const char *node_name, const char *a
       }else {
 	 if (ourfa_hash_set_double(my_ctx->res_h, node_name,
 	       arr_index, val) != 0) {
-	    ret_code=set_err(my_ctx, "Cannot set hash value to '%i' "
+	    ret_code=set_err(my_ctx, "Cannot set hash value to '%f' "
 		  "for node '%s(%s)'",
 		  val, node_name, arr_index);
 	 }
@@ -224,7 +224,7 @@ static int node_hook(const char *node_type, const char *node_name, const char *a
       }else {
 	 if (ourfa_hash_set_string(my_ctx->res_h, node_name,
 	       arr_index, val) != 0) {
-	    ret_code=set_err(my_ctx, "Cannot set hash value to '%i' "
+	    ret_code=set_err(my_ctx, "Cannot set hash value to '%s' "
 		  "for node '%s(%s)'",
 		  val, node_name, arr_index);
 	 }
@@ -238,9 +238,11 @@ static int node_hook(const char *node_type, const char *node_name, const char *a
       }else {
 	 if (ourfa_hash_set_ip(my_ctx->res_h, node_name,
 	       arr_index, val) != 0) {
-	    ret_code=set_err(my_ctx, "Cannot set hash value to '%i' "
+	    struct in_addr tmp;
+	    tmp.s_addr=val;
+	    ret_code=set_err(my_ctx, "Cannot set hash value to '%s' "
 		  "for node '%s(%s)'",
-		  val, node_name, arr_index);
+		  inet_ntoa(tmp), node_name, arr_index);
 	 }
       }
    }else {
