@@ -136,6 +136,7 @@ const char *ourfa_login_type2str(unsigned login_type);
 unsigned    ourfa_is_valid_login_type(unsigned login_type);
 
 int ourfa_set_debug_stream(ourfa_t *ourfa, FILE *stream);
+void ourfa_set_auto_reconnect(ourfa_t *ourfa, int state);
 
 ourfa_xmlapi_t *ourfa_get_xmlapi(ourfa_t *ourfa);
 ourfa_conn_t *ourfa_get_conn(ourfa_t *conn);
@@ -306,6 +307,7 @@ int ourfa_istream_load_full(ourfa_conn_t *conn);
 int ourfa_istream_flush(ourfa_conn_t *conn);
 
 int ourfa_conn_set_debug_stream(ourfa_conn_t *conn, FILE *stream);
+int ourfa_conn_is_connected(ourfa_conn_t *conn);
 const char *ourfa_conn_last_err_str(ourfa_conn_t *conn);
 
 

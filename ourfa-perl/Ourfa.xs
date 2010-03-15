@@ -624,6 +624,10 @@ new0(...)
       if (hv_fetchs(params, "debug", 0) != NULL) {
 	 ourfa_set_debug_stream(ourfa, stdout);
       }
+      if ( (sv0 = hv_fetchs(params, "auto_reconnect", 0)) != NULL) {
+	 if (*sv0)
+	    ourfa_set_auto_reconnect(ourfa, SvIV(*sv0));
+      }
 
       res = ourfa_connect(ourfa);
       if (res != 0) {

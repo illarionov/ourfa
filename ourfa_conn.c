@@ -48,6 +48,7 @@ struct ourfa_t {
    unsigned   login_type;
    unsigned   ssl;
    unsigned   timeout;
+   unsigned   auto_reconnect;
    char *login;
    char *pass;
    char *server_port;
@@ -104,6 +105,7 @@ ourfa_t *ourfa_new()
    res->err_msg[0] = '\0';
    res->timeout = DEFAULT_TIMEOUT;
    res->debug_stream = NULL;
+   res->auto_reconnect=0;
 
    return res;
 }
@@ -241,6 +243,13 @@ setconf_error:
    return -1;
 }
 
+void ourfa_set_auto_reconnect(ourfa_t *ourfa, int state)
+{
+   if (ourfa == NULL)
+      return;
+
+   ourfa->auto_reconnect=state;
+}
 
 int ourfa_connect(ourfa_t *ourfa)
 {
@@ -343,10 +352,25 @@ int ourfa_start_call(ourfa_t *ourfa, const char *func,
 
    /* Start call */
    if (ourfa_conn_start_func_call(ourfa->conn, ourfa_xmlapictx_func_id(ctx)) != 0) {
-      ourfa_xmlapictx_free(ctx);
-      ourfa_pkt_free(pkt_in);
       set_err(ourfa, "%s", ourfa_conn_last_err_str(ourfa->conn));
-      return -1;
+      if (!ourfa->auto_reconnect || ourfa_conn_is_connected(ourfa->conn)) {
+	 ourfa_xmlapictx_free(ctx);
+	 ourfa_pkt_free(pkt_in);
+	 return -1;
+      }
+      /* auto-reconnect */
+      ourfa_conn_close(ourfa->conn);
+      if (ourfa_connect(ourfa) != 0) {
+	 ourfa_xmlapictx_free(ctx);
+	 ourfa_pkt_free(pkt_in);
+	 return -1;
+      }
+      if (ourfa_conn_start_func_call(ourfa->conn, ourfa_xmlapictx_func_id(ctx)) != 0) {
+	 set_err(ourfa, "%s", ourfa_conn_last_err_str(ourfa->conn));
+	 ourfa_xmlapictx_free(ctx);
+	 ourfa_pkt_free(pkt_in);
+	 return -1;
+      }
    }
 
    /* Send input parameters  */

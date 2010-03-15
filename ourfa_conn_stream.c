@@ -76,6 +76,7 @@ static void pktlist_init(ourfa_conn_t *conn);
 static int pktlist_insert (ourfa_conn_t *conn, ourfa_pkt_t *pkt);
 static ourfa_pkt_t *pktlist_remove_head(ourfa_conn_t *conn);
 static void pktlist_free(ourfa_conn_t *conn);
+static int update_sockfd(ourfa_conn_t *conn);
 static int login(ourfa_conn_t *conn,
       const char *login,
       const char *pass,
@@ -102,7 +103,7 @@ static ourfa_conn_t *conn_new(char *err_str, size_t err_str_size)
    conn->timeout = 0;
    conn->err_code = 0;
    conn->err_msg[0] = '\0';
-   conn->sockfd = 0;
+   conn->sockfd = -1;
    conn->term_pkt_in_tail = 0;
    conn->debug_stream = NULL;
    pktlist_init(conn);
@@ -264,6 +265,11 @@ int ourfa_conn_set_debug_stream(ourfa_conn_t *conn, FILE *stream)
    return 0;
 }
 
+int ourfa_conn_is_connected(ourfa_conn_t *conn)
+{
+   return OURFA_IS_CONNECTED(conn);
+}
+
 const char *ourfa_logint_type2str(unsigned login_type)
 {
    const char *res = NULL;
@@ -412,8 +418,10 @@ ssize_t ourfa_conn_send_packet(ourfa_conn_t *conn, const ourfa_pkt_t *pkt)
       return set_err(conn, ENOMEM, "Cannot create output packet");
 
    transmitted_size = send(conn->sockfd, buf, pkt_size, MSG_NOSIGNAL);
-   if (transmitted_size < (ssize_t)pkt_size)
-      return set_err(conn, errno, "Cannot send packet: %s", strerror(errno));
+   if (transmitted_size < (ssize_t)pkt_size) {
+      return set_err(conn, update_sockfd(conn),
+	    "Cannot send packet: %s", strerror(errno));
+   }
 
    return transmitted_size;
 }
@@ -441,7 +449,7 @@ ssize_t ourfa_conn_recv_packet(ourfa_conn_t *conn, ourfa_pkt_t **res)
 
    recv_size = recv(conn->sockfd, &pkt_hdr, 4, MSG_PEEK | MSG_WAITALL);
    if (recv_size < 4)
-      return set_err(conn, errno, "%s", strerror(errno));
+      return set_err(conn, update_sockfd(conn), "%s", strerror(errno));
 
    /* Check header */
    if (!ourfa_pkt_is_valid_code(pkt_hdr.code))
@@ -460,7 +468,7 @@ ssize_t ourfa_conn_recv_packet(ourfa_conn_t *conn, ourfa_pkt_t **res)
    recv_size = recv(conn->sockfd, buf, packet_size, MSG_WAITALL);
    if (recv_size < 0) {
       free(buf);
-      return set_err(conn, errno, "%s", strerror(errno));
+      return set_err(conn, update_sockfd(conn), "%s", strerror(errno));
    }
 
    /* Create new packet */
@@ -523,6 +531,23 @@ ourfa_start_call_exit:
    return res;
 }
 
+static int update_sockfd(ourfa_conn_t *conn)
+{
+   int err;
+   err = errno;
+   switch (err) {
+      case EAGAIN:
+      case ENOBUFS:
+      case EMSGSIZE:
+      case EINTR:
+	 break;
+      default:
+	 close(conn->sockfd);
+	 conn->sockfd=-1;
+   }
+
+   return err;
+}
 
 const char *ourfa_conn_last_err_str(ourfa_conn_t *conn)
 {
