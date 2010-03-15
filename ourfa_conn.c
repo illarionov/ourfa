@@ -345,6 +345,7 @@ int ourfa_start_call(ourfa_t *ourfa, const char *func,
    if (ourfa_conn_start_func_call(ourfa->conn, ourfa_xmlapictx_func_id(ctx)) != 0) {
       ourfa_xmlapictx_free(ctx);
       ourfa_pkt_free(pkt_in);
+      set_err(ourfa, "%s", ourfa_conn_last_err_str(ourfa->conn));
       return -1;
    }
 
