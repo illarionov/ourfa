@@ -1079,8 +1079,10 @@ static int idx_list_add(ourfa_hash_t *h, const char *idx,
 	 return -1;
    }else {
       long long tmp;
-      if (ourfa_hash_get_long(h, idx, NULL, &tmp) !=0)
-	 return -1;
+      if (ourfa_hash_get_long(h, idx, NULL, &tmp) !=0) {
+	 /* XXX: Index not defined. Print warning */
+	 tmp = 0;
+      }
       res[cnt] = (unsigned)tmp;
    }
 
