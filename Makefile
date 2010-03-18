@@ -1,6 +1,6 @@
 SHELL=/bin/sh
 
-OURFA_VERSION=\"0.2-beta1\"
+OURFA_VERSION=\"0.2-beta2\"
 
 CC?=gcc
 CFLAGS?= -W -Wall -O2 -DNDEBUG -s

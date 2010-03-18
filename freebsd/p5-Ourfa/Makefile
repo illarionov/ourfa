@@ -6,12 +6,12 @@
 #
 
 PORTNAME=	Ourfa
-PORTVERSION=	0.2.b1
+PORTVERSION=	0.2.b2
 CATEGORIES=	devel perl5
 MASTER_SITES=	${MASTER_SITE_SOURCEFORGE}
 MASTER_SITE_SUBDIR=	ourfa
 PKGNAMEPREFIX=	p5-
-DISTNAME=	ourfa-0.2beta1
+DISTNAME=	ourfa-0.2beta2
 
 MAINTAINER=	littlesavage@orionet.ru
 COMMENT=	URFA (UTM Remote Function Access) client library
