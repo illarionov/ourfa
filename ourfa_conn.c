@@ -337,7 +337,7 @@ int ourfa_start_call(ourfa_t *ourfa, const char *func,
    ctx = ourfa_xmlapictx_new(ourfa->xmlapi, func, 0, NULL, NULL, 0, NULL, 
 	 ourfa->err_msg, sizeof(ourfa->err_msg));
    if (ctx == NULL)
-      return 01;
+      return -1;
 
    pkt_in = NULL;
    if (ourfa_xmlapictx_have_input_parameters(ctx)) {
