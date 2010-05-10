@@ -13,7 +13,7 @@ WriteMakefile(
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM  => 'lib/Ourfa.pm', # retrieve abstract from module
        AUTHOR         => 'Alexey Illarionov <littlesavage@rambler.ru>') : ()),
-    LIBS              => ["-lssl $xml2_libs"], # e.g., '-lm'
+    LIBS              => ["-lssl -lcrypto $xml2_libs"], # e.g., '-lm'
     DEFINE            => $xml2_includes, # e.g., '-DHAVE_SOMETHING'
     INC               => '-I.', # e.g., '-I. -I/usr/include/other'
     MYEXTLIB          => 'ourfa/libourfa$(LIB_EXT)',

@@ -8,7 +8,7 @@ my $xml2_libs = `xml2-config --libs`;
 WriteMakefile(
    NAME   => 'Ourfa::libourfa',
    SKIP   => [qw(all static static_lib dynamic dynamic_lib)],
-   LIBS              => ["-lssl $xml2_libs"], # e.g., '-lm'
+   LIBS              => ["-lssl -lcrypto $xml2_libs"], # e.g., '-lm'
    DEFINE            => $xml2_includes, # e.g., '-DHAVE_SOMETHING'
    clean  => {'FILES' => 'libourfa$(LIB_EXT)'},
    OPTIMIZE => '-O0 -g'
