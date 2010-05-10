@@ -27,9 +27,10 @@
 #ifdef __linux__
 #define _GNU_SOURCE
 #include <endian.h>
-#else
+#elif defined __FreeBSD__
 #include <sys/endian.h>
 #endif
+#include <sys/types.h>
 #include <assert.h>
 #include <ctype.h>
 #include <stdarg.h>
@@ -38,6 +39,10 @@
 #include <stdio.h>
 
 #include "ourfa.h"
+
+#ifdef __OpenBSD__
+#define be64toh(_x) betoh64(_x)
+#endif
 
 #define PKT_HDR_SIZE	   4
 #define PKT_ATTR_HDR_SIZE  4
@@ -1051,7 +1056,7 @@ void ourfa_pkt_dump(const ourfa_pkt_t *pkt, FILE *stream, const char *annotation
    fprintf(stream, "pkt:  %-18s v: 0x%x size: 0x%04x attrs_cnt: %u\n",
 	 pkt_code,
 	 pkt->proto,
-	 pkt->data_p,
+	 (unsigned)pkt->data_p,
 	 pkt->attrs.all.cnt);
    for (i=0; i<pkt->attrs.all.cnt; i++) {
       const char *attr_type;

@@ -417,7 +417,7 @@ ssize_t ourfa_conn_send_packet(ourfa_conn_t *conn, const ourfa_pkt_t *pkt)
    if (buf == NULL)
       return set_err(conn, ENOMEM, "Cannot create output packet");
 
-   transmitted_size = send(conn->sockfd, buf, pkt_size, MSG_NOSIGNAL);
+   transmitted_size = send(conn->sockfd, buf, pkt_size, 0);
    if (transmitted_size < (ssize_t)pkt_size) {
       return set_err(conn, update_sockfd(conn),
 	    "Cannot send packet: %s", strerror(errno));

@@ -6,7 +6,7 @@ CC?=gcc
 CFLAGS?= -W -Wall -O2 -DNDEBUG -s
 CFLAGS=-W -Wall -g
 
-LDFLAGS= -L/usr/local/lib -lssl
+LDFLAGS= -L/usr/local/lib -lssl -lcrypto
 
 XML2_CFLAGS?=	`xml2-config --cflags`
 XML2_LIBS?=	`xml2-config --libs`
