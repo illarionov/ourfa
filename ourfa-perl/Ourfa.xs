@@ -268,20 +268,27 @@ int ourfa_exec(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, HV **res
    ourfa_hash_t *h;
    void *loadresp_ctx;
 
-   if (!ourfa || !func_name || !res) {
-      if (err_msg) {
-	 snprintf(err_msg, err_msg_size, "Wrong parameter");
-      }
+   if (!ourfa) { if (err_msg){snprintf(err_msg, err_msg_size, "ourfa is NULL");} return -2;}
+   if (!func_name) { if (err_msg){snprintf(err_msg, err_msg_size, "undefined function");} return -2;}
+   if (!res) { if (err_msg){snprintf(err_msg, err_msg_size, "undefined function");} return -2;}
+
+   xmlapi = ourfa_get_xmlapi(ourfa);
+   if (!xmlapi) {
+      if(err_msg){snprintf(err_msg, err_msg_size, "XML API not loaded");}
       return -2;
    }
 
-   xmlapi = ourfa_get_xmlapi(ourfa);
    conn = ourfa_get_conn(ourfa);
+   if (!conn) {
+      if(err_msg){snprintf(err_msg, err_msg_size, "Connection closed");}
+      return -2;
+   }
+
    my_ctx.res_h=newHV();
 
-   if (!xmlapi || !conn || !my_ctx.res_h) {
+   if (!my_ctx.res_h) {
       if (err_msg) {
-	 snprintf(err_msg, err_msg_size, "Wrong parameter");
+	 snprintf(err_msg, err_msg_size, "no HV");
       }
       return -2;
    }
@@ -290,6 +297,7 @@ int ourfa_exec(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, HV **res
       if (err_msg) {
 	 snprintf(err_msg, err_msg_size, "%s", ourfa_last_err_str(ourfa));
       }
+      hv_undef(my_ctx.res_h);
       return -2;
    }
 
