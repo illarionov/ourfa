@@ -278,12 +278,6 @@ int ourfa_exec(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, HV **res
       return -2;
    }
 
-   conn = ourfa_get_conn(ourfa);
-   if (!conn) {
-      if(err_msg){snprintf(err_msg, err_msg_size, "Connection closed");}
-      return -2;
-   }
-
    my_ctx.res_h=newHV();
 
    if (!my_ctx.res_h) {
@@ -303,6 +297,13 @@ int ourfa_exec(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, HV **res
 
    my_ctx.s[0]=(SV *)my_ctx.res_h;
    my_ctx.top_idx=0;
+
+   conn = ourfa_get_conn(ourfa);
+   if (!conn) {
+      if(err_msg){snprintf(err_msg, err_msg_size, "Connection closed");}
+      hv_undef(my_ctx.res_h);
+      return -2;
+   }
 
    loadresp_ctx = ourfa_xmlapictx_load_resp_init(
 	 xmlapi,
