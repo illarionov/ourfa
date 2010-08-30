@@ -40,10 +40,6 @@
 
 #include "ourfa.h"
 
-#ifdef __OpenBSD__
-#define be64toh(_x) betoh64(_x)
-#endif
-
 #define PKT_HDR_SIZE	   4
 #define PKT_ATTR_HDR_SIZE  4
 #define PKT_MAX_SIZE	   0xffff
@@ -253,27 +249,44 @@ static inline int ourfa_pkt_add_string(ourfa_pkt_t *pkt, unsigned type, const ch
 
 static inline int ourfa_pkt_add_long(ourfa_pkt_t *pkt, unsigned type, long long val)
 {
-   int64_t v;
+   uint8_t v[8];
+   unsigned long long v0 = (unsigned long long)val;
 
    if (pkt == NULL)
       return -1;
 
-   v = (int64_t)val;
-   v = htobe64(v);
+   v[0] = (v0 >> 56) & 0xff;
+   v[1] = (v0 >> 48) & 0xff;
+   v[2] = (v0 >> 40) & 0xff;
+   v[3] = (v0 >> 32) & 0xff;
+   v[4] = (v0 >> 24) & 0xff;
+   v[5] = (v0 >> 16) & 0xff;
+   v[6] = (v0 >> 8) & 0xff;
+   v[7] = v0 & 0xff;
 
    return ourfa_pkt_add_attr(pkt, type, 8, (const void *)&v);
 }
 
 static inline int ourfa_pkt_add_double(ourfa_pkt_t *pkt, int type, double val)
 {
+   uint8_t v[8];
    union {
       uint64_t u;
       double d;
    }tmp0;
 
    tmp0.d = val;
-   tmp0.u = htobe64(tmp0.u);
-   return ourfa_pkt_add_attr(pkt, type, sizeof(tmp0.u), (const void *)&tmp0.u);
+
+   v[0] = (tmp0.u >> 56) & 0xff;
+   v[1] = (tmp0.u >> 48) & 0xff;
+   v[2] = (tmp0.u >> 40) & 0xff;
+   v[3] = (tmp0.u >> 32) & 0xff;
+   v[4] = (tmp0.u >> 24) & 0xff;
+   v[5] = (tmp0.u >> 16) & 0xff;
+   v[6] = (tmp0.u >> 8) & 0xff;
+   v[7] = tmp0.u & 0xff;
+
+   return ourfa_pkt_add_attr(pkt, type, sizeof(tmp0.u), (const void *)v);
 }
 
 static inline int ourfa_pkt_add_ip(ourfa_pkt_t *pkt, int type, in_addr_t ip)
@@ -626,26 +639,47 @@ int ourfa_pkt_get_attr(const ourfa_attr_hdr_t *attr,
    switch (type) {
       case OURFA_ATTR_DATA_INT:
 	 {
-	    uint32_t res32;
+	    int32_t res32;
 	    res32 = ntohl(*(uint32_t *)attr->data);
 	    *(int *)res = (int)res32;
 	 }
 	 break;
       case OURFA_ATTR_DATA_LONG:
 	 {
-	    uint64_t res64;
-	    res64 = be64toh(*(uint64_t *)attr->data);
-	    *(long long *)res = (long long)res64;
+	    uint8_t *d = (uint8_t *)attr->data;
+	    union {
+	       int64_t s;
+	       uint64_t u;
+	    } r;
+
+	    r.u = (((uint64_t)d[0]) << 56 & 0xff00000000000000LL)
+	       | (((uint64_t)d[1]) << 48 & 0xff000000000000LL)
+	       | (((uint64_t)d[2]) << 40 & 0xff0000000000LL)
+	       | (((uint64_t)d[3]) << 32 & 0xff00000000LL)
+	       | (((uint64_t)d[4]) << 24 & 0xff000000LL)
+	       | (((uint64_t)d[5]) << 16 & 0xff0000LL)
+	       | (((uint64_t)d[6]) << 8  & 0xff00LL)
+	       | (((uint64_t)d[7]) & 0xffLL);
+
+	    *(long long *)res = (long long)r.s;
 	 }
 	 break;
       case OURFA_ATTR_DATA_DOUBLE:
 	 {
+	    uint8_t *d = (uint8_t *)attr->data;
 	    union {
 	       double d;
 	       uint64_t u;
 	    }tmp0;
 	    assert(sizeof(tmp0.u)==sizeof(tmp0.d));
-	    tmp0.u = be64toh(*(uint64_t *)attr->data);
+	    tmp0.u = (((uint64_t)d[0]) << 56 & 0xff00000000000000LL)
+	       | (((uint64_t)d[1]) << 48 & 0xff000000000000LL)
+	       | (((uint64_t)d[2]) << 40 & 0xff0000000000LL)
+	       | (((uint64_t)d[3]) << 32 & 0xff00000000LL)
+	       | (((uint64_t)d[4]) << 24 & 0xff000000LL)
+	       | (((uint64_t)d[5]) << 16 & 0xff0000LL)
+	       | (((uint64_t)d[6]) << 8  & 0xff00LL)
+	       | (((uint64_t)d[7]) & 0xff);
 	    *(double *)res = tmp0.d;
 	 }
 	 break;
