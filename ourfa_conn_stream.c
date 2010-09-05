@@ -36,11 +36,16 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <openssl/bio.h>
+#include <openssl/err.h>
 #include <openssl/md5.h>
+#include <openssl/ssl.h>
 
 #include "ourfa.h"
 
 #define DEFAULT_PORT 11758
+#define DEFAULT_SSL_CERT "/netup/utm5/admin.crt"
+#define DEFAULT_SSL_PASS "netup"
 
 struct pktlist_elm_t {
    ourfa_pkt_t *pkt;
@@ -49,7 +54,7 @@ struct pktlist_elm_t {
 
 struct ourfa_conn_t {
    unsigned proto;
-   unsigned ssl;
+   unsigned ssl_type;
    unsigned timeout;
 
    int err_code;
@@ -62,11 +67,12 @@ struct ourfa_conn_t {
 
    FILE *debug_stream;
 
-   int	sockfd;
+   BIO *bio;
+   SSL_CTX *ssl_ctx;
 
    int term_pkt_in_tail;
 
-#define OURFA_IS_CONNECTED(_ourfa_conn) ((_ourfa_conn)->sockfd >= 0)
+#define OURFA_IS_CONNECTED(_ourfa_conn) ((_ourfa_conn)->bio != NULL)
 };
 
 static int set_err(ourfa_conn_t *conn, int err_code, const char *fmt, ...);
@@ -76,12 +82,12 @@ static void pktlist_init(ourfa_conn_t *conn);
 static int pktlist_insert (ourfa_conn_t *conn, ourfa_pkt_t *pkt);
 static ourfa_pkt_t *pktlist_remove_head(ourfa_conn_t *conn);
 static void pktlist_free(ourfa_conn_t *conn);
-static int update_sockfd(ourfa_conn_t *conn);
+static int close_bio_with_err(ourfa_conn_t *conn, const char *err_str);
 static int login(ourfa_conn_t *conn,
       const char *login,
       const char *pass,
       unsigned login_type,
-      unsigned use_ssl);
+      unsigned ssl_type);
 
 
 static ourfa_conn_t *conn_new(char *err_str, size_t err_str_size)
@@ -99,14 +105,16 @@ static ourfa_conn_t *conn_new(char *err_str, size_t err_str_size)
    }
 
    conn->proto = OURFA_PROTO_VERSION;
-   conn->ssl  = 0;
+   conn->ssl_type  = 0;
    conn->timeout = 0;
    conn->err_code = 0;
    conn->err_msg[0] = '\0';
-   conn->sockfd = -1;
+   conn->bio = NULL;
+   conn->ssl_ctx = NULL;
    conn->term_pkt_in_tail = 0;
    conn->debug_stream = NULL;
    pktlist_init(conn);
+
 
    return conn;
 }
@@ -114,8 +122,21 @@ static ourfa_conn_t *conn_new(char *err_str, size_t err_str_size)
 static void conn_free(ourfa_conn_t *conn)
 {
    pktlist_free(conn);
+   if (conn->ssl_ctx)
+      SSL_CTX_free(conn->ssl_ctx);
    free(conn);
 }
+
+
+static int pem_passwd_cb(char *buf, int size, int rwflag, void *password)
+{
+   if (rwflag || password) {}
+
+   strncpy(buf, DEFAULT_SSL_PASS, size);
+   buf[size - 1] = '\0';
+   return(strlen(buf));
+}
+
 
 ourfa_conn_t *ourfa_conn_open(
       const char *server_port,
@@ -123,7 +144,9 @@ ourfa_conn_t *ourfa_conn_open(
       const char *pass,
       unsigned login_type,
       unsigned timeout_s,
-      unsigned use_ssl,
+      unsigned ssl_type,
+      const char *ssl_cert,
+      const char *ssl_key,
       FILE *debug_stream,
       char *err_str,
       size_t err_str_size)
@@ -132,6 +155,8 @@ ourfa_conn_t *ourfa_conn_open(
    struct addrinfo hints, *res, *res0;
    struct timeval tv;
    ourfa_conn_t *conn;
+   int sockfd;
+   const char *cipher_list = "ADH-RC4-MD5";
    char host_name[255];
    char service_name[30];
 
@@ -178,37 +203,101 @@ ourfa_conn_t *ourfa_conn_open(
    conn = conn_new(err_str, err_str_size);
    if (conn == NULL)
       return NULL;
-   conn->ssl  = use_ssl;
+   conn->ssl_type  = ssl_type;
    conn->timeout = timeout_s;
    conn->debug_stream = debug_stream;
+
+   /* Init SSLCtx  */
+   if (ssl_type != OURFA_SSL_TYPE_NONE) {
+      switch (ssl_type) {
+	 case OURFA_SSL_TYPE_TLS1:
+	    conn->ssl_ctx = SSL_CTX_new(TLSv1_client_method());
+	    break;
+	 case OURFA_SSL_TYPE_SSL3:
+	    conn->ssl_ctx = SSL_CTX_new(SSLv3_client_method());
+	    break;
+	 case OURFA_SSL_TYPE_RSA_CRT:
+	    cipher_list = "RC4-MD5";
+	    /* FALLTHROUGH  */
+	 case OURFA_SSL_TYPE_CRT:
+	    conn->ssl_ctx = SSL_CTX_new(SSLv3_client_method());
+
+	    SSL_CTX_set_default_passwd_cb(conn->ssl_ctx, pem_passwd_cb);
+
+	    /* Cert  */
+	    if (SSL_CTX_use_certificate_chain_file(conn->ssl_ctx,
+		     ssl_cert ? ssl_cert : DEFAULT_SSL_CERT) == 0) {
+	       snprintf(err_str, err_str_size,
+		     "Can not load client certificate `%s`: %s",
+		     ssl_cert ? ssl_cert : DEFAULT_SSL_CERT,
+		     ERR_error_string(ERR_get_error(), NULL)
+		     );
+	       conn_free(conn);
+	       return NULL;
+	    }
+	    /* Key  */
+	    if (SSL_CTX_use_PrivateKey_file(conn->ssl_ctx,
+		     ssl_key ? ssl_key : (ssl_cert ? ssl_cert : DEFAULT_SSL_CERT),
+		     SSL_FILETYPE_PEM) == 0) {
+	       snprintf(err_str, err_str_size,
+		     "Can not load certificate private key `%s`: %s",
+		     ssl_key ? ssl_key : (ssl_cert ? ssl_cert : DEFAULT_SSL_CERT),
+		     ERR_error_string(ERR_get_error(), NULL)
+		     );
+	       conn_free(conn);
+	       return NULL;
+	    }
+	    break;
+	 default:
+	    snprintf(err_str, err_str_size,
+		  "Unknown requested SSL type 0x%x", ssl_type);
+	    conn_free(conn);
+	    return NULL;
+      }
+      if (conn->ssl_ctx == NULL) {
+	 snprintf(err_str, err_str_size, "SSL_CTX_new() Failed");
+	 conn_free(conn);
+	 return NULL;
+      }
+      if (SSL_CTX_set_cipher_list(conn->ssl_ctx, cipher_list) == 0) {
+	 snprintf(err_str, err_str_size, "SSL_CTX_set_cipher_list(""%s"") Failed",
+	       cipher_list);
+	 conn_free(conn);
+	 return NULL;
+      }
+   }
 
    /* Connect */
    tv.tv_sec = timeout_s;
    tv.tv_usec = 0;
    for (res = res0; res; res = res->ai_next) {
-      conn->sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-      if (conn->sockfd < 0) {
+      sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+      if (sockfd < 0) {
 	 set_err(conn, -1, "Cannot create socket: %s", strerror(errno));
 	 continue;
       }
 
       /* Socket timeout */
-      if (setsockopt(conn->sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv))
-	    || setsockopt(conn->sockfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)))
+      if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv))
+	    || setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)))
       {
 	 set_err(conn, -2, "Cannot set socket timeout: %s", strerror(errno));
+	 close(sockfd);
+	 sockfd=-1;
 	 continue;
       }
 
-      if (connect(conn->sockfd, res->ai_addr, res->ai_addrlen) < 0) {
+      if (connect(sockfd, res->ai_addr, res->ai_addrlen) < 0) {
 	 set_err(conn, errno, "%s", strerror(errno));
+	 close(sockfd);
+	 sockfd=-1;
 	 continue;
       }
       break;
    }
    freeaddrinfo(res0);
 
-   if (conn->sockfd < 0) {
+   if (sockfd < 0) {
       if (err_str) {
 	 snprintf(err_str,
 	       err_str_size,
@@ -219,9 +308,15 @@ ourfa_conn_t *ourfa_conn_open(
       return NULL;
    }
 
+   conn->bio = BIO_new_socket(sockfd, BIO_CLOSE);
+
    /* login  */
-   if (login(conn, user_login, pass, login_type, use_ssl)) {
-      close(conn->sockfd);
+   if (login(conn, user_login, pass, login_type, ssl_type)) {
+      if (conn->bio) {
+	 BIO_ssl_shutdown(conn->bio);
+	 BIO_free_all(conn->bio);
+	 conn->bio = NULL;
+      }
       if (err_str) {
 	 snprintf(err_str,
 	       err_str_size,
@@ -251,8 +346,11 @@ void ourfa_conn_close(ourfa_conn_t *conn)
 	 ourfa_pkt_free(pkt);
       }
 
-      close(conn->sockfd);
+      BIO_ssl_shutdown(conn->bio);
+      BIO_free_all(conn->bio);
+      conn->bio = NULL;
    }
+
    conn_free(conn);
 }
 
@@ -300,11 +398,11 @@ static int login(ourfa_conn_t *conn,
       const char *login,
       const char *pass,
       unsigned login_type,
-      unsigned use_ssl)
+      unsigned ssl_type)
 {
    int res;
    ourfa_pkt_t *read_pkt, *write_pkt;
-   const ourfa_attr_hdr_t *attr_md5_salt;
+   const ourfa_attr_hdr_t *attr_md5_salt, *attr_ssl_type;
    MD5_CTX md5_ctx;
    unsigned char md5_hash[16];
 
@@ -354,7 +452,7 @@ static int login(ourfa_conn_t *conn,
 	 login,
 	 (size_t)16,
 	 (const void *)&md5_hash[0],
-	 use_ssl
+	 ssl_type
 	 );
 
    if (write_pkt == NULL) {
@@ -391,6 +489,51 @@ static int login(ourfa_conn_t *conn,
 	 goto login_exit;
    }
 
+   attr_ssl_type = ourfa_pkt_get_attrs_list(read_pkt, OURFA_ATTR_SSL_REQUEST);
+   if (attr_ssl_type) {
+      int tmp;
+      int res0;
+      BIO *b;
+      SSL *ssl;
+
+      res0 = ourfa_pkt_get_int(attr_ssl_type, &tmp);
+      if (tmp != OURFA_SSL_TYPE_NONE) {
+	 if (conn->debug_stream)
+	    fprintf(conn->debug_stream, "Peer requested SSL 0x%x\n", (unsigned)tmp);
+
+	 b = BIO_new_ssl(conn->ssl_ctx, 1);
+	 if (b == NULL) {
+	    set_err(conn, -8, "BIO_new_ssl_connect() failed");
+	    goto login_exit;
+	 }
+	 BIO_get_ssl(b, &ssl);
+	 SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
+
+	 switch (tmp) {
+	    case OURFA_SSL_TYPE_TLS1:
+	       SSL_set_options(ssl, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3);
+	       break;
+	    case OURFA_SSL_TYPE_SSL3:
+	       SSL_set_options(ssl, SSL_OP_NO_SSLv2 | SSL_OP_NO_TLSv1);
+	       break;
+	    case OURFA_SSL_TYPE_CRT:
+	    case OURFA_SSL_TYPE_RSA_CRT:
+	       SSL_set_options(ssl, SSL_OP_NO_SSLv2 | SSL_OP_NO_TLSv1);
+	       break;
+	    default:
+	       set_err(conn, -5, "Unknown requested SSL type 0x%x", (unsigned)tmp);
+	       goto login_exit;
+	 }
+	 SSL_set_bio(ssl, conn->bio, conn->bio);
+	 conn->bio = b;
+
+	 if(BIO_do_handshake(conn->bio) <= 0) {
+	    close_bio_with_err(conn, NULL);
+	    goto login_exit;
+	 }
+      }
+   }
+
    res=0;
 login_exit:
    ourfa_pkt_free(read_pkt);
@@ -417,11 +560,9 @@ ssize_t ourfa_conn_send_packet(ourfa_conn_t *conn, const ourfa_pkt_t *pkt)
    if (buf == NULL)
       return set_err(conn, ENOMEM, "Cannot create output packet");
 
-   transmitted_size = send(conn->sockfd, buf, pkt_size, 0);
-   if (transmitted_size < (ssize_t)pkt_size) {
-      return set_err(conn, update_sockfd(conn),
-	    "Cannot send packet: %s", strerror(errno));
-   }
+   transmitted_size= BIO_write(conn->bio, buf, pkt_size);
+   if (transmitted_size < (ssize_t)pkt_size)
+      return close_bio_with_err(conn, "Cannot send packet");
 
    return transmitted_size;
 }
@@ -447,9 +588,10 @@ ssize_t ourfa_conn_recv_packet(ourfa_conn_t *conn, ourfa_pkt_t **res)
    if (!OURFA_IS_CONNECTED(conn))
       return set_err(conn, -100, "Not connected");
 
-   recv_size = recv(conn->sockfd, &pkt_hdr, 4, MSG_PEEK | MSG_WAITALL);
+   recv_size = BIO_read(conn->bio, &pkt_hdr, 4);
+
    if (recv_size < 4)
-      return set_err(conn, update_sockfd(conn), "%s", strerror(errno));
+      return close_bio_with_err(conn, NULL);
 
    /* Check header */
    if (!ourfa_pkt_is_valid_code(pkt_hdr.code))
@@ -465,10 +607,12 @@ ssize_t ourfa_conn_recv_packet(ourfa_conn_t *conn, ourfa_pkt_t **res)
       return set_err(conn, ENOMEM,
 	    "Malloc error: %s (%u bytes)", strerror(errno), packet_size);
 
-   recv_size = recv(conn->sockfd, buf, packet_size, MSG_WAITALL);
-   if (recv_size < 0) {
+   memcpy(buf, &pkt_hdr, 4);
+   recv_size = BIO_read(conn->bio, buf+4, packet_size-4)+4;
+
+   if (recv_size < 4) {
       free(buf);
-      return set_err(conn, update_sockfd(conn), "%s", strerror(errno));
+      return close_bio_with_err(conn, NULL);
    }
 
    /* Create new packet */
@@ -502,7 +646,7 @@ int ourfa_conn_start_func_call(ourfa_conn_t *conn, int func_code)
       return set_err(conn, ENOMEM, "Cannot create packet");
 
    ourfa_pkt_dump(pkt, conn->debug_stream,
-	 "SENDING START FUNC CALL PKT ...\n");
+	 "SEND START FUNC CALL PKT ...\n");
    if (ourfa_conn_send_packet(conn, pkt) <= 0)
       goto ourfa_start_call_exit;
 
@@ -531,22 +675,23 @@ ourfa_start_call_exit:
    return res;
 }
 
-static int update_sockfd(ourfa_conn_t *conn)
+static int close_bio_with_err(ourfa_conn_t *conn, const char *err_str)
 {
-   int err;
-   err = errno;
-   switch (err) {
-      case EAGAIN:
-      case ENOBUFS:
-      case EMSGSIZE:
-      case EINTR:
-	 break;
-      default:
-	 close(conn->sockfd);
-	 conn->sockfd=-1;
+   int eno = ERR_get_error();
+   if (eno) {
+      while(ERR_get_error());
+      if (err_str) {
+	 set_err(conn, eno, "%s: %s", err_str, ERR_error_string(eno, NULL));
+      }else {
+	 set_err(conn, eno, "%s", ERR_error_string(eno, NULL));
+      }
    }
 
-   return err;
+   BIO_ssl_shutdown(conn->bio);
+   BIO_free_all(conn->bio);
+   conn->bio = NULL;
+
+   return eno ? eno : -1;
 }
 
 const char *ourfa_conn_last_err_str(ourfa_conn_t *conn)

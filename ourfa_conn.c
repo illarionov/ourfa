@@ -264,6 +264,8 @@ int ourfa_connect(ourfa_t *ourfa)
 	 ourfa->login_type,
 	 ourfa->timeout,
 	 ourfa->ssl,
+	 NULL,
+	 NULL,
 	 ourfa->debug_stream,
 	 ourfa->err_msg,
 	 sizeof(ourfa->err_msg)
@@ -343,7 +345,7 @@ int ourfa_start_call(ourfa_t *ourfa, const char *func,
    if (ourfa_xmlapictx_have_input_parameters(ctx)) {
       if (ourfa->debug_stream != NULL)
 	 ourfa_hash_dump(in, ourfa->debug_stream,
-	       "FUNCTION INPUT PARAMETERS HASH ...\n");
+	       "FUNCTION ARGUMENTS HASH ...\n");
       if (ourfa_xmlapictx_get_req_pkt(ctx, in, &pkt_in) != 0) {
 	 ourfa_xmlapictx_free(ctx);
 	 return -1;
@@ -382,7 +384,7 @@ int ourfa_start_call(ourfa_t *ourfa, const char *func,
       }
 
       ourfa_pkt_dump(pkt_in, ourfa->debug_stream,
-	    "SENDING FUNC INPUT PARAMS PKT ...\n");
+	    "SEND FUNC ARGUMENTS PKT ...\n");
       if (ourfa_send_packet(ourfa, pkt_in) <= 0) {
 	 ourfa_xmlapictx_free(ctx);
 	 ourfa_pkt_free(pkt_in);
@@ -431,7 +433,7 @@ int ourfa_call(ourfa_t *ourfa, const char *func,
       return -1;
 
    if (ourfa->debug_stream != NULL)
-      ourfa_hash_dump(res_h, ourfa->debug_stream, "RECIVED HASH ...\n");
+      ourfa_hash_dump(res_h, ourfa->debug_stream, "RECVD HASH ...\n");
 
    return 0;
 }

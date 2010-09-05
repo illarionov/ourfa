@@ -56,14 +56,15 @@
 #define OURFA_ATTR_CHAP_RESPONSE  0x0900
 #define OURFA_ATTR_SSL_REQUEST    0x0a00
 
-#define OURFA_LOGIN_USER	   0x01
-#define OURFA_LOGIN_SYSTEM	   0x02
-#define OURFA_LOGIN_CARD	   0x03
+#define OURFA_LOGIN_USER	   0x00
+#define OURFA_LOGIN_SYSTEM	   0x01
+#define OURFA_LOGIN_CARD	   0x02
 
 #define OURFA_SSL_TYPE_NONE	   0x00
 #define OURFA_SSL_TYPE_TLS1	   0x01
 #define OURFA_SSL_TYPE_SSL3	   0x02
 #define OURFA_SSL_TYPE_CRT	   0x03
+#define OURFA_SSL_TYPE_RSA_CRT	   0x04
 
 #define OURFA_TIME_NOW		   ((int)time(NULL))
 #define OURFA_TIME_MAX		   2000000000
@@ -284,11 +285,13 @@ ourfa_hash_t *ourfa_xmlapictx_load_resp(void *load_resp_ctx);
 /* Connection  */
 ourfa_conn_t *ourfa_conn_open(
       const char *server_port,
-      const char *login,
+      const char *user_login,
       const char *pass,
       unsigned login_type,
       unsigned timeout_s,
-      unsigned use_ssl,
+      unsigned ssl_type,
+      const char *ssl_cert,
+      const char *ssl_key,
       FILE *debug_stream,
       char *err_str,
       size_t err_str_size);

@@ -30,6 +30,7 @@
 #include <arpa/inet.h>
 
 #include <assert.h>
+#include <openssl/ssl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -105,14 +106,19 @@ int main(int argc, char **argv)
       const char *xml_dir;
       const char *xml_api;
       unsigned login_type;
+      unsigned ssl_type;
       const char *action;
       FILE *debug;
       enum output_format_t output_format;
-   } params = {NULL, NULL, NULL, NULL, NULL, OURFA_LOGIN_SYSTEM,
+   } params = {NULL, NULL, NULL, NULL, NULL,
+      OURFA_LOGIN_SYSTEM, OURFA_SSL_TYPE_NONE,
       NULL, NULL, OUTPUT_FORMAT_XML};
 
    if (argc <= 1)
       return usage();
+
+   SSL_load_error_strings();
+   SSL_library_init();
 
    ourfa = ourfa_new();
    if (ourfa == NULL) {
@@ -209,7 +215,7 @@ int main(int argc, char **argv)
       }else
 	 p++;
 
-      /* Compare values wirh system parameters */
+      /* Compare values with system parameters */
       if (idx[0] == '\0') {
 	 is_system_param=1;
 
@@ -336,7 +342,7 @@ int main(int argc, char **argv)
 	 params.password,
 	 params.host,
 	 &params.login_type,
-	 NULL,
+	 &params.ssl_type,
 	 params.xml_dir,
 	 params.xml_api,
 	 NULL);
