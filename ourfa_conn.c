@@ -52,6 +52,8 @@ struct ourfa_t {
    char *login;
    char *pass;
    char *server_port;
+   char *ssl_cert;
+   char *ssl_key;
 
    ourfa_xmlapi_t *xmlapi;
    ourfa_conn_t *conn;
@@ -100,6 +102,8 @@ ourfa_t *ourfa_new()
    res->server_port = NULL;
    res->login_type = DEFAULT_LOGIN_TYPE;
    res->ssl = 0;
+   res->ssl_cert = NULL;
+   res->ssl_key = NULL;
    res->xmlapi = NULL;
    res->conn = NULL;
    res->err_msg[0] = '\0';
@@ -117,6 +121,8 @@ void ourfa_free(ourfa_t *ourfa)
    free(ourfa->login);
    free(ourfa->pass);
    free(ourfa->server_port);
+   free(ourfa->ssl_cert);
+   free(ourfa->ssl_key);
 
    ourfa_conn_close(ourfa->conn);
    ourfa_xmlapi_free(ourfa->xmlapi);
@@ -138,6 +144,39 @@ int ourfa_set_debug_stream(ourfa_t *ourfa, FILE *stream)
 
    return 0;
 }
+
+int ourfa_set_ssl(
+      ourfa_t    *ctx,
+      unsigned   ssl,
+      const char *cert,
+      const char *key)
+{
+   if (ctx == NULL)
+      return -1;
+
+   if (ctx->conn)
+      return set_err(ctx, "Can not set configuration when online.  Disconnect first");
+
+   ctx->err_msg[0] = '\0';
+
+   ctx->ssl = ssl;
+
+   free(ctx->ssl_cert);
+   if (cert) {
+      ctx->ssl_cert = strdup(cert);
+   }else {
+      ctx->ssl_cert = NULL;
+   }
+
+   free(ctx->ssl_key);
+   if (key)
+      ctx->ssl_key = strdup(key);
+   else
+      ctx->ssl_key = NULL;
+
+   return 0;
+}
+
 
 int ourfa_set_conf(
       ourfa_t    *ctx,
@@ -264,8 +303,8 @@ int ourfa_connect(ourfa_t *ourfa)
 	 ourfa->login_type,
 	 ourfa->timeout,
 	 ourfa->ssl,
-	 NULL,
-	 NULL,
+	 ourfa->ssl_cert,
+	 ourfa->ssl_key,
 	 ourfa->debug_stream,
 	 ourfa->err_msg,
 	 sizeof(ourfa->err_msg)

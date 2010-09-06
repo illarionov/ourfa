@@ -591,7 +591,7 @@ ssize_t ourfa_conn_recv_packet(ourfa_conn_t *conn, ourfa_pkt_t **res)
    recv_size = BIO_read(conn->bio, &pkt_hdr, 4);
 
    if (recv_size < 4)
-      return close_bio_with_err(conn, NULL);
+      return close_bio_with_err(conn, "recv_pkt_hdr");
 
    /* Check header */
    if (!ourfa_pkt_is_valid_code(pkt_hdr.code))
@@ -611,8 +611,9 @@ ssize_t ourfa_conn_recv_packet(ourfa_conn_t *conn, ourfa_pkt_t **res)
    recv_size = BIO_read(conn->bio, buf+4, packet_size-4)+4;
 
    if (recv_size < 4) {
+      int err = close_bio_with_err(conn, "recv_pkt_data");
       free(buf);
-      return close_bio_with_err(conn, NULL);
+      return err;
    }
 
    /* Create new packet */
@@ -677,14 +678,27 @@ ourfa_start_call_exit:
 
 static int close_bio_with_err(ourfa_conn_t *conn, const char *err_str)
 {
+   const char *err_string;
+   int tmp_errno = errno;
+
    int eno = ERR_get_error();
    if (eno) {
-      while(ERR_get_error());
-      if (err_str) {
-	 set_err(conn, eno, "%s: %s", err_str, ERR_error_string(eno, NULL));
+      ERR_clear_error();
+      err_string =  ERR_error_string(eno, NULL);
+   }else {
+      if (tmp_errno) {
+	 err_string = strerror(tmp_errno);
+	 eno = tmp_errno;
       }else {
-	 set_err(conn, eno, "%s", ERR_error_string(eno, NULL));
+	 err_string = "unknown error";
+	 eno = -1;
       }
+   }
+
+   if (err_str) {
+      set_err(conn, eno, "%s: %s", err_str, err_string);
+   }else {
+      set_err(conn, eno, "%s", err_string);
    }
 
    BIO_ssl_shutdown(conn->bio);

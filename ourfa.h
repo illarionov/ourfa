@@ -124,6 +124,12 @@ int ourfa_set_conf(
       int        *timeout
       );
 
+int ourfa_set_ssl(
+      ourfa_t    *ctx,
+      unsigned   ssl,
+      const char *cert,
+      const char *key);
+
 int ourfa_connect(ourfa_t *ourfa);
 int ourfa_disconnect(ourfa_t *ourfa);
 int ourfa_call(ourfa_t *ourfa, const char *func, ourfa_hash_t *globals);

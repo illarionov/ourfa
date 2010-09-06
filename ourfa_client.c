@@ -76,12 +76,18 @@ static int help()
 	 " %-2s %-20s %s\n"
 	 " %-2s %-20s %s\n"
 	 " %-2s %-20s %s\n"
+	 " %-2s %-20s %s\n"
+	 " %-2s %-20s %s\n"
+	 " %-2s %-20s %s\n"
 	 "\n",
 	 "-h", "--help",       "This message",
 	 "-a", "--action",     "Action name",
 	 "-H", "--host",       "URFA server address:port (default: localhost:11758)",
 	 "-l", "--login",      "URFA server login. (default: init)",
 	 "-p", "--password",   "URFA server password. (default: init)",
+	 "-s", "--ssl",        "SSL/TLS method: none (default), tlsv1, sslv3, rsa_cert",
+	 "-c", "--cert",       "Certificate file for rsa_cert SSL (PEM format)",
+	 "-k", "--key",        "Private key file for rsa_cert SSL (PEM format)",
 	 "-x", "--xml-dir",    "URFA server xml dir. (default: xml/)",
 	 "-t", "--login-type", "Login type: admin, user, or dealer (deault: admin)",
 	 "-A", "--xml-api",    "URFA server API file (default: api.xml)",
@@ -107,11 +113,14 @@ int main(int argc, char **argv)
       const char *xml_api;
       unsigned login_type;
       unsigned ssl_type;
+      const char *ssl_cert;
+      const char *ssl_key;
       const char *action;
       FILE *debug;
       enum output_format_t output_format;
    } params = {NULL, NULL, NULL, NULL, NULL,
-      OURFA_LOGIN_SYSTEM, OURFA_SSL_TYPE_NONE,
+      OURFA_LOGIN_SYSTEM,
+      OURFA_SSL_TYPE_NONE, NULL, NULL,
       NULL, NULL, OUTPUT_FORMAT_XML};
 
    if (argc <= 1)
@@ -292,6 +301,34 @@ int main(int argc, char **argv)
 	    return help();
 	 } else  if ( ((name[0]=='d') && (name[1]=='\0')) || strcmp(name, "debug") == 0) {
 	    params.debug = stderr;
+	    incr_i=0;
+	 } else  if ( ((name[0]=='s') && (name[1]=='\0')) || strcmp(name, "ssl") == 0) {
+	    if (p==NULL) {
+	       params.ssl_type=OURFA_SSL_TYPE_SSL3;
+	       incr_i=0;
+	    }else if ((strcasecmp(p,"tlsv1")==0) || (strcasecmp(p,"tls1")==0) || (strcasecmp(p,"tls")==0)) {
+	       params.ssl_type=OURFA_SSL_TYPE_TLS1;
+	    }else if ((strcasecmp(p,"sslv3")==0) || (strcasecmp(p,"ssl3")==0)) {
+	       params.ssl_type=OURFA_SSL_TYPE_SSL3;
+	    }else if ((strcasecmp(p,"rsa_cert")==0))  {
+	       params.ssl_type=OURFA_SSL_TYPE_RSA_CRT;
+	    }else {
+	       fprintf(stderr, "Unknown SSL/TLS method '%s'. "
+		     "Allowed methods: tlsv1, sslv3, rsa_cert\n", p);
+	       return 1;
+	    }
+	 } else  if ( ((name[0]=='c') && (name[1]=='\0')) || strcmp(name, "cert") == 0) {
+	    if (p==NULL) {
+	       fprintf(stderr, "Wrong parameter '%s': cannot parse value\n", argv[i]);
+	       return 1;
+	    }
+	    params.ssl_cert=p;
+	 } else  if ( ((name[0]=='k') && (name[1]=='\0')) || strcmp(name, "key") == 0) {
+	    if (p==NULL) {
+	       fprintf(stderr, "Wrong parameter '%s': cannot parse value\n", argv[i]);
+	       return 1;
+	    }
+	    params.ssl_key=p;
 	 } else
 	    is_system_param=0;
       }
@@ -350,6 +387,10 @@ int main(int argc, char **argv)
    if (res != 0) {
       fprintf(stderr, "Initializaton error: %s\n", ourfa_last_err_str(ourfa));
       return 1;
+   }
+
+   if (params.ssl_type != OURFA_SSL_TYPE_NONE) {
+      ourfa_set_ssl(ourfa, params.ssl_type, params.ssl_cert, params.ssl_key);
    }
 
    if (params.debug)
