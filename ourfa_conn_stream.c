@@ -705,7 +705,7 @@ static int close_bio_with_err(ourfa_conn_t *conn, const char *err_str)
    BIO_free_all(conn->bio);
    conn->bio = NULL;
 
-   return eno ? eno : -1;
+   return -1;
 }
 
 const char *ourfa_conn_last_err_str(ourfa_conn_t *conn)
@@ -741,7 +741,7 @@ static int pktlist_read_pkt(ourfa_conn_t *conn)
 
    recvd_bytes = ourfa_conn_recv_packet(conn, &pkt);
 
-   if (recvd_bytes < 0)
+   if (recvd_bytes <= 0)
       return -1;
 
    ourfa_pkt_dump(pkt, conn->debug_stream, "RECIVED FUNC OUTPUT PKT ...\n");
