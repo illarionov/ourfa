@@ -25,7 +25,7 @@ our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 
 our @EXPORT = qw();
 
-our $VERSION = '0.2beta2';
+our $VERSION = '0.3beta0';
 
 sub AUTOLOAD {
     # This AUTOLOAD is used to 'autoload' constants from the constant()
@@ -38,9 +38,7 @@ sub AUTOLOAD {
 
     if ($constname =~ /^rpcf_/) {
        my ($self, %params) = @_;
-       my ($res, $error) = $self->call($constname, \%params);
-       if ($error) {croak $error;}
-       return $res;
+       return $self->call($constname, \%params);
     }
 
     my ($error, $val) = constant($constname);
@@ -63,13 +61,6 @@ XSLoader::load('Ourfa', $VERSION);
 
 
 # Preloaded methods go here.
-
-sub new {
-   my ($class, %params) = @_;
-   my ($res, $error) = Ourfa::new0(\%params);
-   if ($error) { croak $error};
-   return $res;
-}
 
 # Autoload methods go after =cut, and are processed by the autosplit program.
 

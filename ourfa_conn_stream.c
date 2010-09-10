@@ -558,11 +558,11 @@ ssize_t ourfa_conn_send_packet(ourfa_conn_t *conn, const ourfa_pkt_t *pkt)
    /* Get packet size */
    buf = ourfa_pkt_data(pkt, &pkt_size);
    if (buf == NULL)
-      return set_err(conn, ENOMEM, "Cannot create output packet");
+      return set_err(conn, ENOMEM, "Can not create output packet");
 
    transmitted_size= BIO_write(conn->bio, buf, pkt_size);
    if (transmitted_size < (ssize_t)pkt_size)
-      return close_bio_with_err(conn, "Cannot send packet");
+      return close_bio_with_err(conn, "Can not send packet");
 
    return transmitted_size;
 }

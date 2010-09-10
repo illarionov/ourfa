@@ -34,6 +34,7 @@
 #include "ourfa/ourfa.h"
 
 #include <assert.h>
+#include <openssl/ssl.h>
 
 #define NEED_newRV_noinc
 #define NEED_newSVpvn_flags
@@ -524,22 +525,30 @@ MODULE = Ourfa		PACKAGE = Ourfa
 
 INCLUDE: const-xs.inc
 
+void BEGIN()
+   CODE:
+      SSL_load_error_strings();
+      SSL_library_init();
+
 void
-new0(...)
+new(...)
    PREINIT:
       SV *    sv;
-      HV *    params;
       SV **   sv0;
       ourfa_t *ourfa;
-      const char *err_str = NULL;
       char *login = NULL;
       char *password = NULL;
       char *server_port = NULL;
       char *api_xml_dir = NULL;
       char *api_xml_file = NULL;
+      char *ssl_cert = NULL;
+      char *ssl_key = NULL;
+      int debug = 0;
       unsigned login_type = -1;
-      unsigned ssl = -1;
+      unsigned ssl_type = OURFA_SSL_TYPE_NONE;
       int timeout = -1;
+      int auto_reconnect = 0;
+      unsigned i;
 
       struct t_str_params {
 	 char *key;
@@ -550,102 +559,119 @@ new0(...)
 	    {"server", &server_port  },
 	    {"api_xml_dir", &api_xml_dir  },
 	    {"api_xml_file", &api_xml_file  },
+	    {"ssl_cert", &ssl_cert  },
+	    {"ssl_key", &ssl_key  },
 	    {NULL, NULL}
       };
       struct t_str_params *t;
       int res;
 
    PPCODE:
-      /* /printf("Ourfa::new\n"); */
-      if (items > 1) {
-	 err_str="Wrong argument list";
-      }else if (items==1) {
-	 if (!SvROK(ST(0))
-	    || (SvTYPE(SvRV(ST(0))) != SVt_PVHV)) {
-	    err_str="Wrong argument";
-	 }else
-	    params = (HV *)SvRV(ST(0));
-      }else {
-	 params = NULL;
-      }
 
-      if (err_str) {
-         sv = sv_2mortal(newSVpv(err_str,0));
-	 EXTEND(SP, 2);
-	 PUSHs(&PL_sv_undef);
-	 PUSHs(sv);
-	 XSRETURN(2);
+      /* /printf("Ourfa::new\n"); */
+      if ((items == 0) || ((items % 2) == 0)) {
+	 croak("Wrong argument list. Usage: Ourfa->new(%%params)");
       }
 
       ourfa = ourfa_new();
       if (!ourfa) {
-         sv = sv_2mortal(newSVpv("Cannot create OURFA object",0));
-	 EXTEND(SP, 2);
-	 PUSHs(&PL_sv_undef);
-	 PUSHs(sv);
-	 XSRETURN(2);
+	 croak("Can not create OURFA object");
       }
 
-      if (params) {
-         /*   printf("parsing params...\n"); */
-	 for (t=&str_params[0]; t->key; t++) {
-	    if (!hv_exists(params, (t->key), strlen(t->key)))
-	       continue;
+      for(i=1; i<items; i += 2) {
+	 const char *p;
+	 int found = 0;
 
-	    sv0 = hv_fetch(params, t->key, strlen(t->key), 0);
-	    if (sv0 && (*sv0)) {
-	       *t->val = SvPV_nolen(*sv0);
-	       /* /printf("t_val: %s\n", *t->val); */
+	 p = SvPV_nolen(ST(i));
+	 if (!p) {
+	    croak("Wrong parameter num %u: not a string", i);
+	 }
+
+	 for (t=&str_params[0]; t->key && !found; t++) {
+	    if (strcmp(p, t->key) == 0) {
+	       if (SvOK(ST(i+1))) {
+		  *t->val = SvPV_nolen(ST(i+1));
+	       }else {
+		  *t->val = NULL;
+	       }
+	       found=1;
 	    }
 	 }
+	 if (!found) {
+	    if(strcmp(p, "debug") == 0) {
+	       debug = SvTRUE(ST(i+1));
+	    }else if(strcmp(p, "auto_reconnect") == 0) {
+	       auto_reconnect = SvTRUE(ST(i+1));
+	    }else if (strcmp(p, "login_type") == 0) {
+	       const char *type;
+	       type = SvPV_nolen(ST(i+1));
+	       if (!type) {
+		  croak("Wrong parameter `login_type`: not a string");
+	       }
+	       if (strcmp(type, "admin") == 0) {
+		  login_type = OURFA_LOGIN_SYSTEM;
+	       }else if (strcmp(type, "user") == 0) {
+		  login_type = OURFA_LOGIN_USER;
+	       }else if (strcmp(type, "dealer") == 0) {
+		  login_type = OURFA_LOGIN_CARD;
+	       }else if (SvOK(ST(i+1))){
+		  croak("Wrong parameter `login_type`: unknown type `%s`. "
+			"Allowed types: admin, user, dealer", type);
+	       }
+	    }else if(strcmp(p, "ssl") == 0) {
+	       const char *p;
+	       p = SvPV_nolen(ST(i+1));
 
-	 if ( (sv0 = hv_fetchs(params, "login_type", 0)) != NULL) {
-	    if (*sv0)
-	       login_type = SvUV(*sv0);
+	       if (strcmp(p,"tlsv1")==0) {
+		  ssl_type=OURFA_SSL_TYPE_TLS1;
+	       }else if (strcmp(p,"sslv3")==0) {
+		  ssl_type=OURFA_SSL_TYPE_SSL3;
+	       }else if (strcmp(p,"rsa_cert")==0)  {
+		  ssl_type=OURFA_SSL_TYPE_RSA_CRT;
+	       }else if ((strcmp(p,"none")==0) || (!SvTRUE(ST(i+1))))  {
+		  ssl_type=OURFA_SSL_TYPE_NONE;
+	       }else{
+		  croak("Wrong parameter `ssl`: unknown type `%s`. "
+			"Allowed types: none, tlsv1, sslv3, rsa_cert", p);
+	       }
+	    }else if (strcmp(p, "timeout") == 0) {
+	       if (SvOK(ST(i+1))) {
+		  timeout = SvUV(ST(i+1));
+	       }
+	    }else {
+	       croak("Unknown parameter `%s`", p);
+	    }
 	 }
-
-	 if ( (sv0 = hv_fetchs(params, "ssl", 0)) != NULL) {
-	    ssl = (*sv0 && SvTRUE(*sv0)) ? 1 : 0;
-	 }
-
-	 if ( (sv0 = hv_fetchs(params, "timeout", 0)) != NULL) {
-	    if (*sv0)
-	       timeout = SvIV(*sv0);
-	 }
-      } /* params  */
+      }
 
       res = ourfa_set_conf(ourfa,
 	 login, password, server_port,
 	 (login_type == (unsigned)-1) ? NULL : &login_type,
-	 (ssl == (unsigned)-1) ? NULL : &ssl,
+	 &ssl_type,
 	 api_xml_dir, api_xml_file,
 	 (timeout == -1) ? NULL : &timeout);
 
       if (res != 0) {
+	 char *err;
 	 sv = newSVpv(ourfa_last_err_str(ourfa),0);
+	 err = SvPV_nolen(sv);
 	 ourfa_free(ourfa);
-	 EXTEND(SP, 2);
-	 PUSHs(&PL_sv_undef);
-	 mPUSHs(sv);
-	 XSRETURN(2);
+	 croak("test1");
       }
 
-      if (hv_fetchs(params, "debug", 0) != NULL) {
+      if (debug) {
 	 ourfa_set_debug_stream(ourfa, stdout);
       }
-      if ( (sv0 = hv_fetchs(params, "auto_reconnect", 0)) != NULL) {
-	 if (*sv0)
-	    ourfa_set_auto_reconnect(ourfa, SvIV(*sv0));
-      }
+      ourfa_set_auto_reconnect(ourfa, auto_reconnect);
+      ourfa_set_ssl(ourfa, ssl_type, ssl_cert, ssl_key);
 
       res = ourfa_connect(ourfa);
       if (res != 0) {
+	 char *err;
 	 sv = newSVpv(ourfa_last_err_str(ourfa),0);
+	 err = SvPV_nolen(sv);
 	 ourfa_free(ourfa);
-	 EXTEND(SP, 2);
-	 PUSHs(&PL_sv_undef);
-	 mPUSHs(sv);
-	 XSRETURN(2);
+	 croak(err);
       }
 
       sv = newSViv(PTR2IV(ourfa));
@@ -672,27 +698,15 @@ call(self, func_name, in)
       /*   printf("Ourfa::call\n"); */
       err_str=NULL;
       if (!SvROK(self))
-	 err_str ="Not a reference";
+	 croak("Not a reference");
       else if (!sv_isa(self, "Ourfa"))
-	 err_str="Wrong reference type";
+	 croak("Wrong reference type");
       else if (!SvROK(in) || (SvTYPE(SvRV(in)) != SVt_PVHV))
-	 err_str = "Wrong input parameters";
-
-      if (err_str) {
-         sv = sv_2mortal(newSVpv(err_str,0));
-	 EXTEND(SP, 2);
-	 PUSHs(&PL_sv_undef);
-	 PUSHs(sv);
-	 XSRETURN(2);
-      }
+	 croak("Wrong input parameters");
 
       ourfa = INT2PTR(void *, SvIV(SvRV(self)));
       if (hv2ourfah((HV *) SvRV(in), &ourfa_in) <= 0) {
-         sv = sv_2mortal(newSVpv("Cannot parse input parameters",0));
-	 EXTEND(SP, 2);
-	 PUSHs(&PL_sv_undef);
-	 PUSHs(sv);
-	 XSRETURN(2);
+	 croak("Can not parse input parameters");
       }
 
       snprintf(err_msg, sizeof(err_msg), "Unknown error");
@@ -701,11 +715,7 @@ call(self, func_name, in)
 	    err_msg, sizeof(err_msg)))) {
 	 /* /printf("error: %s\n", err_msg); */
 	 ourfa_hash_free(ourfa_in);
-	 sv = newSVpv(err_msg,0);
-	 EXTEND(SP, 2);
-	 PUSHs(&PL_sv_undef);
-	 mPUSHs(sv);
-	 XSRETURN(2);
+	 croak(err_msg);
       }
 
       ourfa_hash_free(ourfa_in);
@@ -713,6 +723,9 @@ call(self, func_name, in)
       sv = newRV_noinc((SV *)res_h);
 
       mXPUSHs(sv);
+
+
+     
 
 void DESTROY(self)
    SV *self
