@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009 Alexey Illarionov <littlesavage@rambler.ru>
+ * Copyright (c) 2009-2010 Alexey Illarionov <littlesavage@rambler.ru>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,25 +43,25 @@
 
 #define DEFAULT_ARRAY_SIZE 5
 
-enum ourfa_inout_elm_type_t {
-   OURFA_INOUT_ARRAY,
-   OURFA_INOUT_HASH,
-   OURFA_INOUT_INT,
-   OURFA_INOUT_LONG,
-   OURFA_INOUT_DOUBLE,
-   OURFA_INOUT_STRING,
-   OURFA_INOUT_IP
+enum ourfa_elm_type_t {
+   OURFA_ELM_ARRAY,
+   OURFA_ELM_HASH,
+   OURFA_ELM_INT,
+   OURFA_ELM_LONG,
+   OURFA_ELM_DOUBLE,
+   OURFA_ELM_STRING,
+   OURFA_ELM_IP
 };
 
 struct hash_val_t {
-   enum ourfa_inout_elm_type_t type;
+   enum ourfa_elm_type_t type;
    size_t elm_cnt;
    size_t data_pool_size;
    void *data;
 };
 
-static inline size_t elm_size_by_type(enum ourfa_inout_elm_type_t t);
-static struct hash_val_t *hash_val_new(enum ourfa_inout_elm_type_t type, size_t size);
+static inline size_t elm_size_by_type(enum ourfa_elm_type_t t);
+static struct hash_val_t *hash_val_new(enum ourfa_elm_type_t type, size_t size);
 static int convert_hashval2string(struct hash_val_t *val);
 static int increase_pool_size(struct hash_val_t *ha, size_t add);
 static void hash_val_clear(struct hash_val_t *val);
@@ -69,7 +69,7 @@ static void hash_val_free(struct hash_val_t *val);
 static void hash_val_free_0(void * payload, xmlChar * name);
 
 static struct hash_val_t *findncreate_arr_by_idx(ourfa_hash_t *h,
-      enum ourfa_inout_elm_type_t type,
+      enum ourfa_elm_type_t type,
       const char *key,
       const char *arr_idx,
       unsigned do_not_create,
@@ -81,7 +81,7 @@ ourfa_hash_t *ourfa_hash_new(int size)
    return xmlHashCreate(size ? size : 10);
 }
 
-static struct hash_val_t *hash_val_new(enum ourfa_inout_elm_type_t type, size_t size)
+static struct hash_val_t *hash_val_new(enum ourfa_elm_type_t type, size_t size)
 {
    struct hash_val_t *res;
 
@@ -101,7 +101,7 @@ static struct hash_val_t *hash_val_new(enum ourfa_inout_elm_type_t type, size_t 
 }
 
 static struct hash_val_t *findncreate_arr_by_idx(ourfa_hash_t *h,
-      enum ourfa_inout_elm_type_t type,
+      enum ourfa_elm_type_t type,
       const char *key,
       const char *arr_idx,
       unsigned do_not_create,
@@ -114,7 +114,6 @@ static struct hash_val_t *findncreate_arr_by_idx(ourfa_hash_t *h,
    unsigned idx_list[20];
    int idx_list_cnt;
 
-   /*  XXX: type is unsused and must be 0 when do_not_create=1.  */
    if (do_not_create)
       assert(type == 0);
 
@@ -139,7 +138,7 @@ static struct hash_val_t *findncreate_arr_by_idx(ourfa_hash_t *h,
 	 if (idx_list_cnt == 1) {
 	    hval = hash_val_new(type, idx_list[0]);
 	 } else
-	    hval = hash_val_new(OURFA_INOUT_ARRAY, idx_list[0]);
+	    hval = hash_val_new(OURFA_ELM_ARRAY, idx_list[0]);
 	 if (hval == NULL)
 	    return NULL;
 
@@ -157,14 +156,14 @@ static struct hash_val_t *findncreate_arr_by_idx(ourfa_hash_t *h,
       unsigned cur_idx;
       cur_idx = idx_list[i];
 
-      if (hval->type != OURFA_INOUT_ARRAY) {
+      if (hval->type != OURFA_ELM_ARRAY) {
 	 if (do_not_create)
 	    return NULL;
 	 /* Replace old value */
 	 hash_val_clear(hval);
 	 assert(hval->data == NULL);
 	 assert(hval->data_pool_size == 0);
-	 hval->type=OURFA_INOUT_ARRAY;
+	 hval->type=OURFA_ELM_ARRAY;
       }
 
       /*  Increase data pool */
@@ -189,7 +188,7 @@ static struct hash_val_t *findncreate_arr_by_idx(ourfa_hash_t *h,
 	 if (do_not_create)
 	    return NULL;
 	 ((struct hash_val_t **)hval->data)[cur_idx] = hash_val_new(
-	    i == idx_list_cnt-2 ? type : OURFA_INOUT_ARRAY,
+	    i == idx_list_cnt-2 ? type : OURFA_ELM_ARRAY,
 	    idx_list[i+1]+1);
       }
       hval = ((struct hash_val_t **)hval->data)[cur_idx];
@@ -224,18 +223,18 @@ int ourfa_hash_set_int(ourfa_hash_t *h, const char *key, const char *idx, int va
    if (h == NULL || key == NULL)
       return -1;
 
-   arr = findncreate_arr_by_idx(h, OURFA_INOUT_INT, key, idx, 0, &last_idx);
+   arr = findncreate_arr_by_idx(h, OURFA_ELM_INT, key, idx, 0, &last_idx);
 
    if (arr == NULL)
       return -1;
-   if (arr->type == OURFA_INOUT_IP) {
+   if (arr->type == OURFA_ELM_IP) {
       if (convert_hashval2string(arr) != 0)
 	 return -1;
    }
 
    res = 0;
    switch (arr->type) {
-      case OURFA_INOUT_INT:
+      case OURFA_ELM_INT:
 	 assert(arr->data_pool_size > last_idx);
 
 	 ((int *)arr->data)[last_idx] = val;
@@ -246,23 +245,23 @@ int ourfa_hash_set_int(ourfa_hash_t *h, const char *key, const char *idx, int va
 	    arr->elm_cnt = last_idx+1;
 	 }
 	 break;
-      case OURFA_INOUT_LONG:
+      case OURFA_ELM_LONG:
 	 res = ourfa_hash_set_long(h, key, idx, val);
 	 break;
-      case OURFA_INOUT_DOUBLE:
+      case OURFA_ELM_DOUBLE:
 	 res = ourfa_hash_set_double(h, key, idx, val);
 	 break;
-      case OURFA_INOUT_STRING:
+      case OURFA_ELM_STRING:
 	 {
 	    char str[80];
 	    snprintf(str, sizeof(str), "%i", val);
 	    res = ourfa_hash_set_string(h, key, idx, str);
 	 }
 	 break;
-      case OURFA_INOUT_IP:
+      case OURFA_ELM_IP:
 	 assert(0);
-      case OURFA_INOUT_ARRAY:
-      case OURFA_INOUT_HASH:
+      case OURFA_ELM_ARRAY:
+      case OURFA_ELM_HASH:
       default:
 	 return -1;
    }
@@ -280,19 +279,19 @@ int ourfa_hash_set_long(ourfa_hash_t *h, const char *key, const char *idx, long 
    if (h == NULL || key == NULL)
       return -1;
 
-   arr = findncreate_arr_by_idx(h, OURFA_INOUT_LONG, key, idx, 0, &last_idx);
+   arr = findncreate_arr_by_idx(h, OURFA_ELM_LONG, key, idx, 0, &last_idx);
 
    if (arr == NULL)
       return -1;
-   if ((arr->type == OURFA_INOUT_IP)
-	 || (arr->type == OURFA_INOUT_INT)) {
+   if ((arr->type == OURFA_ELM_IP)
+	 || (arr->type == OURFA_ELM_INT)) {
       if (convert_hashval2string(arr) != 0)
 	 return -1;
    }
 
    res = 0;
    switch (arr->type) {
-      case OURFA_INOUT_LONG:
+      case OURFA_ELM_LONG:
 	 assert(arr->data_pool_size > last_idx);
 
 	 ((long long *)arr->data)[last_idx] = val;
@@ -303,21 +302,21 @@ int ourfa_hash_set_long(ourfa_hash_t *h, const char *key, const char *idx, long 
 	    arr->elm_cnt = last_idx+1;
 	 }
 	 break;
-      case OURFA_INOUT_DOUBLE:
+      case OURFA_ELM_DOUBLE:
 	 res = ourfa_hash_set_double(h, key, idx, val);
 	 break;
-      case OURFA_INOUT_STRING:
+      case OURFA_ELM_STRING:
 	 {
 	    char str[80];
 	    snprintf(str, sizeof(str), "%lli", val);
 	    res = ourfa_hash_set_string(h, key, idx, str);
 	 }
 	 break;
-      case OURFA_INOUT_IP:
-      case OURFA_INOUT_INT:
+      case OURFA_ELM_IP:
+      case OURFA_ELM_INT:
 	 assert(0);
-      case OURFA_INOUT_ARRAY:
-      case OURFA_INOUT_HASH:
+      case OURFA_ELM_ARRAY:
+      case OURFA_ELM_HASH:
       default:
 	 return -1;
    }
@@ -335,20 +334,20 @@ int ourfa_hash_set_double(ourfa_hash_t *h, const char *key, const char *idx, dou
    if (h == NULL || key == NULL)
       return -1;
 
-   arr = findncreate_arr_by_idx(h, OURFA_INOUT_DOUBLE, key, idx, 0, &last_idx);
+   arr = findncreate_arr_by_idx(h, OURFA_ELM_DOUBLE, key, idx, 0, &last_idx);
 
    if (arr == NULL)
       return -1;
-   if ((arr->type == OURFA_INOUT_IP)
-	 || (arr->type == OURFA_INOUT_INT)
-	 || (arr->type == OURFA_INOUT_LONG)) {
+   if ((arr->type == OURFA_ELM_IP)
+	 || (arr->type == OURFA_ELM_INT)
+	 || (arr->type == OURFA_ELM_LONG)) {
       if (convert_hashval2string(arr) != 0)
 	 return -1;
    }
 
    res = 0;
    switch (arr->type) {
-      case OURFA_INOUT_DOUBLE:
+      case OURFA_ELM_DOUBLE:
 	 assert(arr->data_pool_size > last_idx);
 
 	 ((double *)arr->data)[last_idx] = val;
@@ -359,19 +358,19 @@ int ourfa_hash_set_double(ourfa_hash_t *h, const char *key, const char *idx, dou
 	    arr->elm_cnt = last_idx+1;
 	 }
 	 break;
-      case OURFA_INOUT_STRING:
+      case OURFA_ELM_STRING:
 	 {
 	    char str[80];
 	    snprintf(str, sizeof(str), "%f", val);
 	    res = ourfa_hash_set_string(h, key, idx, str);
 	 }
 	 break;
-      case OURFA_INOUT_INT:
-      case OURFA_INOUT_LONG:
-      case OURFA_INOUT_IP:
+      case OURFA_ELM_INT:
+      case OURFA_ELM_LONG:
+      case OURFA_ELM_IP:
 	 assert(0);
-      case OURFA_INOUT_ARRAY:
-      case OURFA_INOUT_HASH:
+      case OURFA_ELM_ARRAY:
+      case OURFA_ELM_HASH:
       default:
 	 return -1;
    }
@@ -393,14 +392,14 @@ int ourfa_hash_set_string(ourfa_hash_t *h, const char *key, const char *idx, con
    if (val0 == NULL)
       return -1;
 
-   arr = findncreate_arr_by_idx(h, OURFA_INOUT_STRING, key, idx, 0, &last_idx);
+   arr = findncreate_arr_by_idx(h, OURFA_ELM_STRING, key, idx, 0, &last_idx);
 
    if (arr == NULL) {
       free(val0);
       return -1;
    }
 
-   if ((arr->type != OURFA_INOUT_STRING)
+   if ((arr->type != OURFA_ELM_STRING)
       && (convert_hashval2string(arr) != 0))
       return -1;
 
@@ -428,20 +427,20 @@ int ourfa_hash_set_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr
    if (h == NULL || key == NULL)
       return -1;
 
-   arr = findncreate_arr_by_idx(h, OURFA_INOUT_IP, key, idx, 0, &last_idx);
+   arr = findncreate_arr_by_idx(h, OURFA_ELM_IP, key, idx, 0, &last_idx);
 
    if (arr == NULL)
       return -1;
-   if ((arr->type == OURFA_INOUT_DOUBLE)
-	 || (arr->type == OURFA_INOUT_INT)
-	 || (arr->type == OURFA_INOUT_LONG)) {
+   if ((arr->type == OURFA_ELM_DOUBLE)
+	 || (arr->type == OURFA_ELM_INT)
+	 || (arr->type == OURFA_ELM_LONG)) {
       if (convert_hashval2string(arr) != 0)
 	 return -1;
    }
 
    res = 0;
    switch (arr->type) {
-      case OURFA_INOUT_IP:
+      case OURFA_ELM_IP:
 	 assert(arr->data_pool_size > last_idx);
 
 	 ((in_addr_t *)arr->data)[last_idx] = val;
@@ -452,7 +451,7 @@ int ourfa_hash_set_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr
 	    arr->elm_cnt = last_idx+1;
 	 }
 	 break;
-      case OURFA_INOUT_STRING:
+      case OURFA_ELM_STRING:
 	 {
 	    char ip[INET_ADDRSTRLEN+1];
 	    inet_ntop(AF_INET, &val, ip, INET_ADDRSTRLEN);
@@ -460,12 +459,12 @@ int ourfa_hash_set_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr
 	    res = ourfa_hash_set_string(h, key, idx, ip);
 	 }
 	 break;
-      case OURFA_INOUT_DOUBLE:
-      case OURFA_INOUT_INT:
-      case OURFA_INOUT_LONG:
+      case OURFA_ELM_DOUBLE:
+      case OURFA_ELM_INT:
+      case OURFA_ELM_LONG:
 	 assert(0);
-      case OURFA_INOUT_ARRAY:
-      case OURFA_INOUT_HASH:
+      case OURFA_ELM_ARRAY:
+      case OURFA_ELM_HASH:
       default:
 	 return -1;
    }
@@ -513,19 +512,19 @@ int ourfa_hash_get_long(ourfa_hash_t *h, const char *key, const char *idx, long 
 
    retval = 0;
    switch (arr->type) {
-      case OURFA_INOUT_INT:
+      case OURFA_ELM_INT:
 	 *res = (((int *)arr->data)[last_idx]);
 	 break;
-      case OURFA_INOUT_LONG:
+      case OURFA_ELM_LONG:
 	 *res = ((long long *)arr->data)[last_idx];
 	 break;
-      case OURFA_INOUT_DOUBLE:
+      case OURFA_ELM_DOUBLE:
 	 *res = (long long)(((double *)arr->data)[last_idx]);
 	 break;
-      case OURFA_INOUT_IP:
+      case OURFA_ELM_IP:
 	 *res = (long long)(((in_addr_t *)arr->data)[last_idx]);
 	 break;
-      case OURFA_INOUT_STRING:
+      case OURFA_ELM_STRING:
 	 {
 	    char *s, *p_end;
 	    double tmp;
@@ -542,8 +541,8 @@ int ourfa_hash_get_long(ourfa_hash_t *h, const char *key, const char *idx, long 
 	    }
 	 }
 	 break;
-      case OURFA_INOUT_ARRAY:
-      case OURFA_INOUT_HASH:
+      case OURFA_ELM_ARRAY:
+      case OURFA_ELM_HASH:
       default:
 	 retval=-1;
 	 break;
@@ -570,19 +569,19 @@ int ourfa_hash_get_double(ourfa_hash_t *h, const char *key, const char *idx, dou
       return -1;
 
    switch  (arr->type) {
-      case OURFA_INOUT_INT:
+      case OURFA_ELM_INT:
 	 if (res != NULL)
 	    *res = ((int *)arr->data)[last_idx];
 	 break;
-      case OURFA_INOUT_LONG:
+      case OURFA_ELM_LONG:
 	 if (res != NULL)
 	    *res = ((long long *)arr->data)[last_idx];
 	 break;
-      case OURFA_INOUT_DOUBLE:
+      case OURFA_ELM_DOUBLE:
 	 if (res != NULL)
 	    *res = ((double *)arr->data)[last_idx];
 	 break;
-      case OURFA_INOUT_STRING:
+      case OURFA_ELM_STRING:
 	 {
 	    char *s, *end_p;
 	    double tmp;
@@ -624,23 +623,23 @@ int ourfa_hash_copy_val(ourfa_hash_t *h, const char *dst_key, const char *dst_id
 
    res=-1;
    switch (src_arr->type) {
-      case OURFA_INOUT_INT:
+      case OURFA_ELM_INT:
 	 res = ourfa_hash_set_long(h, dst_key, dst_idx, ((int *)src_arr->data)[last_idx]);
 	 break;
-      case OURFA_INOUT_LONG:
+      case OURFA_ELM_LONG:
 	 res = ourfa_hash_set_long(h, dst_key, dst_idx, ((long long *)src_arr->data)[last_idx]);
 	 break;
-      case OURFA_INOUT_DOUBLE:
+      case OURFA_ELM_DOUBLE:
 	 res = ourfa_hash_set_double(h, dst_key, dst_idx, ((double *)src_arr->data)[last_idx]);
 	 break;
-      case OURFA_INOUT_STRING:
+      case OURFA_ELM_STRING:
 	 res = ourfa_hash_set_string(h, dst_key, dst_idx, ((char **)src_arr->data)[last_idx]);
 	 break;
-      case OURFA_INOUT_IP:
+      case OURFA_ELM_IP:
 	 res = ourfa_hash_set_ip(h, dst_key, dst_idx, ((in_addr_t *)src_arr->data)[last_idx]);
 	 break;
-      case OURFA_INOUT_ARRAY:
-      case OURFA_INOUT_HASH:
+      case OURFA_ELM_ARRAY:
+      case OURFA_ELM_HASH:
 	 res=-1;
 	 break;
    }
@@ -704,11 +703,11 @@ int ourfa_hash_get_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr
       return -1;
 
    switch  (arr->type) {
-      case OURFA_INOUT_IP:
+      case OURFA_ELM_IP:
 	 if (res != NULL)
 	    *res = ((in_addr_t *)arr->data)[last_idx];
 	 break;
-      case OURFA_INOUT_STRING:
+      case OURFA_ELM_STRING:
 	 {
 	    char *s;
 	    struct in_addr in;
@@ -725,9 +724,9 @@ int ourfa_hash_get_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr
       default:
 	 {
 	    int val;
-	    if (arr->type == OURFA_INOUT_INT) {
+	    if (arr->type == OURFA_ELM_INT) {
 	       val = ((int *)arr->data)[last_idx];
-	    }else if (arr->type == OURFA_INOUT_LONG) {
+	    }else if (arr->type == OURFA_ELM_LONG) {
 	       val = (int)((long long *)arr->data)[last_idx];
 	    }else
 	       return -1;
@@ -782,22 +781,22 @@ int ourfa_hash_get_string(ourfa_hash_t *h,
    retval = -1;
 
    switch (arr->type) {
-      case OURFA_INOUT_INT:
+      case OURFA_ELM_INT:
 	 asprintf(res, "%i", ((int *)arr->data)[last_idx]);
 	 if (*res != NULL)
 	    retval = 0;
 	 break;
-      case OURFA_INOUT_LONG:
+      case OURFA_ELM_LONG:
 	 asprintf(res, "%lli", ((long long *)arr->data)[last_idx]);
 	 if (*res != NULL)
 	    retval = 0;
 	 break;
-      case OURFA_INOUT_DOUBLE:
+      case OURFA_ELM_DOUBLE:
 	 asprintf(res, "%f", ((double *)arr->data)[last_idx]);
 	 if (*res != NULL)
 	    retval = 0;
 	 break;
-      case OURFA_INOUT_STRING:
+      case OURFA_ELM_STRING:
 	 {
 	    char *s;
 	    s = ((char **)arr->data)[last_idx];
@@ -808,7 +807,7 @@ int ourfa_hash_get_string(ourfa_hash_t *h,
 	    }
 	 }
 	 break;
-      case OURFA_INOUT_IP:
+      case OURFA_ELM_IP:
 	    *res = malloc(INET_ADDRSTRLEN+1);
 	    if (*res != NULL) {
 	       struct in_addr in;
@@ -818,8 +817,8 @@ int ourfa_hash_get_string(ourfa_hash_t *h,
 	       retval = 0;
 	    }
 	 break;
-      case OURFA_INOUT_ARRAY:
-      case OURFA_INOUT_HASH:
+      case OURFA_ELM_ARRAY:
+      case OURFA_ELM_HASH:
       default:
 	 break;
    }
@@ -842,33 +841,33 @@ static void hash_dump_0(void *payload, void *data, xmlChar *name)
 
    for (idx=0; idx<arr->elm_cnt;idx++){
       char name0[50];
-      if ((arr->type != OURFA_INOUT_ARRAY) && (arr->elm_cnt <= 1)) {
+      if ((arr->type != OURFA_ELM_ARRAY) && (arr->elm_cnt <= 1)) {
 	 strncpy(name0, (const char *)name, sizeof(name0));
 	 name0[sizeof(name0)-1]='\0';
       }else
 	 snprintf(name0, sizeof(name0), "%s_%u", name, idx);
 
       switch (arr->type) {
-	 case OURFA_INOUT_INT:
+	 case OURFA_ELM_INT:
 	    fprintf(stream, "%-7s %-18s %i\n", "INT", name0,
 		  ((int *)arr->data)[idx]);
 	    break;
-	 case OURFA_INOUT_LONG:
+	 case OURFA_ELM_LONG:
 	    fprintf(stream, "%-7s %-18s %lli\n", "LONG", name0,
 		  ((long long *)arr->data)[idx]);
 	    break;
-	 case OURFA_INOUT_DOUBLE:
+	 case OURFA_ELM_DOUBLE:
 	    fprintf(stream, "%-7s %-18s %.4f\n", "DOUBLE", name0,
 		  ((double *)arr->data)[idx]);
 	    break;
-	 case OURFA_INOUT_IP:
+	 case OURFA_ELM_IP:
 	    {
 	       struct in_addr s;
 	       s.s_addr = ((in_addr_t *)arr->data)[idx];
 	       fprintf(stream, "%-7s %-18s %s\n", "IP", name0, inet_ntoa(s));
 	    }
 	    break;
-	 case OURFA_INOUT_STRING:
+	 case OURFA_ELM_STRING:
 	    {
 	       char *res;
 	       res = ((char **)arr->data)[idx];
@@ -876,7 +875,7 @@ static void hash_dump_0(void *payload, void *data, xmlChar *name)
 		  res ? res : "undef");
 	    }
 	    break;
-	 case OURFA_INOUT_ARRAY:
+	 case OURFA_ELM_ARRAY:
 	    {
 	       struct hash_val_t *tmp;
 
@@ -888,7 +887,7 @@ static void hash_dump_0(void *payload, void *data, xmlChar *name)
 	       }
 	    }
 	    break;
-	 case OURFA_INOUT_HASH:
+	 case OURFA_ELM_HASH:
 	 default:
 	    assert(0);
 	    break;
@@ -941,7 +940,7 @@ static void hash_val_clear(struct hash_val_t *val)
 
    switch (val->type)
    {
-      case OURFA_INOUT_ARRAY:
+      case OURFA_ELM_ARRAY:
 	 for (i=0; i<val->elm_cnt; i++) {
 	    struct hash_val_t *val0;
 	    val0 = ((struct hash_val_t **)val->data)[i];
@@ -950,7 +949,7 @@ static void hash_val_clear(struct hash_val_t *val)
 	    free(val0);
 	 }
 	 break;
-      case OURFA_INOUT_HASH:
+      case OURFA_ELM_HASH:
 	 for (i=0; i<val->elm_cnt; i++) {
 	    ourfa_hash_t *val0;
 	    val0 = ((ourfa_hash_t **)val->data)[i];
@@ -958,7 +957,7 @@ static void hash_val_clear(struct hash_val_t *val)
 	    ourfa_hash_free(val0);
 	 }
 	 break;
-      case OURFA_INOUT_STRING:
+      case OURFA_ELM_STRING:
 	 for (i=0; i<val->elm_cnt; i++) {
 	    char *val0;
 	    val0 = ((char **)val->data)[i];
@@ -988,20 +987,20 @@ static int convert_hashval2string(struct hash_val_t *val)
    struct hash_val_t *tmp;
 
    switch (val->type) {
-      case OURFA_INOUT_STRING:
+      case OURFA_ELM_STRING:
 	 return 0;
-      case OURFA_INOUT_INT:
-      case OURFA_INOUT_LONG:
-      case OURFA_INOUT_DOUBLE:
-      case OURFA_INOUT_IP:
+      case OURFA_ELM_INT:
+      case OURFA_ELM_LONG:
+      case OURFA_ELM_DOUBLE:
+      case OURFA_ELM_IP:
 	 break;
-      case OURFA_INOUT_ARRAY:
-      case OURFA_INOUT_HASH:
+      case OURFA_ELM_ARRAY:
+      case OURFA_ELM_HASH:
       default:
 	 assert(0);
    }
 
-   tmp = hash_val_new(OURFA_INOUT_STRING, val->elm_cnt);
+   tmp = hash_val_new(OURFA_ELM_STRING, val->elm_cnt);
    if (tmp == NULL)
       return -1;
 
@@ -1010,16 +1009,16 @@ static int convert_hashval2string(struct hash_val_t *val)
    while (tmp->elm_cnt < val->elm_cnt) {
       char *str;
       switch (val->type) {
-	 case OURFA_INOUT_INT:
+	 case OURFA_ELM_INT:
 	    asprintf(&str, "%i", ((int *)val->data)[tmp->elm_cnt]);
 	    break;
-	 case OURFA_INOUT_LONG:
+	 case OURFA_ELM_LONG:
 	    asprintf(&str, "%lli", ((long long *)val->data)[tmp->elm_cnt]);
 	    break;
-	 case OURFA_INOUT_DOUBLE:
+	 case OURFA_ELM_DOUBLE:
 	    asprintf(&str, "%f", ((double *)val->data)[tmp->elm_cnt]);
 	    break;
-	 case OURFA_INOUT_IP:
+	 case OURFA_ELM_IP:
 	    str = malloc(INET_ADDRSTRLEN+1);
 	    if (str != NULL) {
 	       struct in_addr in;
@@ -1040,7 +1039,7 @@ static int convert_hashval2string(struct hash_val_t *val)
    }
 
    free(val->data);
-   val->type = OURFA_INOUT_STRING;
+   val->type = OURFA_ELM_STRING;
    val->data = tmp->data;
    val->data_pool_size = tmp->data_pool_size;
    free(tmp);
@@ -1131,31 +1130,31 @@ int ourfa_hash_parse_idx_list(ourfa_hash_t *h, const char *idx_list,
    return (int)cnt;
 }
 
-static inline size_t elm_size_by_type(enum ourfa_inout_elm_type_t t)
+static inline size_t elm_size_by_type(enum ourfa_elm_type_t t)
 {
    size_t res;
 
    res = 0;
    switch (t) {
-      case OURFA_INOUT_ARRAY:
+      case OURFA_ELM_ARRAY:
 	 res = sizeof(struct hash_val_t *);
 	 break;
-      case OURFA_INOUT_HASH:
+      case OURFA_ELM_HASH:
 	 res = sizeof(ourfa_hash_t *);
 	 break;
-      case OURFA_INOUT_INT:
+      case OURFA_ELM_INT:
 	 res = sizeof(int);
 	 break;
-      case OURFA_INOUT_LONG:
+      case OURFA_ELM_LONG:
 	 res = sizeof(long long);
 	 break;
-      case OURFA_INOUT_DOUBLE:
+      case OURFA_ELM_DOUBLE:
 	 res = sizeof(double);
 	 break;
-      case OURFA_INOUT_STRING:
+      case OURFA_ELM_STRING:
 	 res = sizeof(const char *);
 	 break;
-      case OURFA_INOUT_IP:
+      case OURFA_ELM_IP:
 	 res = sizeof(in_addr_t);
 	 break;
       default:

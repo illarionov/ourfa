@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009 Alexey Illarionov <littlesavage@rambler.ru>
+ * Copyright (c) 2009-2010 Alexey Illarionov <littlesavage@rambler.ru>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,8 +24,8 @@
  * SUCH DAMAGE.
  */
 
-#ifndef _OPENURFA_H
-#define _OPENURFA_H
+#ifndef _OURFA_H
+#define _OURFA_H
 
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -34,6 +34,7 @@
 #include <time.h>
 
 #include <libxml/hash.h>
+#include <openssl/ssl.h>
 
 #define OURFA_PROTO_VERSION	   0x23
 
@@ -50,8 +51,8 @@
 #define OURFA_ATTR_CALL	          0x0300
 #define OURFA_ATTR_TERMINATION    0x0400
 #define OURFA_ATTR_DATA		  0x0500
-#define OURFA_ATTR_MD5_CHALLENGE  0x0600
-#define OURFA_ATTR_CLIENT_IP      0x0700
+#define OURFA_ATTR_SESSION_ID     0x0600
+#define OURFA_ATTR_SESSION_IP     0x0700
 #define OURFA_ATTR_CHAP_CHALLENGE 0x0800
 #define OURFA_ATTR_CHAP_RESPONSE  0x0900
 #define OURFA_ATTR_SSL_REQUEST    0x0a00
@@ -69,6 +70,33 @@
 #define OURFA_TIME_NOW		   ((int)time(NULL))
 #define OURFA_TIME_MAX		   2000000000
 
+/* Error codes  */
+enum {
+   OURFA_ERROR_SYSTEM = -1,
+   OURFA_OK  = 0,
+   OURFA_ERROR_SESSION_ACTIVE,
+   OURFA_ERROR_NOT_CONNECTED,
+   OURFA_ERROR_NOT_IMPLEMENTED,
+   OURFA_ERROR_WRONG_HOSTNAME,
+   OURFA_ERROR_WRONG_SSL_TYPE,
+   OURFA_ERROR_WRONG_LOGIN_TYPE,
+   OURFA_ERROR_WRONG_SESSION_ID,
+   OURFA_ERROR_WRONG_CLIENT_CERTIFICATE,
+   OURFA_ERROR_WRONG_CLIENT_CERTIFICATE_KEY,
+   OURFA_ERROR_WRONG_INITIAL_PACKET,
+   OURFA_ERROR_INVALID_PACKET,
+   OURFA_ERROR_INVALID_PACKET_FORMAT,
+   OURFA_ERROR_AUTH_REJECTED,
+   OURFA_ERROR_ACCESS_DENIED,
+   OURFA_ERROR_WRONG_ATTRIBUTE,
+   OURFA_ERROR_SSL,
+   OURFA_ERROR_NO_DATA,
+   OURFA_ERROR_ATTR_TOO_LONG,
+   OURFA_ERROR_PKT_TERM,
+   OURFA_ERROR_HASH,
+   OURFA_ERROR_OTHER
+} ourfa_errcode_t;
+
 typedef enum {
    OURFA_ATTR_DATA_ANY,
    OURFA_ATTR_DATA_INT,
@@ -78,14 +106,14 @@ typedef enum {
    OURFA_ATTR_DATA_IP
 } ourfa_attr_data_type_t;
 
-typedef struct ourfa_t ourfa_t;
 typedef struct ourfa_pkt_t ourfa_pkt_t;
 typedef xmlHashTable ourfa_hash_t;
 typedef struct ourfa_array_t ourfa_array_t;
-typedef struct ourfa_conn_t ourfa_conn_t;
-typedef xmlDoc ourfa_xmlapi_t;
-typedef struct ourfa_xmlapictx_t ourfa_xmlapictx_t;
-
+typedef struct ourfa_ssl_ctx_t ourfa_ssl_ctx_t;
+typedef struct ourfa_connection_t ourfa_connection_t;
+typedef struct ourfa_xmlapi_t ourfa_xmlapi_t;
+typedef struct ourfa_xmlapi_func_t ourfa_xmlapi_func_t;
+typedef struct ourfa_func_call_ctx_t ourfa_func_call_ctx_t;
 
 typedef struct ourfa_attr_hdr_t {
    unsigned		     attr_type;
@@ -94,10 +122,11 @@ typedef struct ourfa_attr_hdr_t {
    struct ourfa_attr_hdr_t    *next;
 } ourfa_attr_hdr_t;
 
+typedef int ourfa_err_f_t (int err_code, void *user_ctx, const char *fmt, ...);
 
 struct ourfa_traverse_funcs_t {
-   int (* node)(const char *node_type, const char *node_name, const char *arr_index , void *ctx);
-   int (* start_for)(const char *array_name, const char *node_name,
+   int (* node)(/* struct xmlapi_func_node_t */void *node, void *user_ctx);
+   int (* start_for)(/* struct xmlapi_func_node_t */void *node,
 	 unsigned from, unsigned cnt, void *ctx);
    int (* err_node)(const char *err_str, unsigned err_code, void *ctx);
    int (* start_for_item)(void *ctx);
@@ -106,48 +135,6 @@ struct ourfa_traverse_funcs_t {
 };
 
 typedef struct ourfa_traverse_funcs_t ourfa_traverse_funcs_t;
-
-
-/* Session */
-ourfa_t *ourfa_new();
-void ourfa_free(ourfa_t *ourfa);
-
-int ourfa_set_conf(
-      ourfa_t    *ctx,
-      const char *login,
-      const char *pass,
-      const char *server_port,
-      unsigned   *login_type,
-      unsigned   *ssl,
-      const char *api_xml_dir,
-      const char *api_xml_file,
-      int        *timeout
-      );
-
-int ourfa_set_ssl(
-      ourfa_t    *ctx,
-      unsigned   ssl,
-      const char *cert,
-      const char *key);
-
-int ourfa_connect(ourfa_t *ourfa);
-int ourfa_disconnect(ourfa_t *ourfa);
-int ourfa_call(ourfa_t *ourfa, const char *func, ourfa_hash_t *globals);
-int ourfa_start_call(ourfa_t *ourfa, const char *func,
-      ourfa_hash_t *in);
-
-ssize_t ourfa_send_packet(ourfa_t *ourfa, const ourfa_pkt_t *pkt);
-ssize_t ourfa_recv_packet(ourfa_t *ourfa, ourfa_pkt_t **res);
-
-const char *ourfa_last_err_str(ourfa_t *ourfa);
-const char *ourfa_login_type2str(unsigned login_type);
-unsigned    ourfa_is_valid_login_type(unsigned login_type);
-
-int ourfa_set_debug_stream(ourfa_t *ourfa, FILE *stream);
-void ourfa_set_auto_reconnect(ourfa_t *ourfa, int state);
-
-ourfa_xmlapi_t *ourfa_get_xmlapi(ourfa_t *ourfa);
-ourfa_conn_t *ourfa_get_conn(ourfa_t *conn);
 
 /* Packet */
 ourfa_pkt_t *ourfa_pkt_new (unsigned pkt_code, const char *fmt, ...);
@@ -158,11 +145,16 @@ int ourfa_pkt_add_attr(ourfa_pkt_t *pkt,
       unsigned attr_type,
       size_t size,
       const void *data);
-int ourfa_pkt_add_data_int(ourfa_pkt_t *pkt, int val);
-int ourfa_pkt_add_data_str(ourfa_pkt_t *pkt, const char *val);
+
 int ourfa_pkt_add_data_long(ourfa_pkt_t *pkt, long long val);
 int ourfa_pkt_add_data_double(ourfa_pkt_t *pkt, double val);
 int ourfa_pkt_add_data_ip(ourfa_pkt_t *pkt, in_addr_t ip);
+int ourfa_pkt_add_int(ourfa_pkt_t *pkt, unsigned type, int val);
+int ourfa_pkt_add_string(ourfa_pkt_t *pkt, unsigned type, const char *val);
+int ourfa_pkt_add_long(ourfa_pkt_t *pkt, unsigned type, long long val);
+int ourfa_pkt_add_double(ourfa_pkt_t *pkt, unsigned type, double val);
+int ourfa_pkt_add_ip(ourfa_pkt_t *pkt, unsigned type, in_addr_t ip);
+
 
 /*
  * ourfa_pkt_add_attrs input format:
@@ -178,10 +170,11 @@ int ourfa_pkt_add_data_ip(ourfa_pkt_t *pkt, in_addr_t ip);
  * 3 - set attribute type ATTR_CALL for all next attributes
  * 4 - set attribute type ATTR_TERMINATION for all next attributes
  * 5 - set attribute type ATTR_DATA (default) for all next attributes
- * 6 - set attribute type ATTR_MD5_CHALLENGE for all next attributes
- * 7 - set attribute type ATTR_CHAP_CHALLENGE for all next attributes
- * 8 - set attribute type ATTR_CHAP_RESPONSE for all next attributes
- * 9 - set attribute type ATTR_SSL_REQUEST for all next attributes
+ * 6 - set attribute type ATTR_SESSION_ID for all next attributes
+ * 7 - set attribute type ATTR_SESSION_IP for all next attributes
+ * 8 - set attribute type ATTR_CHAP_CHALLENGE for all next attributes
+ * 9 - set attribute type ATTR_CHAP_RESPONSE for all next attributes
+ * 0 - set attribute type ATTR_SSL_REQUEST for all next attributes
  *
  * example: (pkt, "1i2s6D5ii", LOGIN_TYPE_SYSTEM, "init", 16, digest, 5555, 5666);
  *    Adds to packet 5 attributes:
@@ -194,10 +187,13 @@ int ourfa_pkt_add_data_ip(ourfa_pkt_t *pkt, in_addr_t ip);
 int ourfa_pkt_add_attrs(ourfa_pkt_t *pkt, const char *fmt, ...);
 int ourfa_pkt_add_attrs_v(ourfa_pkt_t *pkt, const char *fmt, va_list ap);
 
+size_t ourfa_pkt_space_left(const ourfa_pkt_t *pkt);
+
 const void *ourfa_pkt_data (const ourfa_pkt_t *pkt, size_t *res_size);
 unsigned    ourfa_pkt_code (const ourfa_pkt_t *pkt);
 unsigned    ourfa_pkt_proto(const ourfa_pkt_t *pkt);
 
+const ourfa_attr_hdr_t *ourfa_pkt_get_all_attrs_list(const ourfa_pkt_t *pkt);
 const ourfa_attr_hdr_t *ourfa_pkt_get_attrs_list(ourfa_pkt_t *pkt, unsigned attr_type);
 int ourfa_pkt_get_attr(const ourfa_attr_hdr_t *attr,
       ourfa_attr_data_type_t type,
@@ -248,77 +244,241 @@ void ourfa_hash_dump(ourfa_hash_t *h, FILE *stream, const char *annotation_fmt, 
 int ourfa_hash_parse_idx_list(ourfa_hash_t *h, const char *idx_list,
       unsigned *res, size_t res_size);
 
-/*  XML API  */
-ourfa_xmlapi_t *ourfa_xmlapi_new(
-      const char *xml_dir,
-      const char *xml_file,
-      char *err_str,
-      size_t err_str_size);
-void ourfa_xmlapi_free(ourfa_xmlapi_t *api);
 
-ourfa_xmlapictx_t *ourfa_xmlapictx_new(ourfa_xmlapi_t *api, const char *func_name,
-      unsigned traverse_in,
-      const ourfa_traverse_funcs_t *funcs,
-      ourfa_hash_t *data_h,
-      unsigned use_unset,
-      void *user_ctx,
-      char *user_err_str,
-      size_t user_err_str_size
-      );
-void ourfa_xmlapictx_free(ourfa_xmlapictx_t *ctx);
+/* SSL CTX  */
+ourfa_ssl_ctx_t *ourfa_ssl_ctx_new();
+void  ourfa_ssl_ctx_free(ourfa_ssl_ctx_t *ctx);
+ourfa_ssl_ctx_t *ourfa_ssl_ctx_ref(ourfa_ssl_ctx_t *ctx);
 
-int ourfa_xmlapictx_func_id(ourfa_xmlapictx_t *ctx);
-int ourfa_xmlapictx_have_input_parameters(ourfa_xmlapictx_t *ctx);
-int ourfa_xmlapictx_have_output_parameters(ourfa_xmlapictx_t *ctx);
+unsigned    ourfa_ssl_ctx_ssl_type(ourfa_ssl_ctx_t *ssl_ctx);
+int         ourfa_ssl_ctx_set_ssl_type(ourfa_ssl_ctx_t *ssl_ctx, unsigned ssl_type);
 
-int ourfa_xmlapictx_traverse_start(ourfa_xmlapictx_t *ctx);
-int ourfa_xmlapictx_traverse(ourfa_xmlapictx_t *ctx);
+const char *ourfa_ssl_ctx_cert(ourfa_ssl_ctx_t *ssl_ctx);
+int         ourfa_ssl_ctx_load_cert(ourfa_ssl_ctx_t *ssl_ctx, const char *cert);
 
-int ourfa_xmlapictx_get_req_pkt(ourfa_xmlapictx_t *ctx,
-      ourfa_hash_t *in, ourfa_pkt_t **out);
+const char *ourfa_ssl_ctx_key(ourfa_ssl_ctx_t *ssl_ctx);
+const char *ourfa_ssl_ctx_cert_pass(const ourfa_ssl_ctx_t *ssl_ctx);
+int         ourfa_ssl_ctx_load_private_key(ourfa_ssl_ctx_t *ssl_ctx, const char *key, const char *pass);
 
-void *ourfa_xmlapictx_load_resp_init(ourfa_xmlapi_t *api,
-      const char *func_name,
-      ourfa_conn_t *conn,
-      const ourfa_traverse_funcs_t *user_hooks,
-      char *user_err_str,
-      size_t user_err_str_size,
-      void *user_ctx,
-      ourfa_hash_t *res_h
-      );
-ourfa_hash_t *ourfa_xmlapictx_load_resp(void *load_resp_ctx);
+SSL_CTX    *ourfa_ssl_get_ctx(ourfa_ssl_ctx_t *ssl_ctx);
+
+int            ourfa_ssl_ctx_set_err_f(ourfa_ssl_ctx_t *ssl_ctx, ourfa_err_f_t *f, void *user_ctx);
+ourfa_err_f_t *ourfa_ssl_ctx_err_f(ourfa_ssl_ctx_t *ssl_ctx);
+void          *ourfa_ssl_ctx_err_ctx(ourfa_ssl_ctx_t *ssl_ctx);
 
 /* Connection  */
-ourfa_conn_t *ourfa_conn_open(
-      const char *server_port,
-      const char *user_login,
-      const char *pass,
-      unsigned login_type,
-      unsigned timeout_s,
-      unsigned ssl_type,
-      const char *ssl_cert,
-      const char *ssl_key,
-      FILE *debug_stream,
-      char *err_str,
-      size_t err_str_size);
-
-void ourfa_conn_close(ourfa_conn_t *conn);
-ssize_t ourfa_conn_send_packet(ourfa_conn_t *conn, const ourfa_pkt_t *pkt);
-ssize_t ourfa_conn_recv_packet(ourfa_conn_t *conn, ourfa_pkt_t **res);
-int ourfa_conn_start_func_call(ourfa_conn_t *conn, int func_code);
-
-int ourfa_istream_get_next_attr(ourfa_conn_t *conn, const ourfa_attr_hdr_t **res);
-int ourfa_istream_get_int(ourfa_conn_t *conn, int *res);
-int ourfa_istream_get_long(ourfa_conn_t *conn, long long *res);
-int ourfa_istream_get_double(ourfa_conn_t *conn, double *res);
-int ourfa_istream_get_ip(ourfa_conn_t *conn, in_addr_t *res);
-int ourfa_istream_get_string(ourfa_conn_t *conn, char **res);
-int ourfa_istream_load_full(ourfa_conn_t *conn);
-int ourfa_istream_flush(ourfa_conn_t *conn);
-
-int ourfa_conn_set_debug_stream(ourfa_conn_t *conn, FILE *stream);
-int ourfa_conn_is_connected(ourfa_conn_t *conn);
-const char *ourfa_conn_last_err_str(ourfa_conn_t *conn);
+ourfa_connection_t *ourfa_connection_new(ourfa_ssl_ctx_t *ssl_ctx);
+void ourfa_connection_free(ourfa_connection_t *connection);
+int ourfa_connection_is_connected(ourfa_connection_t *connection);
+unsigned ourfa_connection_proto(ourfa_connection_t *connection);
+ourfa_ssl_ctx_t *ourfa_connection_ssl_ctx(ourfa_connection_t *connection);
+unsigned ourfa_connection_login_type(ourfa_connection_t *connection);
+unsigned ourfa_connection_timeout(ourfa_connection_t *connection);
+unsigned ourfa_connection_auto_reconnect(ourfa_connection_t *connection);
+const char *ourfa_connection_login(ourfa_connection_t *connection);
+const char *ourfa_connection_password(ourfa_connection_t *connection);
+const char *ourfa_connection_hostname(ourfa_connection_t *connection);
+int ourfa_connection_session_id(ourfa_connection_t *connection, char *res, size_t buf_size);
+const in_addr_t *ourfa_connection_session_ip(ourfa_connection_t *connection);
+BIO *ourfa_connection_bio(ourfa_connection_t *connection);
 
 
-#endif  /* _OPENURFA_H */
+ourfa_err_f_t *ourfa_connection_err_f(ourfa_connection_t *connection);
+void          *ourfa_connection_err_ctx(ourfa_connection_t *connection);
+FILE *ourfa_connection_debug_stream(ourfa_connection_t *connection);
+
+int ourfa_connection_set_proto(ourfa_connection_t *connection, unsigned proto);
+int ourfa_connection_set_login_type(ourfa_connection_t *connection, unsigned login_type);
+int ourfa_connection_set_timeout(ourfa_connection_t *connection, unsigned timeout);
+int ourda_connection_set_auto_reconnect(ourfa_connection_t *connection, unsigned val);
+int ourfa_connection_set_login(ourfa_connection_t *connection, const char *login);
+int ourfa_connection_set_password(ourfa_connection_t *connection, const char *password);
+int ourfa_connection_set_hostname(ourfa_connection_t *connection, const char *hostname);
+int ourfa_connection_set_session_id(ourfa_connection_t *connection, const char *session_id);
+int ourfa_connection_set_session_ip(ourfa_connection_t *connection, const in_addr_t *session_ip);
+
+int ourfa_connection_set_err_f(ourfa_connection_t *connection, ourfa_err_f_t *f, void *user_ctx);
+int ourfa_connection_set_debug_stream(ourfa_connection_t *connection, FILE *stream);
+
+int ourfa_connection_open(ourfa_connection_t *connection);
+int ourfa_connection_close(ourfa_connection_t *connection);
+
+ssize_t ourfa_connection_send_packet(ourfa_connection_t *connection,
+      const ourfa_pkt_t *pkt,
+      const char *descr);
+ssize_t ourfa_connection_recv_packet(ourfa_connection_t *connection,
+      ourfa_pkt_t **res,
+      const char *descr);
+
+int   ourfa_connection_read_attr(ourfa_connection_t *conn, const ourfa_attr_hdr_t **res);
+int   ourfa_connection_read_int(ourfa_connection_t *conn, unsigned type, int *val);
+int   ourfa_connection_read_long(ourfa_connection_t *conn, unsigned type, long long  *val);
+int   ourfa_connection_read_double(ourfa_connection_t *conn, unsigned type, double *val);
+int   ourfa_connection_read_string(ourfa_connection_t *conn, unsigned type, char **val);
+int   ourfa_connection_read_ip(ourfa_connection_t *conn, unsigned type, in_addr_t *val);
+
+int   ourfa_connection_write_attr(ourfa_connection_t *conn, unsigned type,
+      size_t size, const void *data);
+int   ourfa_connection_write_int(ourfa_connection_t *conn, unsigned type, int val);
+int   ourfa_connection_write_long(ourfa_connection_t *conn, unsigned type, long long  val);
+int   ourfa_connection_write_double(ourfa_connection_t *conn, unsigned type, double val);
+int   ourfa_connection_write_string(ourfa_connection_t *conn, unsigned type, const char * val);
+int   ourfa_connection_write_ip(ourfa_connection_t *conn, unsigned type, in_addr_t val);
+
+int   ourfa_connection_flush_read(ourfa_connection_t *conn);
+int   ourfa_connection_flush_write(ourfa_connection_t *conn);
+
+const ourfa_pkt_t      *ourfa_connection_rbuf_cur_pkt(ourfa_connection_t *conn);
+const ourfa_attr_hdr_t *ourfa_connection_rbuf_cur_attr(ourfa_connection_t *conn);
+
+const char *ourfa_login_type2str(unsigned login_type);
+unsigned    ourfa_is_valid_login_type(unsigned login_type);
+
+int ourfa_start_call(ourfa_func_call_ctx_t *fctx,
+      ourfa_connection_t *connection);
+int ourfa_call(ourfa_connection_t *connection,
+      ourfa_xmlapi_t *xmlapi,
+      const char *func,
+      ourfa_hash_t *globals);
+
+/* Error  */
+const char *ourfa_error_strerror(int err_code);
+int ourfa_err_f_stderr(int err_code, void *user_ctx, const char *fmt, ...);
+int ourfa_err_f_null(int err_code, void *user_ctx, const char *fmt, ...);
+
+/*  XML API  */
+
+ourfa_xmlapi_t *ourfa_xmlapi_new();
+int             ourfa_xmlapi_load_file(ourfa_xmlapi_t *xmlapi,  const char *file);
+void            ourfa_xmlapi_free(ourfa_xmlapi_t *api);
+
+int             ourfa_xmlapi_set_err_f(ourfa_xmlapi_t *xmlapi, ourfa_err_f_t *f, void *user_ctx);
+ourfa_err_f_t  *ourfa_xmlapi_err_f(ourfa_xmlapi_t *xmlapi);
+void           *ourfa_xmlapi_err_ctx(ourfa_xmlapi_t *xmlapi);
+
+const char     *ourfa_xmlapi_node_name_by_type(int node_type);
+int             ourfa_xmlapi_node_type_by_name(const xmlChar *node_name);
+ourfa_xmlapi_func_t  *ourfa_xmlapi_func(ourfa_xmlapi_t *api, const char *name);
+
+/* Private  */
+/*  XML API */
+struct ourfa_xmlapi_t {
+   xmlHashTable *func_by_name;
+   char *file;
+
+   ourfa_err_f_t *printf_err;
+   void *err_ctx;
+};
+
+/* XML API Function */
+enum xmlapi_func_node_type_t {
+   OURFA_XMLAPI_NODE_ROOT,
+   OURFA_XMLAPI_NODE_INTEGER,
+   OURFA_XMLAPI_NODE_STRING,
+   OURFA_XMLAPI_NODE_LONG,
+   OURFA_XMLAPI_NODE_DOUBLE,
+   OURFA_XMLAPI_NODE_IP,
+   OURFA_XMLAPI_NODE_IF,
+   OURFA_XMLAPI_NODE_SET,
+   OURFA_XMLAPI_NODE_FOR,
+   OURFA_XMLAPI_NODE_BREAK,
+   OURFA_XMLAPI_NODE_ERROR,
+   OURFA_XMLAPI_NODE_UNKNOWN,
+};
+
+struct xmlapi_func_node_t {
+   struct xmlapi_func_node_t *parent;
+   struct xmlapi_func_node_t *next;
+   struct xmlapi_func_node_t *children;
+
+   enum xmlapi_func_node_type_t type;
+   union {
+      struct {
+	 char *name;
+	 char *array_index;
+	 char *defval;
+      } n_val;
+
+      struct {
+	 char *variable;
+	 char *value;
+	 enum {
+	    OURFA_XMLAPI_IF_NE,
+	    OURFA_XMLAPI_IF_EQ,
+	 } condition;
+      } n_if;
+      struct {
+	 char *src;
+	 char *src_index;
+	 char *dst;
+	 char *dst_index;
+	 char *value;
+      } n_set;
+      struct {
+	 char *name;
+	 char *from;
+	 char *count;
+	 char *array_name;
+      } n_for;
+      struct {
+	 int code;
+	 char *comment;
+	 char *variable;
+      } n_error;
+   } n;
+};
+
+struct ourfa_xmlapi_func_t {
+   int id;
+
+   struct xmlapi_func_node_t *in;
+   struct xmlapi_func_node_t *out;
+
+   char name[];
+};
+
+/* Function Call Context  */
+struct ourfa_func_call_ctx_t {
+   struct ourfa_xmlapi_func_t *f;
+   ourfa_hash_t *h;
+
+   enum {
+      OURFA_FUNC_CALL_STATE_START,
+      OURFA_FUNC_CALL_STATE_STARTFOR,
+      OURFA_FUNC_CALL_STATE_STARTFORSTEP,
+      OURFA_FUNC_CALL_STATE_ENDFORSTEP,
+      OURFA_FUNC_CALL_STATE_ENDFOR,
+      OURFA_FUNC_CALL_STATE_BREAK,
+      OURFA_FUNC_CALL_STATE_STARTIF,
+      OURFA_FUNC_CALL_STATE_ENDIF,
+      OURFA_FUNC_CALL_STATE_NODE,
+      OURFA_FUNC_CALL_STATE_END,
+      OURFA_FUNC_CALL_STATE_ERROR
+   } state;
+   struct xmlapi_func_node_t *cur;
+
+   ourfa_err_f_t *printf_err;
+   void *err_ctx;
+};
+
+ourfa_func_call_ctx_t *ourfa_func_call_ctx_new(struct ourfa_xmlapi_func_t *f,
+      ourfa_hash_t *h);
+void ourfa_func_call_ctx_free(ourfa_func_call_ctx_t *fctx);
+
+int ourfa_func_call_start(ourfa_func_call_ctx_t *fctx, unsigned is_req);
+int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx);
+
+int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx, ourfa_connection_t *conn);
+int ourfa_func_call_resp_step(ourfa_func_call_ctx_t *fctx,ourfa_connection_t *conn);
+
+int ourfa_func_call_resp(ourfa_func_call_ctx_t *fctx,ourfa_connection_t *conn);
+int ourfa_func_call_req(ourfa_func_call_ctx_t *fctx, ourfa_connection_t *conn);
+
+int ourfa_parse_builtin_func(ourfa_hash_t *globals, const char *func, int *res);
+int ourfa_func_call_get_long_prop_val(ourfa_func_call_ctx_t *fctx,
+      const char *prop, long long *res);
+
+int ourfa_hash_parse_ip(const char *str, struct in_addr *res);
+
+
+#endif  /* _OURFA_H */

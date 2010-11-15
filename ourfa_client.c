@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009 Alexey Illarionov <littlesavage@rambler.ru>
+ * Copyright (c) 2009-2010 Alexey Illarionov <littlesavage@rambler.ru>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,15 +30,12 @@
 #include <arpa/inet.h>
 
 #include <assert.h>
+#include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "ourfa.h"
-
-#ifndef OURFA_VERSION
-#define OURFA_VERSION "0.1-prealpha"
-#endif
 
 enum output_format_t {
    OUTPUT_FORMAT_XML,
@@ -46,17 +43,40 @@ enum output_format_t {
    OUTPUT_FORMAT_BATCH
 };
 
-/* ourfa_client_dump.c */
-int ourfa_dump_xml(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, FILE *stream);
-int ourfa_dump_batch(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, FILE *stream);
+struct params_t {
+   char *host;
+   char *login;
+   char *password;
+   char *xml_api;
+   unsigned login_type;
+   unsigned ssl_type;
+   char *ssl_cert;
+   char *ssl_key;
+   char *action;
+   char *session_id;
+   struct in_addr *session_ip;
+   struct in_addr session_ip_buf;
+   FILE *debug;
+   enum output_format_t output_format;
+   ourfa_hash_t *h;
+};
 
+/* ourfa_client_dump.c */
+int ourfa_dump_xml(
+      ourfa_func_call_ctx_t *fctx,
+      ourfa_connection_t *connection,
+      FILE *stream);
+int ourfa_dump_batch(
+      ourfa_func_call_ctx_t *fctx,
+      ourfa_connection_t *connection,
+      FILE *stream);
 
 static int usage()
 {
    fprintf(stdout,
 	 "ourfa_client, URFA (UTM Remote Function Access) client. Version %s\n\n "
 	 " usage: ourfa_client -a action \n"
-	 "   [-H addr:port] [-l login] [-p pass] [-x xml_dir] [-A api.xml] [-h]\n\n",
+	 "   [-H addr:port] [-l login] [-p pass] [-A api.xml] [-h]\n\n",
 	 OURFA_VERSION);
    return 0;
 }
@@ -79,13 +99,17 @@ static int help()
 	 " %-2s %-20s %s\n"
 	 " %-2s %-20s %s\n"
 	 " %-2s %-20s %s\n"
+	 " %-2s %-20s %s\n"
+	 " %-2s %-20s %s\n"
 	 "\n",
 	 "-h", "--help",       "This message",
 	 "-a", "--action",     "Action name",
 	 "-H", "--host",       "URFA server address:port (default: localhost:11758)",
 	 "-l", "--login",      "URFA server login. (default: init)",
 	 "-p", "--password",   "URFA server password. (default: init)",
-	 "-s", "--ssl",        "SSL/TLS method: none (default), tlsv1, sslv3, rsa_cert",
+	 "-s", "--session_id", "Restore session with ID",
+	 "-i", "--session_ip", "Restore session with IP",
+	 "-S", "--ssl",        "SSL/TLS method: none (default), tlsv1, sslv3, cert, rsa_cert",
 	 "-c", "--cert",       "Certificate file for rsa_cert SSL (PEM format)",
 	 "-k", "--key",        "Private key file for rsa_cert SSL (PEM format)",
 	 "-x", "--xml-dir",    "URFA server xml dir. (default: xml/)",
@@ -99,29 +123,162 @@ static int help()
    return 0;
 }
 
+
+static int init_params(struct params_t *params)
+{
+   assert(params);
+   params->host = NULL;
+   params->login = NULL;
+   params->password = NULL;
+   params->xml_api = NULL;
+   params->login_type = OURFA_LOGIN_SYSTEM;
+   params->ssl_type = OURFA_SSL_TYPE_NONE;
+   params->ssl_cert = NULL;
+   params->session_ip = NULL;
+   params->ssl_key = NULL;
+   params->action = NULL;
+   params->session_id = NULL;
+   params->debug = NULL;
+   params->output_format = OUTPUT_FORMAT_XML;
+   params->h = ourfa_hash_new(0);
+   if (params->h == NULL) {
+      fprintf(stderr, "Cannot create hash\n");
+      return -1;
+   }
+
+   return 1;
+}
+
+static void free_params(struct params_t *params)
+{
+   assert(params);
+   free(params->host);
+   free(params->login);
+   free(params->password);
+   free(params->xml_api);
+   free(params->ssl_cert);
+   free(params->ssl_key);
+   free(params->action);
+   free(params->session_id);
+   ourfa_hash_free(params->h);
+}
+
+int load_system_param(struct params_t *params, const char *name, const char *val)
+{
+   char *p;
+   int res = 2;
+   assert(params);
+   assert(name);
+
+   if (val) {
+      p = strdup(val);
+      if (p == NULL) {
+	 perror(NULL);
+	 return -1;
+      }
+   }else
+      p = NULL;
+
+   if ( ((name[0]=='a') && (name[1]=='\0')) || strcmp(name, "action") == 0) {
+      params->action = p;
+   } else  if ( ((name[0]=='A') && (name[1]=='\0')) || strcmp(name, "xml-api") == 0) {
+      params->xml_api = p;
+   } else  if ( ((name[0]=='H') && (name[1]=='\0')) || strcmp(name, "host") == 0) {
+      params->host = p;
+   } else  if ( ((name[0]=='l') && (name[1]=='\0')) || strcmp(name, "login") == 0) {
+      params->login = p;
+   } else  if ( ((name[0]=='o') && (name[1]=='\0')) || strcmp(name, "output-format") == 0) {
+      if (p) {
+	 if (strcasecmp(p,"xml")==0)
+	    params->output_format = OUTPUT_FORMAT_XML;
+	 else if (strcasecmp(p, "batch")==0)
+	    params->output_format = OUTPUT_FORMAT_BATCH;
+	 else if (strcasecmp(p, "hash")==0)
+	    params->output_format = OUTPUT_FORMAT_HASH;
+	 else {
+	    fprintf(stderr, "Unknown output format '%s'. "
+		  "Allowed values: xml, hash\n", p);
+	    res = -1;
+	 }
+	 free(p);
+      }
+   } else  if ( ((name[0]=='p') && (name[1]=='\0')) || strcmp(name, "password") == 0) {
+      params->password = p;
+   } else  if ( ((name[0]=='t') && (name[1]=='\0')) || strcmp(name, "login-type") == 0) {
+      if (p) {
+	 if (strcasecmp(p,"admin")==0)
+	    params->login_type = OURFA_LOGIN_SYSTEM;
+	 else if (strcasecmp(p, "user")==0)
+	    params->login_type = OURFA_LOGIN_USER;
+	 else if (strcasecmp(p, "dealer")==0)
+	    params->login_type = OURFA_LOGIN_CARD;
+	 else {
+	    fprintf(stderr, "Unknown login type '%s'. "
+		  "Allowed values: admin, user, dealer\n", p);
+	    res=-1;
+	 }
+	 free(p);
+      }
+   } else  if ( ((name[0]=='d') && (name[1]=='\0')) || strcmp(name, "debug") == 0) {
+      params->debug = stderr;
+      res=1;
+      free(p);
+   } else  if ( ((name[0]=='S') && (name[1]=='\0')) || strcmp(name, "ssl") == 0) {
+      if (p==NULL) {
+	 params->ssl_type=OURFA_SSL_TYPE_SSL3;
+	 res=1;
+      }else if ((strcasecmp(p,"tlsv1")==0) || (strcasecmp(p,"tls1")==0) || (strcasecmp(p,"tls")==0)) {
+	 params->ssl_type=OURFA_SSL_TYPE_TLS1;
+      }else if ((strcasecmp(p,"sslv3")==0) || (strcasecmp(p,"ssl3")==0)) {
+	 params->ssl_type=OURFA_SSL_TYPE_SSL3;
+      }else if ((strcasecmp(p,"cert")==0) || (strcasecmp(p,"crt") == 0)) {
+	 params->ssl_type=OURFA_SSL_TYPE_CRT;
+      }else if ((strcasecmp(p,"rsa_cert")==0))  {
+	 params->ssl_type=OURFA_SSL_TYPE_RSA_CRT;
+      }else {
+	 fprintf(stderr, "Unknown SSL/TLS method '%s'. "
+	       "Allowed methods: tlsv1, sslv3, cert, rsa_cert\n", p);
+	 res=-1;
+      }
+      free(p);
+   } else  if ( ((name[0]=='s') && (name[1]=='\0')) || strcmp(name, "session_id") == 0) {
+      params->session_id=p;
+   } else  if ( ((name[0]=='i') && (name[1]=='\0')) || strcmp(name, "session_ip") == 0) {
+      if (p) {
+	 if (ourfa_hash_parse_ip(p, &params->session_ip_buf) < 0) {
+	    fprintf(stderr, "Wrong IP\n");
+	    res=-1;
+	 }else
+	    params->session_ip = &params->session_ip_buf;
+	 free(p);
+      }
+   } else  if ( ((name[0]=='c') && (name[1]=='\0')) || strcmp(name, "cert") == 0) {
+      params->ssl_cert=p;
+   } else  if ( ((name[0]=='k') && (name[1]=='\0')) || strcmp(name, "key") == 0) {
+      params->ssl_key=p;
+   } else {
+      res=0;
+      free(p);
+   }
+
+   if ((res >= 2) && (val == NULL)) {
+      fprintf(stderr, "Wrong parameter '%s': cannot parse value\n", name);
+      res = -1;
+   }
+
+   return res;
+}
+
 int main(int argc, char **argv)
 {
    int i, res;
-   ourfa_t *ourfa;
-   ourfa_hash_t *in;
+   ourfa_connection_t *connection;
+   ourfa_xmlapi_t *xmlapi;
 
-   struct {
-      const char *host;
-      const char *login;
-      const char *password;
-      const char *xml_dir;
-      const char *xml_api;
-      unsigned login_type;
-      unsigned ssl_type;
-      const char *ssl_cert;
-      const char *ssl_key;
-      const char *action;
-      FILE *debug;
-      enum output_format_t output_format;
-   } params = {NULL, NULL, NULL, NULL, NULL,
-      OURFA_LOGIN_SYSTEM,
-      OURFA_SSL_TYPE_NONE, NULL, NULL,
-      NULL, NULL, OUTPUT_FORMAT_XML};
+   struct params_t params;
+
+   if (init_params(&params) < 0)
+      return 1;
 
    if (argc <= 1)
       return usage();
@@ -129,16 +286,14 @@ int main(int argc, char **argv)
    SSL_load_error_strings();
    SSL_library_init();
 
-   ourfa = ourfa_new();
-   if (ourfa == NULL) {
-      fprintf(stderr, "Initialization error\n");
-      return 1;
-   }
+   connection = NULL;
+   xmlapi = NULL;
+   res=1;
 
-   in = ourfa_hash_new(0);
-   if (in == NULL) {
-      fprintf(stderr, "Cannot create hash\n");
-      return 1;
+   connection = ourfa_connection_new(NULL);
+   if (connection == NULL) {
+      fprintf(stderr, "Initialization error\n");
+      goto main_end;
    }
 
    i=1;
@@ -180,7 +335,7 @@ int main(int argc, char **argv)
       if (res_idx == sizeof(name)-1) {
 	 fprintf(stderr, "Wrong parameter '%s': too long parameter name\n",
 	       argv[i]);
-	 return 1;
+	 goto main_end;
       }
 
       res_idx=0;
@@ -226,113 +381,19 @@ int main(int argc, char **argv)
 
       /* Compare values with system parameters */
       if (idx[0] == '\0') {
-	 is_system_param=1;
-
-	 if ( ((name[0]=='a') && (name[1]=='\0')) || strcmp(name, "action") == 0) {
-	    if (p==NULL) {
-	       fprintf(stderr, "Wrong parameter '%s': cannot parse value\n", argv[i]);
-	       return 1;
-	    }
-	    params.action = p;
-	 } else  if ( ((name[0]=='A') && (name[1]=='\0')) || strcmp(name, "xml-api") == 0) {
-	    if (p==NULL) {
-	       fprintf(stderr, "Wrong parameter '%s': cannot parse value\n", argv[i]);
-	       return 1;
-	    }
-	    params.xml_api = p;
-	 } else  if ( ((name[0]=='H') && (name[1]=='\0')) || strcmp(name, "host") == 0) {
-	    if (p==NULL) {
-	       fprintf(stderr, "Wrong parameter '%s': cannot parse value\n", argv[i]);
-	       return 1;
-	    }
-	    params.host = p;
-	 } else  if ( ((name[0]=='l') && (name[1]=='\0')) || strcmp(name, "login") == 0) {
-	    if (p==NULL) {
-	       fprintf(stderr, "Wrong parameter '%s': cannot parse value\n", argv[i]);
-	       return 1;
-	    }
-	    params.login = p;
-	 } else  if ( ((name[0]=='o') && (name[1]=='\0')) || strcmp(name, "output-format") == 0) {
-	    if (p==NULL) {
-	       fprintf(stderr, "Wrong parameter '%s': cannot parse value\n", argv[i]);
-	       return 1;
-	    }
-	    if (strcasecmp(p,"xml")==0)
-	       params.output_format = OUTPUT_FORMAT_XML;
-	    else if (strcasecmp(p, "batch")==0)
-	       params.output_format = OUTPUT_FORMAT_BATCH;
-	    else if (strcasecmp(p, "hash")==0)
-	       params.output_format = OUTPUT_FORMAT_HASH;
-	    else {
-	       fprintf(stderr, "Unknown output format '%s'. "
-		     "Allowed values: xml, hash\n", p);
-	       return 1;
-	    }
-
-	 } else  if ( ((name[0]=='p') && (name[1]=='\0')) || strcmp(name, "password") == 0) {
-	    if (p==NULL) {
-	       fprintf(stderr, "Wrong parameter '%s': cannot parse value\n", argv[i]);
-	       return 1;
-	    }
-	    params.password = p;
-	 } else  if ( ((name[0]=='x') && (name[1]=='\0')) || strcmp(name, "xml-dir") == 0) {
-	    if (p==NULL) {
-	       fprintf(stderr, "Wrong parameter '%s': cannot parse value\n", argv[i]);
-	       return 1;
-	    }
-	    params.xml_dir = p;
-	 } else  if ( ((name[0]=='t') && (name[1]=='\0')) || strcmp(name, "login-type") == 0) {
-	    if (p==NULL) {
-	       fprintf(stderr, "Wrong parameter '%s': cannot parse value\n", argv[i]);
-	       return 1;
-	    }
-	    if (strcasecmp(p,"admin")==0)
-	       params.login_type = OURFA_LOGIN_SYSTEM;
-	    else if (strcasecmp(p, "user")==0)
-	       params.login_type = OURFA_LOGIN_USER;
-	    else if (strcasecmp(p, "dealer")==0)
-	       params.login_type = OURFA_LOGIN_CARD;
-	    else {
-	       fprintf(stderr, "Unknown login type '%s'. "
-		     "Allowed values: admin, user, dealer\n", p);
-	       return 1;
-	    }
-	 } else  if ( ((name[0]=='h') && (name[1]=='\0')) || strcmp(name, "help") == 0) {
+	 int load_res;
+	 if (((name[0]=='h') && (name[1]=='\0')) || strcmp(name, "help") == 0)
 	    return help();
-	 } else  if ( ((name[0]=='d') && (name[1]=='\0')) || strcmp(name, "debug") == 0) {
-	    params.debug = stderr;
-	    incr_i=0;
-	 } else  if ( ((name[0]=='s') && (name[1]=='\0')) || strcmp(name, "ssl") == 0) {
-	    if (p==NULL) {
-	       params.ssl_type=OURFA_SSL_TYPE_SSL3;
-	       incr_i=0;
-	    }else if ((strcasecmp(p,"tlsv1")==0) || (strcasecmp(p,"tls1")==0) || (strcasecmp(p,"tls")==0)) {
-	       params.ssl_type=OURFA_SSL_TYPE_TLS1;
-	    }else if ((strcasecmp(p,"sslv3")==0) || (strcasecmp(p,"ssl3")==0)) {
-	       params.ssl_type=OURFA_SSL_TYPE_SSL3;
-	    }else if ((strcasecmp(p,"rsa_cert")==0))  {
-	       params.ssl_type=OURFA_SSL_TYPE_RSA_CRT;
-	    }else {
-	       fprintf(stderr, "Unknown SSL/TLS method '%s'. "
-		     "Allowed methods: tlsv1, sslv3, rsa_cert\n", p);
-	       return 1;
-	    }
-	 } else  if ( ((name[0]=='c') && (name[1]=='\0')) || strcmp(name, "cert") == 0) {
-	    if (p==NULL) {
-	       fprintf(stderr, "Wrong parameter '%s': cannot parse value\n", argv[i]);
-	       return 1;
-	    }
-	    params.ssl_cert=p;
-	 } else  if ( ((name[0]=='k') && (name[1]=='\0')) || strcmp(name, "key") == 0) {
-	    if (p==NULL) {
-	       fprintf(stderr, "Wrong parameter '%s': cannot parse value\n", argv[i]);
-	       return 1;
-	    }
-	    params.ssl_key=p;
-	 } else
+	 load_res=load_system_param(&params, name, p);
+	 if (load_res < 0)
+	    goto main_end;
+	 else if (load_res == 0)
 	    is_system_param=0;
+	 else {
+	    is_system_param = 1;
+	    incr_i = load_res-1;
+	 }
       }
-
 
       /* Add parameter to hash  */
       if (!is_system_param) {
@@ -350,7 +411,7 @@ int main(int argc, char **argv)
 	 else
 	    p_name = &name[0];
 
-	 if (ourfa_hash_set_string(in,
+	 if (ourfa_hash_set_string(params.h,
 		  p_name,
 		  idx[0] == '\0' ? NULL : idx,
 		  p) != 0)
@@ -368,67 +429,128 @@ int main(int argc, char **argv)
 
    if (params.action == NULL) {
       fprintf(stderr, "Action not defined\n");
-      return 1;
+      goto main_end;
    }
 
    if (params.debug)
-      ourfa_set_debug_stream(ourfa, params.debug);
+      ourfa_connection_set_debug_stream(connection, params.debug);
 
-   res = ourfa_set_conf(ourfa,
-	 params.login,
-	 params.password,
-	 params.host,
-	 &params.login_type,
-	 &params.ssl_type,
-	 params.xml_dir,
-	 params.xml_api,
-	 NULL);
-
-   if (res != 0) {
-      fprintf(stderr, "Initializaton error: %s\n", ourfa_last_err_str(ourfa));
-      return 1;
+   res = ourfa_connection_set_login(connection, params.login);
+   assert(res == OURFA_OK);
+   res = ourfa_connection_set_password(connection, params.password);
+   assert(res == OURFA_OK);
+   res = ourfa_connection_set_hostname(connection, params.host);
+   assert(res == OURFA_OK);
+   res = ourfa_connection_set_login_type(connection, params.login_type);
+   assert(res == OURFA_OK);
+   if (params.session_id) {
+      res = ourfa_connection_set_session_id(connection, params.session_id);
+      if (res != OURFA_OK)
+	 goto main_end;
+   }
+   if (params.session_ip) {
+      res = ourfa_connection_set_session_ip(connection, &params.session_ip->s_addr);
+      assert(res == OURFA_OK);
    }
 
    if (params.ssl_type != OURFA_SSL_TYPE_NONE) {
-      ourfa_set_ssl(ourfa, params.ssl_type, params.ssl_cert, params.ssl_key);
+      ourfa_ssl_ctx_t *ssl_ctx = ourfa_connection_ssl_ctx(connection);
+      assert(ssl_ctx);
+      res = ourfa_ssl_ctx_set_ssl_type(ssl_ctx, params.ssl_type);
+      assert(res == OURFA_OK);
+      if (params.ssl_cert
+	    || (params.ssl_type == OURFA_SSL_TYPE_CRT)
+	    || (params.ssl_type == OURFA_SSL_TYPE_RSA_CRT)) {
+	 res = ourfa_ssl_ctx_load_cert(ssl_ctx, params.ssl_cert);
+	 if (res != OURFA_OK)
+	    goto main_end;
+      }
+      if (params.ssl_key
+	    || params.ssl_cert
+	    || (params.ssl_type == OURFA_SSL_TYPE_CRT)
+	    || (params.ssl_type == OURFA_SSL_TYPE_RSA_CRT)) {
+	 res = ourfa_ssl_ctx_load_private_key(ssl_ctx,
+	       params.ssl_key ? params.ssl_key : (params.ssl_cert ? params.ssl_cert : NULL),
+	       /* XXX  */ NULL);
+	 if (res != OURFA_OK)
+	    goto main_end;
+      }
    }
+
+   res=1;
+
+   xmlapi = ourfa_xmlapi_new();
+   if (xmlapi == NULL) {
+      fprintf(stderr, "malloc error");
+      goto main_end;
+   }
+   if (ourfa_xmlapi_load_file(xmlapi, params.xml_api) != OURFA_OK)
+      goto main_end;
 
    if (params.debug)
-      ourfa_hash_dump(in, params.debug, "Function: %s. INPUT HASH:\n", params.action);
+      ourfa_hash_dump(params.h, params.debug, "Function: %s. INPUT HASH:\n", params.action);
 
-   if (ourfa_connect(ourfa) != 0) {
-      fprintf(stderr, "Cannot login: %s\n", ourfa_last_err_str(ourfa));
-      return 1;
-   }
+   if (ourfa_connection_open(connection) != 0)
+      goto main_end;
 
    if (params.output_format == OUTPUT_FORMAT_HASH) {
-      if (ourfa_call(ourfa, params.action, in) != 0) {
-	 fprintf(stderr, "%s\n", ourfa_last_err_str(ourfa));
-	 return 1;
-      }
-      ourfa_hash_dump(in, stdout, "Function: %s. OUTPUT HASH:\n", params.action);
+      if (ourfa_call(connection, xmlapi, params.action, params.h) != OURFA_OK)
+	 goto main_end;
+      ourfa_hash_dump(params.h, stdout, "Function: %s. OUTPUT HASH:\n", params.action);
    }else {
+      ourfa_func_call_ctx_t *fctx;
       int last_err;
-      last_err = ourfa_start_call(ourfa, params.action, in);
+      ourfa_xmlapi_func_t *f;
 
-      if (last_err < 0) {
-	 fprintf(stderr, "%s\n", ourfa_last_err_str(ourfa));
-	 return 1;
+      f = ourfa_xmlapi_func(xmlapi, params.action);
+      if (f == NULL) {
+	 fprintf(stderr, "Function `%s` not found in API\n", params.action);
+	 goto main_end;
       }
+
+      fctx = ourfa_func_call_ctx_new(f, params.h);
+      if (fctx == NULL) {
+	 fprintf(stderr, "Can not create fctx\n");
+	 goto main_end;
+      }
+
+      last_err = ourfa_start_call(fctx, connection);
+
+      if (last_err != OURFA_OK) {
+	 ourfa_func_call_ctx_free(fctx);
+	 goto main_end;
+      }
+
+      last_err = ourfa_func_call_req(fctx, connection);
+      if (last_err  != OURFA_OK) {
+	 ourfa_func_call_ctx_free(fctx);
+	 goto main_end;
+      }
+
       switch (params.output_format) {
 	 case OUTPUT_FORMAT_XML:
-	    res = ourfa_dump_xml(ourfa, params.action, in, stdout);
+	    res = ourfa_dump_xml(fctx, connection, stdout);
 	    break;
 	 case OUTPUT_FORMAT_BATCH:
-	    res = ourfa_dump_batch(ourfa, params.action, in, stdout);
+	    res = ourfa_dump_batch(fctx, connection, stdout);
 	    break;
 	 default:
 	    assert(0);
 	    break;
       }
+      ourfa_func_call_ctx_free(fctx);
    }
-   ourfa_hash_free(in);
-   ourfa_free(ourfa);
+
+
+main_end:
+   free_params(&params);
+   ourfa_connection_free(connection);
+   ourfa_xmlapi_free(xmlapi);
+   xmlCleanupParser();
+
+   ERR_free_strings();
+   EVP_cleanup();
+   CRYPTO_cleanup_all_ex_data();
 
    return res;
 }

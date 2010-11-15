@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009 Alexey Illarionov <littlesavage@rambler.ru>
+ * Copyright (c) 2009-2010 Alexey Illarionov <littlesavage@rambler.ru>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,13 +24,6 @@
  * SUCH DAMAGE.
  */
 
-/*  TODO:
- *   Merge tree traversal code from ourfa_xmlapictx_dump(),
- *  ourfa_xmlapictx_load_resp_pkt(), req_pkt_add_atts().
- *
- */
-
-
 #ifdef __linux__
 #define _GNU_SOURCE
 #endif
@@ -49,142 +42,151 @@
 
 #include "ourfa.h"
 
-#define DEFAULT_API_XML_FILE "api.xml"
-#define DEFAULT_API_XML_DIR "xml"
+#define DEFAULT_API_XML_FILE "/netup/utm5/xml/api.xml"
+#define FUNC_BY_NAME_HASH_SIZE 180
 
-struct ourfa_xmlapictx_t {
-   ourfa_xmlapi_t *api;
-   /* function id  */
-   int id;
-   xmlChar *name;
-   xmlNodePtr func;
-   xmlNodePtr in;
-   xmlNodePtr out;
-
-   struct ourfa_traverse_funcs_t traverse_funcs;
-   unsigned traverse_in;
-   void *user_ctx;
-
-   xmlNodePtr cur_node;
-   xmlNodePtr end_node;
-
-   /*  Data hash for IF/FOR/SET nodes  */
-   ourfa_hash_t *data_h;
-
-   /* XXX Ugly hack */
-   unsigned use_unset;
-
-   char *user_err_str;
-   size_t user_err_str_size;
+struct t_nodes {
+      char **dst;
+      char *name;
+      unsigned required;
 };
 
-struct err_str_params_t {
-   char *err_str;
-   size_t err_str_size;
+static const struct {
+  int type;
+  const char *name;
+} node_types[] = {
+   {OURFA_XMLAPI_NODE_INTEGER,  "integer"},
+   {OURFA_XMLAPI_NODE_STRING,   "string"},
+   {OURFA_XMLAPI_NODE_LONG,     "long"},
+   {OURFA_XMLAPI_NODE_DOUBLE,   "double"},
+   {OURFA_XMLAPI_NODE_IP,       "ip_address"},
+   {OURFA_XMLAPI_NODE_IF,       "if"},
+   {OURFA_XMLAPI_NODE_FOR,      "for"},
+   {OURFA_XMLAPI_NODE_SET,      "set"},
+   {OURFA_XMLAPI_NODE_ERROR,    "error"},
+   {OURFA_XMLAPI_NODE_ROOT,     "ROOT"},
+   {OURFA_XMLAPI_NODE_BREAK,    "break"}
 };
 
-int ourfa_hash_parse_ip(const char *str, struct in_addr *res);
-
-static int set_ctx_err(ourfa_xmlapictx_t *api, const char *fmt, ...);
+static void xmlapi_func_free(void * payload, xmlChar *name);
 static void xml_generic_error_func(void *ctx, const char *msg, ...);
-static void init_traverse_funcs(ourfa_xmlapictx_t *ctx, const ourfa_traverse_funcs_t *t);
+static struct xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t *api, ourfa_xmlapi_func_t *f);
+static int get_xml_attributes(xmlNode *xml_node,
+      struct t_nodes *nodes,
+      unsigned size,
+      ourfa_xmlapi_t *api);
+static void free_func_def(struct xmlapi_func_node_t *def);
+void dump_func_definitions(ourfa_xmlapi_func_t *f, FILE *stream);
 
 
-ourfa_xmlapi_t *ourfa_xmlapi_new(const char *xml_dir, const char *xml_file,
-      char *err_str, size_t err_str_size)
+ourfa_xmlapi_t *ourfa_xmlapi_new()
 {
    ourfa_xmlapi_t *res;
-   char *xmlapi_file;
-   struct err_str_params_t err_params;
 
-   LIBXML_TEST_VERSION
+   res = (ourfa_xmlapi_t *)malloc(sizeof(*res));
 
-   err_params.err_str = err_str;
-   err_params.err_str_size = err_str_size;
-
-   if ((xml_dir == NULL) && xml_file != NULL)
-      xmlapi_file = strdup(xml_file);
-   else
-      asprintf(&xmlapi_file, "%s/%s",
-	    xml_dir ? xml_dir : DEFAULT_API_XML_DIR,
-	    xml_file ? xml_file : DEFAULT_API_XML_FILE);
-
-   if (xmlapi_file == NULL) {
-      free(res);
-      xml_generic_error_func(&err_params, "Cannot allocate memory for xml api");
+   if (res == NULL)
       return NULL;
-   }
 
-   xmlSetGenericErrorFunc(&err_params, xml_generic_error_func);
-
-   res = xmlReadFile(xmlapi_file, NULL, XML_PARSE_COMPACT);
-   if (res == NULL) {
-      xmlSetGenericErrorFunc(NULL, NULL);
-      free(xmlapi_file);
-      return NULL;
-   }
-
-   xmlSetGenericErrorFunc(NULL, NULL);
-   free(xmlapi_file);
+   res->func_by_name = NULL;
+   res->file = NULL;
+   res->printf_err = ourfa_err_f_stderr;
+   res->err_ctx = res;
 
    return res;
+}
+
+ourfa_err_f_t *ourfa_xmlapi_err_f(ourfa_xmlapi_t *xmlapi)
+{
+   assert(xmlapi);
+   return xmlapi->printf_err;
+}
+
+void *ourfa_xmlapi_err_ctx(ourfa_xmlapi_t *xmlapi)
+{
+   assert(xmlapi);
+   return xmlapi->err_ctx;
+}
+
+int ourfa_xmlapi_set_err_f(ourfa_xmlapi_t *xmlapi, ourfa_err_f_t *f, void *user_ctx)
+{
+   assert(xmlapi);
+   xmlapi->printf_err = f;
+   xmlapi->err_ctx = user_ctx;
+   return OURFA_OK;
 }
 
 void ourfa_xmlapi_free(ourfa_xmlapi_t *api)
 {
    if (api == NULL)
       return;
-   xmlFreeDoc(api);
+   if (api->func_by_name)
+      xmlHashFree(api->func_by_name, xmlapi_func_free);
+   free(api->file);
+   free(api);
 }
 
-ourfa_xmlapictx_t *ourfa_xmlapictx_new(ourfa_xmlapi_t *api, const char *func_name,
-      unsigned traverse_in,
-      const ourfa_traverse_funcs_t *funcs,
-      ourfa_hash_t *data_h,
-      unsigned use_unset,
-      void *user_ctx,
-      char *user_err_str,
-      size_t user_err_str_size
-      )
+int ourfa_xmlapi_load_file(ourfa_xmlapi_t *xmlapi,  const char *file)
 {
-   xmlNode *urfa_root;
-   xmlNode *cur_node;
-   ourfa_xmlapictx_t *res;
+   xmlDoc *xmldoc;
+   xmlNode *urfa_root, *cur_node, *n;
+   xmlNode *f_in, *f_out;
+   ourfa_xmlapi_func_t *f;
 
-   res = NULL;
+   xmlChar *prop_func_id;
+   char *p_end;
+   int res;
 
-   if (api == NULL || func_name == NULL || func_name[0]=='\0')
-      return NULL;
+   LIBXML_TEST_VERSION
 
-   res=malloc(sizeof(ourfa_xmlapictx_t));
-   if (res == NULL)
-      return NULL;
-   res->user_err_str = user_err_str;
-   res->user_err_str_size = user_err_str_size;
+   assert(xmlapi);
+   xmldoc = NULL;
+   res = OURFA_OK;
 
-   urfa_root = xmlDocGetRootElement(api);
+   if (xmlapi->file != NULL) {
+      return xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+	    "File `%s` already loaded", xmlapi->file);
+   }
+
+   if (file != NULL)
+      xmlapi->file = strdup(file);
+   else
+      xmlapi->file = strdup(DEFAULT_API_XML_FILE);
+
+   if (xmlapi->file == NULL) {
+      res = xmlapi->printf_err(OURFA_ERROR_SYSTEM, xmlapi->err_ctx, "Can not allocate memory for xml api");
+      goto load_file_end;
+   }
+
+   xmlSetGenericErrorFunc(xmlapi, xml_generic_error_func);
+
+   xmldoc = xmlReadFile(xmlapi->file, NULL, XML_PARSE_COMPACT);
+   if (xmldoc == NULL) {
+      res = OURFA_ERROR_OTHER;
+      goto load_file_end;
+   }
+
+   xmlapi->func_by_name = xmlHashCreate(FUNC_BY_NAME_HASH_SIZE);
+   if (xmlapi->func_by_name == NULL) {
+      res = OURFA_ERROR_OTHER;
+      goto load_file_end;
+   }
+
+   /* Init function hash  */
+   urfa_root = xmlDocGetRootElement(xmldoc);
    if (urfa_root == NULL) {
-      set_ctx_err(res, "No root element");
-      free(res);
-      return NULL;
+      res = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx, "Can not find XML Root Element");
+      goto load_file_end;
    }
 
    if (xmlStrcasecmp(urfa_root->name, (const xmlChar *) "urfa") != 0) {
-      set_ctx_err(res, "Document of the wrong type, root node != urfa");
-      free(res);
-      return NULL;
+      res = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx, "Document of the wrong type, root node != urfa");
+      goto load_file_end;
    }
 
-   res->api = api;
-   res->id = 0;
-   res->name = NULL;
-   res->func = res->in = res->out = NULL;
-
    for (cur_node=urfa_root->children; cur_node; cur_node = cur_node->next) {
-      xmlChar *prop_func_name, *prop_func_id;
-      char *p_end;
-      long tmp;
-      xmlNode *n;
+      xmlChar *prop_func_name;
+      size_t len;
 
       if (cur_node->type != XML_ELEMENT_NODE)
 	 continue;
@@ -194,1028 +196,691 @@ ourfa_xmlapictx_t *ourfa_xmlapictx_new(ourfa_xmlapi_t *api, const char *func_nam
 	 continue;
 
       prop_func_name = xmlGetProp(cur_node, (const xmlChar *)"name");
-      if (prop_func_name == NULL)
-	 continue;
-      if (xmlStrcasecmp(prop_func_name, (const xmlChar *)func_name) != 0) {
-	 xmlFree(prop_func_name);
+      if (prop_func_name == NULL) {
+	 xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+	       "Unnamed function found. file: `%s` line: %hu content: `%s`",
+	       xmlapi->file, cur_node->line, (const char *)cur_node->content);
 	 continue;
       }
 
-      /*  Node found */
-      res->func = cur_node;
-      res->name = prop_func_name;
+      len = strlen((const char *)prop_func_name);
+      f = (ourfa_xmlapi_func_t *)malloc(sizeof(*f)+len+2);
+      f->in = f->out = NULL;
+      if (f == NULL) {
+	 res = xmlapi->printf_err(OURFA_ERROR_SYSTEM, xmlapi->err_ctx, NULL);
+	 free(prop_func_name);
+	 break; /* foreach function  */
+      }
+      memcpy(f->name, prop_func_name, len+1);
+      free(prop_func_name);
 
       /*  pasrse function id */
       prop_func_id = xmlGetProp(cur_node, (const xmlChar *)"id");
       if (prop_func_id == NULL || prop_func_id[0]=='\0') {
-	 xmlFree(prop_func_name);
-	 set_ctx_err(res, "ID of function '%s' not defined", func_name);
-	 free(res);
-	 return NULL;
+	 xmlapi->printf_err(OURFA_ERROR_OTHER,
+	       xmlapi->err_ctx,
+	       "ID not defined for function `%s`. file: `%s` line: %hu content: `%s`",
+	       f->name, xmlapi->file, cur_node->line, (const char *)cur_node->content);
+	 xmlapi_func_free(f, NULL);
+	 continue;
       }
-      tmp = strtol((const char *)prop_func_id, &p_end, 0);
+      f->id = (int)strtol((const char *)prop_func_id, &p_end, 0);
       if ((*p_end != '\0') || errno == ERANGE) {
-	 set_ctx_err(res, "Wrong ID '%s' of function '%s'", prop_func_id, func_name);
-	 xmlFree(prop_func_name);
+	 xmlapi->printf_err(
+	       OURFA_ERROR_OTHER,
+	       xmlapi->err_ctx,
+	       "Wrong ID for function `%s`. file: `%s` line: %hu content: `%s`",
+	       f->name, xmlapi->file, cur_node->line, (const char *)cur_node->content);
 	 xmlFree(prop_func_id);
-	 free(res);
-	 return NULL;
+	 xmlapi_func_free(f, NULL);
+	 continue;
       }
-
-      res->id = (int)tmp;
       xmlFree(prop_func_id);
 
       /* Find input and output parameters  */
-      for (n=res->func->children; n; n=n->next) {
+      f_in = f_out = NULL;
+      for (n=cur_node->children; n; n=n->next) {
 	 if ((n->type != XML_ELEMENT_NODE)
 	       || (n->name == NULL))
 	    continue;
 
 	 if (xmlStrcasecmp(n->name, (const xmlChar *)"input") == 0)
-	    res->in = n;
+	    f_in = n;
 	 else if (xmlStrcasecmp(n->name, (const xmlChar *)"output") == 0)
-	    res->out = n;
+	    f_out = n;
 	 else {
-	    xmlFree((xmlChar *)res->name);
-	    set_ctx_err(res, "Unknown node name '%s' in function '%s' "
-		  "definition", n->name, res->name);
-	    free(res);
-	    return NULL;
-	 } /* else */
+	    xmlapi->printf_err(OURFA_ERROR_OTHER,
+		  xmlapi->err_ctx,
+		  "Unknown node name `%s` for function `%s`. file: `%s` line: %hu content: `%s`",
+		  (const char *)n->name, f->name, xmlapi->file, cur_node->line, (const char *)cur_node->content);
+	 }
       } /* for */
-      break;
-   } /* for */
 
-   if (res->func == NULL) {
-      xmlFree(res->name);
-      set_ctx_err(res, "Function '%s' not found in API", func_name);
-      free(res);
-      return NULL;
-   }
-   if (res->in == NULL) {
-      xmlFree(res->name);
-      set_ctx_err(res, "Input parameters of function '%s' not found", func_name);
-      free(res);
-      return NULL;
-   }
-   if (res->out == NULL) {
-      xmlFree(res->name);
-      set_ctx_err(res, "Ouput parameters of function '%s' not found", func_name);
-      free(res);
-      return NULL;
-   }
+      /* Load function definitions  */
+      f->in = load_func_def(f_in, xmlapi, f);
+      if (f->in == NULL) {
+	 xmlapi_func_free(f, NULL);
+	 continue;
+      }
+      f->out = load_func_def(f_out, xmlapi, f);
+      if (f->out == NULL) {
+	 xmlapi_func_free(f, NULL);
+	 continue;
+      }
 
-   init_traverse_funcs(res, funcs);
-   res->user_ctx = user_ctx;
-   res->data_h = data_h;
-   res->traverse_in = traverse_in;
-   res->use_unset = use_unset;
+      if (xmlHashUpdateEntry(xmlapi->func_by_name, (const xmlChar *)f->name, f, xmlapi_func_free) < 0) {
+	 res = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+	       "Can not add function `%s` to hash. file: `%s` line: %hu content: `%s`",
+	       f->name, xmlapi->file, cur_node->line, (const char *)cur_node->content);
+	 xmlapi_func_free(f, NULL);
+	 break;
+      }
+   } /* foreach function  */
+
+
+   /* TODO: function by id  */
+
+load_file_end:
+   xmlSetGenericErrorFunc(NULL, NULL);
+   if (xmldoc)
+      xmlFreeDoc(xmldoc);
+
+   if (res != OURFA_OK) {
+      free(xmlapi->file);
+      xmlapi->file = NULL;
+      if (xmlapi->func_by_name) {
+	 xmlHashFree(xmlapi->func_by_name, xmlapi_func_free);
+	 xmlapi->func_by_name = NULL;
+      }
+   }
 
    return res;
 }
 
-void ourfa_xmlapictx_free(ourfa_xmlapictx_t *ctx)
+static void xmlapi_func_free(void * payload, xmlChar *name)
 {
-   if (ctx == NULL)
-      return;
-   xmlFree(ctx->name);
-   free(ctx);
+   ourfa_xmlapi_func_t *val;
+
+   if (name) {};
+
+   val = (ourfa_xmlapi_func_t *)payload;
+
+   free_func_def(val->in);
+   free_func_def(val->out);
+
+   free(val);
 }
 
-int ourfa_xmlapictx_func_id(ourfa_xmlapictx_t *ctx)
+int ourfa_xmlapi_node_type_by_name(const xmlChar *node_name)
 {
-   if (ctx == NULL)
+   unsigned n;
+
+    for (n=0; n < sizeof(node_types)/sizeof(node_types[0]); n++) {
+      if (xmlStrcasecmp(node_name, (const xmlChar *)node_types[n].name)==0)
+	 return node_types[n].type;
+   }
+   return OURFA_XMLAPI_NODE_UNKNOWN;
+}
+
+const char *ourfa_xmlapi_node_name_by_type(int node_type)
+{
+   unsigned n;
+
+    for (n=0; n < sizeof(node_types)/sizeof(node_types[0]); n++) {
+       if (node_type == node_types[n].type)
+	  return node_types[n].name;
+   }
+   return "UNKNOWN";
+}
+
+ourfa_xmlapi_func_t *ourfa_xmlapi_func(ourfa_xmlapi_t *api, const char *name)
+{
+   if (api->func_by_name == NULL)
+      return NULL;
+   return xmlHashLookup(api->func_by_name, (const xmlChar *)name);
+}
+
+
+int ourfa_xmlapi_f_have_input(ourfa_xmlapi_func_t *f)
+{
+   if ( (f == NULL)
+	 || (f->in->children == NULL)
+	 )
       return 0;
-   return ctx->id;
+
+   return 1;
 }
 
-int ourfa_xmlapictx_have_input_parameters(ourfa_xmlapictx_t *ctx)
+int ourfa_xmlapi_f_have_output(ourfa_xmlapi_func_t *f)
 {
-   xmlNodePtr cur_node;
-
-   if ( (ctx == NULL) || (ctx->in == NULL))
+   if ( (f == NULL)
+	 || (f->out->children == NULL)
+	 )
       return 0;
-
-   for (cur_node=ctx->in->children; cur_node; cur_node=cur_node->next) {
-      if (cur_node->type == XML_ELEMENT_NODE)
-	 return 1;
-   }
-
-   return 0;
-}
-
-int ourfa_xmlapictx_have_output_parameters(ourfa_xmlapictx_t *ctx)
-{
-   xmlNodePtr cur_node;
-   if ( (ctx == NULL) || (ctx->out == NULL))
-      return 0;
-   for (cur_node=ctx->out->children; cur_node; cur_node=cur_node->next) {
-      if (cur_node->type == XML_ELEMENT_NODE)
-	 return 1;
-   }
-
-   return 0;
-}
-
-static void init_traverse_funcs(ourfa_xmlapictx_t *ctx,
-      const ourfa_traverse_funcs_t *t)
-{
-   ctx->traverse_funcs.node = t ? t->node : NULL;
-   ctx->traverse_funcs.start_for = t ? t->start_for : NULL;
-   ctx->traverse_funcs.err_node = t ? t->err_node : NULL;
-   ctx->traverse_funcs.start_for_item = t ? t->start_for_item : NULL;
-   ctx->traverse_funcs.end_for_item = t ? t->end_for_item : NULL;
-   ctx->traverse_funcs.end_for = t ? t->end_for : NULL;
-}
-
-
-static int get_prop_val(ourfa_xmlapictx_t *ctx,
-      xmlNode *cur_node,
-      const xmlChar *prop,
-      const xmlChar *parameter_name,
-      xmlChar **res)
-{
-   xmlChar *val;
-
-   if (res)
-      *res = NULL;
-
-   val = xmlGetProp(cur_node, prop);
-   if (val == NULL) {
-      return set_ctx_err(ctx, "Function '%s': cannot get property '%s' of node '%s:%s'",
-	    ctx->name,
-	    (const char *)prop,
-	    (const char *)cur_node->name,
-	    parameter_name ? (const char *)parameter_name : "?");
-   }
-   if (res)
-      *res = val;
-
-   return 0;
-}
-
-
-static int builtin_func(ourfa_hash_t *globals, const xmlChar *func, int *res)
-{
-   if (func == NULL || func[0]=='\0')
-      return -1;
-
-   if (xmlStrcmp(func, (const xmlChar *)"now()")==0)
-      *res = OURFA_TIME_NOW;
-   else if (xmlStrcmp(func, (const xmlChar *)"max_time()")==0)
-      *res = OURFA_TIME_MAX;
-   else {
-      char arr_name[40];
-      unsigned u_res;
-      if (sscanf((const char *)func, "size(%40[a-zA-Z0-9_-])", arr_name) != 1)
-	 return -1;
-      if (ourfa_hash_get_arr_size(globals, arr_name, NULL, &u_res) != 0)
-	 u_res = 0;
-      *res = (int)u_res;
-   }
-
-   return 0;
-}
-
-static int get_long_prop_val(ourfa_xmlapictx_t *ctx,
-      ourfa_hash_t *globals,
-      xmlNode *cur_node,
-      const xmlChar *prop,
-      const xmlChar *parameter_name,
-      long long *res)
-{
-   xmlChar *res_s;
-   char *p_end;
-   long long val;
-
-   if (get_prop_val(ctx, cur_node, prop, parameter_name, &res_s) != 0)
-      return -1;
-
-   val = strtol((const char *)res_s, &p_end, 0);
-   /* Numeric?  */
-   if ((*p_end != '\0') || (errno == ERANGE)) {
-      int int_val;
-      /* Buildin func?  */
-      if (builtin_func(globals, res_s, &int_val) == 0)
-	 val = int_val;
-      else {
-	 /* Global variable?  */
-	 if (ourfa_hash_get_long(globals, (const char *)res_s, NULL, &val) != 0) {
-	    set_ctx_err(ctx, "Wrong input parameter '%s' of function '%s' ('%s')",
-		  parameter_name ? (const char *)parameter_name : "?",
-		  ctx->name,
-		  (const char *)res_s);
-	    xmlFree(res_s);
-	    return -1;
-	 }
-      }
-   }
-
-   *res = val;
-   xmlFree(res_s);
-   return 0;
-}
-
-static int exec_if_node(ourfa_xmlapictx_t *ctx, xmlNodePtr cur_node, ourfa_hash_t *params)
-{
-   xmlChar *if_var, *if_val, *if_cond;
-   int cond_is_eq;
-   int cmp_res;
-   char *s1;
-
-
-   if (get_prop_val(ctx, cur_node,
-	    (const xmlChar *)"variable", NULL, &if_var) != 0)
-      return -1;
-   if (get_prop_val(ctx, cur_node,
-	    (const xmlChar *)"value", NULL, &if_val) != 0) {
-      xmlFree(if_var);
-      return -1;
-   }
-   if (get_prop_val(ctx, cur_node,
-	    (const xmlChar *)"condition", NULL, &if_cond) != 0) {
-      xmlFree(if_var);
-      xmlFree(if_val);
-      return -1;
-   }
-   /*  Pars IF condition  */
-   if ( ((if_cond[0] == 'e') || (if_cond[0] == 'E'))
-	 && ((if_cond[1] == 'q') || (if_cond[1] == 'Q'))
-	 && (if_cond[2] == '\0'))
-      cond_is_eq = 1;
-   else if ( ((if_cond[0] == 'n') || (if_cond[0] == 'N'))
-	 && ((if_cond[1] == 'e') || (if_cond[1] == 'E'))
-	 && (if_cond[2] == '\0'))
-      cond_is_eq = 0;
-   else {
-      set_ctx_err(ctx, "Unkown if condition '%s'", (const char *)if_cond);
-      xmlFree(if_var);
-      xmlFree(if_val);
-      xmlFree(if_cond);
-      return -1;
-   }
-   xmlFree(if_cond);
-
-   /* Compare */
-   if (ourfa_hash_get_string(params, (const char *)if_var, NULL, &s1) != 0 ) {
-      /*
-      set_ctx_err(ctx, "Cannot compare '%s' and '%s'", (const char *)if_var,
-	    (const char *)if_val); */
-      xmlFree(if_var);
-      xmlFree(if_val);
-      return 0;
-      /*   return -1; */
-   }
-
-   /*  XXX: wrong comparsion of double type */
-   cmp_res = (xmlStrcmp((const xmlChar *)s1, if_val) == 0);
-
-   free(s1);
-   xmlFree(if_var);
-   xmlFree(if_val);
-
-   return ((cmp_res && cond_is_eq) || (!cmp_res && !cond_is_eq)) ? 1 : 0;
-}
-
-static int exec_set_node(ourfa_xmlapictx_t *ctx, xmlNodePtr cur_node, ourfa_hash_t *h)
-{
-   xmlChar *src, *dst, *src_idx, *dst_idx, *value;
-
-   if (get_prop_val(ctx, cur_node,
-	    (const xmlChar *)"dst", NULL, &dst) != 0)
-      return -1;
-
-   src = xmlGetProp(cur_node, (const xmlChar *)"src");
-   value = xmlGetProp(cur_node, (const xmlChar *)"value");
-
-   if ((src != NULL) && (value != NULL)) {
-      set_ctx_err(ctx, "Both 'src' and 'value' properties exists in 'set' "
-	    "node of '%s' (%s:%s)", ctx->name, (const char *)src,
-	    (const char *)value);
-      xmlFree(src);
-      xmlFree(value);
-      xmlFree(dst);
-      return -1;
-   }
-
-   if ((src == NULL) && (value == NULL)) {
-      set_ctx_err(ctx, "No 'src' and 'value' properties defined in 'set' "
-	    "node of '%s'", ctx->name, (const char *)src,
-	    (const char *)value);
-      xmlFree(dst);
-      return -1;
-   }
-
-   dst_idx = xmlGetProp(cur_node, (const xmlChar *)"dst_index");
-   if (value) {
-      if (ourfa_hash_set_string(h, (const char *)dst, (const char *)dst_idx,
-	       (const char *)value) != 0) {
-	 set_ctx_err(ctx, "Cannot set hash value ('%s(%s)'='%s') in function %s",
-	       (const char *)dst,
-	       dst_idx ? (const char *)dst_idx : "0",
-	       (const char *)value,
-	       ctx->name);
-	 xmlFree(value);
-	 xmlFree(dst);
-	 xmlFree(dst_idx);
-	 return -1;
-      }
-      xmlFree(value);
-   }else {
-      src_idx = xmlGetProp(cur_node, (const xmlChar *)"src_index");
-      if (ctx->use_unset && dst_idx && !src_idx) {
-	 /* XXX Ugly hack */
-	 xmlChar *tmp, *tmp_idx;
-	 tmp = src;
-	 tmp_idx = src_idx;
-
-	 src = dst;
-	 src_idx = dst_idx;
-
-	 dst = tmp;
-	 dst_idx = tmp_idx;
-      }
-
-      if (ourfa_hash_copy_val(h, (const char *)dst, (const char *)dst_idx,
-	       (const char *)src, (const char *)src_idx) != 0) {
-	 set_ctx_err(ctx, "Cannot copy hash value ('%s(%s)'='%s(%s)') in function %s",
-	       (const char *)dst,
-	       dst_idx ? (const char *)dst_idx : "0",
-	       (const char *)src,
-	       src_idx ? (const char *)src_idx : "0",
-	       ctx->name);
-	 xmlFree(src_idx);
-	 xmlFree(src);
-	 xmlFree(dst);
-	 xmlFree(dst_idx);
-	 return -1;
-      }
-      xmlFree(src_idx);
-      xmlFree(src);
-   }
-
-   xmlFree(dst_idx);
-   xmlFree(dst);
-
-   return 0;
-}
-
-static int exec_error_node(ourfa_xmlapictx_t *ctx, xmlNodePtr cur_node, ourfa_hash_t *h)
-{
-   long long ret_val;
-
-   xmlChar *comment, *variable;
-
-   char *s1;
-
-   ret_val=-1;
-   if (get_long_prop_val(ctx, h, cur_node, (const xmlChar *)"code", NULL, &ret_val) < 0)
-      ret_val=-1;
-
-   comment = xmlGetProp(cur_node, (const xmlChar *)"comment");
-   variable = xmlGetProp(cur_node, (const xmlChar *)"variable");
-
-   if (ourfa_hash_get_string(h, (const char *)variable, NULL, &s1) != 0 )
-      s1 = NULL;
-
-   set_ctx_err(ctx, "%s%s%s",
-	 comment ? (const char *)comment : "Function error",
-	 variable ? " " : "",
-	 variable ? s1 : "");
-
-   ourfa_hash_set_string(h, "_error", NULL,
-	 ctx->user_err_str ? ctx->user_err_str : "");
-
-   xmlFree(comment);
-   xmlFree(variable);
-   free(s1);
-
-   return ret_val;
-}
-
-static int get_for_props(ourfa_xmlapictx_t *ctx, xmlNodePtr cur_node,
-      ourfa_hash_t *params, long long *from, long long *count,
-      xmlChar **cnt_name,
-      xmlChar **array_name)
-{
-   if (get_long_prop_val(ctx, params, cur_node,
-	    (const xmlChar *)"from", NULL, from) != 0)
-      return -1;
-   if (get_long_prop_val(ctx, params, cur_node,
-	    (const xmlChar *)"count", NULL, count) != 0)
-      return -1;
-   if (get_prop_val(ctx, cur_node,
-	    (const xmlChar *)"name", NULL, cnt_name) != 0)
-      return -1;
-
-   if ((*from < 0) || (*count < 0)) {
-      xmlChar *a, *b;
-      get_prop_val(ctx, cur_node, (const xmlChar *)"from", NULL, &a);
-      get_prop_val(ctx, cur_node, (const xmlChar *)"count", NULL, &b);
-
-      set_ctx_err(ctx, "Wrong 'from' (%s:%lli) or 'count'(%s:%lli) parameter "
-	    "of 'for' node. cnt_name: `%s`", a, *from, b, *count, *cnt_name);
-      xmlFree(a);
-      xmlFree(b);
-      xmlFree(*cnt_name);
-      return -1;
-   }
-
-   if (array_name) {
-      if (get_prop_val(ctx, cur_node,
-	       (const xmlChar *)"array_name", NULL, array_name) != 0) {
-	 char *name;
-	 unsigned i = 0;
-	 for (; cur_node; cur_node = cur_node->prev) {
-	    if ((cur_node->type != XML_ELEMENT_NODE)
-		  || (cur_node->name == NULL)) {
-	    }else if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"for") == 0)
-	       i++;
-	 }
-	 asprintf(&name, "array-%u",i);
-	 *array_name = (xmlChar *)name;
-      }
-   }
-
-   return 0;
-}
-
-static int req_pkt_add_atts(ourfa_xmlapictx_t *ctx,
-      ourfa_hash_t *params,
-      ourfa_pkt_t *pkt,
-      xmlNode *head)
-{
-   xmlNode *cur_node;
-
-   for (cur_node=head; cur_node; cur_node=cur_node->next){
-
-      if (cur_node->type != XML_ELEMENT_NODE)
-	 continue;
-      if (cur_node->name == NULL)
-	 continue;
-
-      /*  INTEGER  */
-      if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"integer") == 0){
-	 xmlChar *name, *arr_idx;
-	 int val;
-
-	 if (get_prop_val(ctx, cur_node, (const xmlChar *)"name",
-		  NULL, &name) != 0)
-	    return -1;
-
-	 arr_idx = xmlGetProp(cur_node, (const xmlChar *)"array_index");
-
-	 /*  Integer value */
-	 if (ourfa_hash_get_int(params, (const char *)name,
-		  (const char *)arr_idx, &val) != 0) {
-	    char *s;
-	    if (ourfa_hash_get_string(params, (const char *)name,
-		     (const char *)arr_idx, &s) == 0) {
-	       /* Builtin function */
-	       if (builtin_func(params, (const xmlChar *)s, &val) != 0) {
-		  set_ctx_err(ctx, "Wrong input parameter '%s' of function '%s'",
-			(const char *)name, ctx->name);
-		  xmlFree(name);
-		  xmlFree(arr_idx);
-		  free(s);
-		  return -1;
-	       }
-	       free(s);
-	    }else {
-	       /* Default value */
-	       long long defval;
-	       if (get_long_prop_val(ctx, params, cur_node,
-			(const xmlChar *)"default", name, &defval) >= 0) {
-		  val = (int)defval;
-	       }else {
-		  set_ctx_err(ctx, "Wrong input parameter '%s' of function '%s'",
-			(const char *)name, ctx->name);
-		  xmlFree(arr_idx);
-		  xmlFree(name);
-		  return -1;
-	       }
-	    }
-	 }
-
-	 if (ourfa_hash_set_int(params, (const char *)name, (const char *)arr_idx, val) != 0)
-	    return -1;
-
-	 xmlFree(arr_idx);
-	 xmlFree(name);
-
-	 /*  XXX: check exit code. Handle too long packets*/
-	 if (ourfa_pkt_add_data_int(pkt, val) != 0)
-	    return -1;
-
-      /* LONG */
-      }else if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"long") == 0){
-	 xmlChar *name, *arr_idx;
-	 long long val;
-
-	 if (get_prop_val(ctx, cur_node,
-		  (const xmlChar *)"name", NULL, &name) != 0)
-	    return -1;
-
-	 arr_idx = xmlGetProp(cur_node, (const xmlChar *)"array_index");
-
-	 /*  Get user value */
-	 if (ourfa_hash_get_long(params, (const char *)name,
-		  (const char *)arr_idx, &val) != 0) {
-	    char *s;
-	    int buildin_val;
-	    if (ourfa_hash_get_string(params, (const char *)name,
-		     (const char *)arr_idx, &s) == 0) {
-	       /* Builtin function */
-	       if (builtin_func(params, (const xmlChar *)s, &buildin_val) != 0) {
-		  set_ctx_err(ctx, "Wrong input parameter '%s' of function '%s'",
-			(const char *)name, ctx->name);
-		  xmlFree(name);
-		  xmlFree(arr_idx);
-		  free(s);
-		  return -1;
-	       }
-	       val = buildin_val;
-	       free(s);
-	    }else {
-	       /* Default value */
-	       if (get_long_prop_val(ctx, params, cur_node,
-			(const xmlChar *)"default", name, &val) < 0) {
-		  set_ctx_err(ctx, "Wrong input parameter '%s' of function '%s'",
-			(const char *)name, ctx->name);
-		  xmlFree(arr_idx);
-		  xmlFree(name);
-		  return -1;
-	       }
-	    }
-	    if (ourfa_hash_set_long(params, (const char *)name, (const char *)arr_idx, val) != 0) {
-	       xmlFree(arr_idx);
-	       xmlFree(name);
-	       return -1;
-	    }
-	 }
-
-	 xmlFree(name);
-	 xmlFree(arr_idx);
-	 /*  XXX: check exit code. Handle too long packets*/
-	 if (ourfa_pkt_add_data_long(pkt, val) != 0)
-	    return -1;
-
-      /*  DOUBLE */
-      }else if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"double") == 0){
-	 xmlChar *name, *arr_idx;
-	 double val;
-
-	 if (get_prop_val(ctx, cur_node,
-		  (const xmlChar *)"name", NULL, &name) != 0)
-	    return -1;
-
-	 arr_idx = xmlGetProp(cur_node, (const xmlChar *)"array_index");
-	 /*  Get user value */
-	 if (ourfa_hash_get_double(params, (const char *)name,
-		  (const char *)arr_idx, &val) != 0) {
-	    char *p_end;
-	    xmlChar *defval;
-
-	    /*  Get default value */
-	    if (get_prop_val(ctx, cur_node,
-		     (const xmlChar *)"default", name, &defval) != 0) {
-	       xmlFree(name);
-	       xmlFree(arr_idx);
-	       return -1;
-	    }
-
-	    /*  XXX: functions now(), max_time(), size() ??? */
-	    val = strtod((const char *)defval, &p_end);
-	    if (((*p_end != '\0') || errno == ERANGE)
-		  /* Check for global variable */
-		  && (ourfa_hash_get_double(params, (const char *)defval,
-			NULL, &val) != 0)) {
-	       set_ctx_err(ctx, "Wrong input parameter '%s' of function '%s' ('%s')",
-		     cur_node->name,
-		     ctx->name,
-		     (const char *)defval);
-	       xmlFree(defval);
-	       xmlFree(arr_idx);
-	       xmlFree(name);
-	       return -1;
-	    }
-	    xmlFree(defval);
-	    if (ourfa_hash_set_double(params, (const char *)name, (const char *)arr_idx, val) != 0) {
-	       xmlFree(name);
-	       xmlFree(arr_idx);
-	       return -1;
-	    }
-	 }
-
-	 xmlFree(name);
-	 xmlFree(arr_idx);
-	 /*  XXX */
-	 if (ourfa_pkt_add_data_double(pkt, val) != 0)
-	    break;
-
-      /* STRING */
-      }else if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"string") == 0){
-	 xmlChar *name, *val0, *arr_idx;
-	 char *val;
-
-	 arr_idx = xmlGetProp(cur_node, (const xmlChar *)"array_index");
-
-	 if (get_prop_val(ctx, cur_node,
-		  (const xmlChar *)"name", arr_idx, &name) != 0) {
-	    xmlFree(arr_idx);
-	    return -1;
-	 }
-
-	 /*  Get user value */
-	 if (ourfa_hash_get_string(params, (const char *)name,
-		  (const char *)arr_idx, &val) != 0) {
-	    /*  Get default value */
-	    if (get_prop_val(ctx, cur_node,
-		     (const xmlChar *)"default", name, &val0) != 0) {
-	       xmlFree(name);
-	       xmlFree(arr_idx);
-	       return -1;
-	    }
-	    val = (char *)val0;
-	    if (ourfa_hash_set_string(params, (const char *)name, (const char *)arr_idx, val) != 0)
-	       return -1;
-	 }
-	 xmlFree(name);
-	 xmlFree(arr_idx);
-	 /*  XXX */
-	 if (ourfa_pkt_add_data_str(pkt, val) != 0) {
-	    free(val);
-	    return -1;
-	 }
-	 free(val);
-
-      /* IP */
-      }else if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"ip_address") == 0){
-	 xmlChar *name, *arr_idx;
-	 in_addr_t val;
-
-	 if (get_prop_val(ctx, cur_node,
-		  (const xmlChar *)"name", NULL, &name) != 0)
-	    return -1;
-
-	 arr_idx = xmlGetProp(cur_node, (const xmlChar *)"array_index");
-	 /*  Get user value */
-	 if (ourfa_hash_get_ip(params, (const char *)name,
-		  (const char *)arr_idx, &val) != 0) {
-	    xmlChar *defval;
-	    struct in_addr addr;
-
-	    /*  Get default value */
-	    if (get_prop_val(ctx, cur_node,
-		     (const xmlChar *)"default", name, &defval) != 0) {
-	       xmlFree(name);
-	       xmlFree(arr_idx);
-	       return -1;
-	    }
-
-	    if ((ourfa_hash_parse_ip((const char *)defval, &addr) != 0)
-		  && (ourfa_hash_get_ip(params, (const char *)defval,
-			NULL, &val) != 0)) {
-	       set_ctx_err(ctx, "Wrong input parameter '%s' of function '%s' ('%s')",
-		     name,
-		     ctx->name,
-		     (const char *)defval);
-	       xmlFree(defval);
-	       xmlFree(arr_idx);
-	       xmlFree(name);
-	       return -1;
-	    }
-	    val = addr.s_addr;
-	    xmlFree(defval);
-	    if (ourfa_hash_set_ip(params, (const char *)name, (const char *)arr_idx, val) != 0)
-	       return -1;
-	 }
-	 xmlFree(name);
-	 xmlFree(arr_idx);
-	 /*  XXX */
-	 if (ourfa_pkt_add_data_ip(pkt, val) != 0)
-	    return -1;
-
-      /* IF */
-      }else if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"if") == 0){
-	 int if_res;
-	 if_res = exec_if_node(ctx, cur_node, params);
-
-	 if (if_res < 0)
-	    return -1;
-
-	 if (if_res == 1) {
-	    if (req_pkt_add_atts(ctx, params,
-		     pkt, cur_node->children) != 0)
-	       return -1;
-	 }
-
-      /* SET  */
-      }else if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"set") == 0){
-	 if (exec_set_node(ctx, cur_node, params) != 0)
-	    return -1;
-
-      /* FOR  */
-      }else if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"for") == 0){
-	 xmlChar *cnt_name;
-	 long long from, count, i;
-
-	 if (get_for_props(ctx, cur_node, params, &from, &count, &cnt_name, NULL) != 0)
-	    return -1;
-
-	 for (i=from; i < from+count; i++) {
-	    if (ourfa_hash_set_int(params, (const char *)cnt_name, NULL, i)){
-	       set_ctx_err(ctx, "Cannot set 'for' counter value");
-	       xmlFree(cnt_name);
-	       return -1;
-	    }
-	    if (req_pkt_add_atts(ctx, params,
-		     pkt, cur_node->children) != 0) {
-	       ourfa_hash_unset(params, (const char *)cnt_name);
-	       xmlFree(cnt_name);
-	       return -1;
-	    }
-	 }
-	 /*   ourfa_hash_unset(params, (const char *)cnt_name); */
-	 xmlFree(cnt_name);
-
-      /* ERROR  */
-      }else if (xmlStrcasecmp(cur_node->name, (const xmlChar *)"error") == 0){
-	 return exec_error_node(ctx, cur_node, params);
-      }else {
-	 set_ctx_err(ctx, "Unknown tag '%s' in function '%s' input parameters definition",
-	       (const char *)cur_node->name, ctx->name);
-	 return -1;
-      }
-   }
-
-   return 0;
-}
-
-int ourfa_xmlapictx_get_req_pkt(ourfa_xmlapictx_t *ctx,
-      ourfa_hash_t *in,
-      ourfa_pkt_t **res)
-{
-   unsigned is_new_res;
-
-   if (ctx==NULL || in==NULL || res==NULL)
-      return -1;
-
-   if (*res == NULL) {
-      *res = ourfa_pkt_new(OURFA_PKT_SESSION_DATA, NULL);
-      if (*res == NULL)
-	 return set_ctx_err(ctx, "Cannot create packet");
-      is_new_res=1;
-   }else
-      is_new_res=0;
-
-   if (req_pkt_add_atts(ctx, in, *res, ctx->in->children) != 0) {
-      if (is_new_res)
-	 ourfa_pkt_free(*res);
-      *res=NULL;
-      return -1;
-   }
-
-   return 0;
-}
-
-
-int ourfa_xmlapictx_traverse_start(ourfa_xmlapictx_t *ctx)
-{
-   if (ctx==NULL)
-      return -1;
-
-   if (ctx->traverse_in) {
-      assert(ctx->in != NULL);
-      ctx->end_node = ctx->in;
-      ctx->cur_node = ctx->in->children ? ctx->in->children : ctx->in;
-   }else {
-      assert(ctx->out != NULL);
-      ctx->end_node = ctx->out;
-      ctx->cur_node = ctx->out->children ? ctx->out->children : ctx->out;
-   }
 
    return 1;
 }
 
 
-int ourfa_xmlapictx_traverse(ourfa_xmlapictx_t *ctx)
+static int get_xml_attributes(xmlNode *xml_node,
+      struct t_nodes *nodes,
+      unsigned size,
+      ourfa_xmlapi_t *xmlapi)
 {
+   unsigned n;
+   xmlChar *src;
+   int res = OURFA_OK;
+
+   for (n=0; n<size; n++)
+      *nodes[n].dst = NULL;
+
+   for (n=0; n<size; n++) {
+      src = xmlGetProp(xml_node, (const xmlChar *)nodes[n].name);
+      if (src) {
+	 *nodes[n].dst = strdup((char *)src);
+	 if (*nodes[n].dst == NULL) {
+	    res = xmlapi->printf_err(OURFA_ERROR_SYSTEM, xmlapi->err_ctx, NULL);
+	    xmlFree(src);
+	    break;
+	 }
+	 xmlFree(src);
+      }else {
+	 if (nodes[n].required) {
+	    res = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+		  "No `%s` attribute of node `%s`", nodes[n].name, xml_node->name);
+	    break;
+	 }
+      }
+   }
+
+   if (res != OURFA_OK) {
+      for (n=0; n<size; n++)
+	 free(nodes[n].dst);
+   }
+
+   return res;
+}
+
+static struct xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t *xmlapi, ourfa_xmlapi_func_t *f)
+{
+   struct xmlapi_func_node_t *root, *cur_node;
    int ret_code;
+   xmlNode *xml_node;
 
-   if (ctx==NULL)
-      return -1;
+   assert(xmlapi);
 
-   ret_code=0;
-   while ((ctx->cur_node != ctx->end_node) && (ret_code == 0)) {
-      if (ctx->cur_node->type != XML_ELEMENT_NODE)
-	 goto get_next_node;
-      if (ctx->cur_node->name == NULL)
-	 goto get_next_node;
+   root = malloc(sizeof(*root));
+   if (root == NULL) {
+      ret_code = xmlapi->printf_err(OURFA_ERROR_SYSTEM, xmlapi->err_ctx, NULL);
+      return NULL;
+   }
 
-      /*  Node  */
-      if ((xmlStrcasecmp(ctx->cur_node->name, (const xmlChar *)"integer") == 0)
-	    || (xmlStrcasecmp(ctx->cur_node->name, (const xmlChar *)"string") == 0)
-	    || (xmlStrcasecmp(ctx->cur_node->name, (const xmlChar *)"long") == 0)
-	    || (xmlStrcasecmp(ctx->cur_node->name, (const xmlChar *)"double") == 0)
-	    || (xmlStrcasecmp(ctx->cur_node->name, (const xmlChar *)"ip_address") == 0)){
-	 xmlChar *arr_idx, *name;
+   root->parent = NULL;
+   root->next = NULL;
+   root->children = NULL;
+   root->type = OURFA_XMLAPI_NODE_ROOT;
+   cur_node = NULL;
 
-	 if ((ret_code=get_prop_val(ctx, ctx->cur_node, (const xmlChar *)"name",
-		  NULL, &name)) != 0)
-	    break;
+   if ((xml_root == NULL) || (xml_root->children == NULL))
+      return root;
 
-	 arr_idx = xmlGetProp(ctx->cur_node, (const xmlChar *)"array_index");
+   xml_node = xml_root->children;
+   ret_code = OURFA_OK;
 
-	 if (ctx->traverse_funcs.node) {
-	    ret_code = ctx->traverse_funcs.node(
-		  (const char *)ctx->cur_node->name,
-		  (const char *)name,
-		  (const char *)arr_idx,
-		  ctx->user_ctx);
-	 }
-	 xmlFree(arr_idx);
-	 xmlFree(name);
+   while (xml_node != xml_root) {
+      struct xmlapi_func_node_t *node;
 
-	 if (ret_code != 0)
-	    break;
+      if ((xml_node->type != XML_ELEMENT_NODE) || (xml_node->name == NULL))
+	 goto load_f_def_next_node;
 
-      /* IF */
-      }else if (xmlStrcasecmp(ctx->cur_node->name, (const xmlChar *)"if") == 0) {
-	 int if_res;
-	 if_res = exec_if_node(ctx, ctx->cur_node, ctx->data_h);
+      node = malloc(sizeof(*node));
+      if (node == NULL) {
+	 ret_code = xmlapi->printf_err(OURFA_ERROR_SYSTEM, xmlapi->err_ctx, NULL);
+	 break;
+      }
+      node->children = node->next = NULL;
 
-	 if (if_res < 0) {
-	    ret_code=-1;
-	    break;
-	 }
+      node->type = ourfa_xmlapi_node_type_by_name(xml_node->name);
+      switch (node->type) {
+	 case OURFA_XMLAPI_NODE_INTEGER:
+	 case OURFA_XMLAPI_NODE_STRING:
+	 case OURFA_XMLAPI_NODE_LONG:
+	 case OURFA_XMLAPI_NODE_DOUBLE:
+	 case OURFA_XMLAPI_NODE_IP:
+	    {
+	       struct t_nodes my_nodes[3]= {
+		  {&node->n.n_val.name,        "name", 1},
+		  {&node->n.n_val.array_index, "array_index", 0},
+		  {&node->n.n_val.defval,      "default", 0}
+	       };
 
-	 if ((if_res == 1) && ctx->cur_node->children != NULL) {
-	    ctx->cur_node = ctx->cur_node->children;
-	    continue;
-	 }
-
-      /* SET  */
-      }else if (xmlStrcasecmp(ctx->cur_node->name, (const xmlChar *)"set") == 0){
-	 if (exec_set_node(ctx, ctx->cur_node, ctx->data_h) != 0) {
-	    ret_code = -1;
-	    break;
-	 }
-
-      /* FOR  */
-      }else if (xmlStrcasecmp(ctx->cur_node->name, (const xmlChar *)"for") == 0){
-	 xmlChar *cnt_name;
-	 xmlChar *array_name;
-	 long long from, count;
-
-	 if (get_for_props(ctx, ctx->cur_node, ctx->data_h, &from, &count, &cnt_name,
-		  &array_name) != 0) {
-	    ret_code=-1;
-	    break;
-	 }
-
-	 if (ourfa_hash_set_long(ctx->data_h, (const char *)cnt_name, NULL, from)){
-	    ret_code = set_ctx_err(ctx, "Cannot set 'for' counter value");
-	    xmlFree(cnt_name);
-	    break;
-	 }
-	 if (ctx->traverse_funcs.start_for) {
-	    ret_code = ctx->traverse_funcs.start_for(
-		  (const char *)array_name,
-		  (const char *)cnt_name,
-		  from,
-		  count,
-		  ctx->user_ctx
-		  );
-	 }
-
-	 xmlFree(cnt_name);
-	 xmlFree(array_name);
-	 if ((count != 0) && (ctx->cur_node->children != NULL)) {
-	    if (ctx->traverse_funcs.start_for_item && (ret_code >= 0)) {
-	       ret_code = ctx->traverse_funcs.start_for_item(ctx->user_ctx);
+	       ret_code=get_xml_attributes(xml_node, my_nodes, sizeof(my_nodes)/sizeof(my_nodes[0]), xmlapi);
 	    }
-	    ctx->cur_node = ctx->cur_node->children;
-	    continue;
-	 }
-
-      /* BREAK */
-      }else if (xmlStrcasecmp(ctx->cur_node->name, (const xmlChar *)"break") == 0) {
-	 unsigned node_found;
-
-	 node_found=0;
-	 while (ctx->cur_node != ctx->end_node) {
-	    if (xmlStrcasecmp(ctx->cur_node->name, (const xmlChar *)"for") == 0) {
-	       node_found=1;
-	       break;
-	    }
-	    ctx->cur_node=ctx->cur_node->parent;
-	 }
-
-	 if (!node_found) {
-	    ret_code = set_ctx_err(ctx, "Wrong break node");
 	    break;
-	 }
-      /* ERROR  */
-      }else if (xmlStrcasecmp(ctx->cur_node->name, (const xmlChar *)"error") == 0){
-	 ret_code = exec_error_node(ctx, ctx->cur_node, ctx->data_h);
+	 case OURFA_XMLAPI_NODE_IF:
+	    {
+	       char *condition;
+	       struct t_nodes my_nodes[]= {
+		  {&node->n.n_if.variable, "variable", 1},
+		  {&node->n.n_if.value, "value", 1},
+		  {&condition, "condition", 1}
+	       };
 
-	 if (ctx->traverse_funcs.err_node) {
-	    ret_code = ctx->traverse_funcs.err_node(ctx->user_err_str, ret_code, ctx->user_ctx);
-	 }
+	       ret_code=get_xml_attributes(xml_node, my_nodes, sizeof(my_nodes)/sizeof(my_nodes[0]), xmlapi);
 
+	       if (ret_code != OURFA_OK)
+		  break;
+
+	       if ( ((condition[0] == 'e') || (condition[0] == 'E'))
+		     && ((condition[1] == 'q') || (condition[1] == 'Q'))
+		     && (condition[2] == '\0'))
+		  node->n.n_if.condition = OURFA_XMLAPI_IF_EQ;
+	       else if ( ((condition[0] == 'n') || (condition[0] == 'N'))
+		     && ((condition[1] == 'e') || (condition[1] == 'E'))
+		     && (condition[2] == '\0'))
+		  node->n.n_if.condition = OURFA_XMLAPI_IF_NE;
+	       else {
+		  ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+			"Wrong condition on node `%s`. Function: '%s'",
+			xml_node->name,
+			f->name
+			);
+		  free(condition);
+		  free(node->n.n_if.variable);
+		  free(node->n.n_if.value);
+		  break;
+	       }
+	       free(condition);
+	       node->children = node; /* uninitialized  */
+	    }
+	    break;
+	 case OURFA_XMLAPI_NODE_SET:
+	    {
+	       struct t_nodes my_nodes[]= {
+		  {&node->n.n_set.src,       "src",       0},
+		  {&node->n.n_set.src_index, "src_index", 0},
+		  {&node->n.n_set.dst,       "dst",       0},
+		  {&node->n.n_set.dst_index, "dst_index", 0},
+		  {&node->n.n_set.value,     "value",     0}
+	       };
+
+	       ret_code=get_xml_attributes(xml_node, my_nodes, sizeof(my_nodes)/sizeof(my_nodes[0]), xmlapi);
+
+	       if (ret_code == OURFA_OK) {
+		  if (node->n.n_set.src && node->n.n_set.value) {
+		     ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+			   "Both 'src' and 'value' properties exists in 'set' "
+			   "node (%s:%s). Function: '%s'",
+			   node->n.n_set.src,
+			   node->n.n_set.value,
+			   f->name
+			   );
+		     free_func_def(node);
+		     break;
+		  }
+		  if (!node->n.n_set.src && !node->n.n_set.dst) {
+		     ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+			   "No 'src' and no 'value' properties defined in 'set' node. Function: '%s'",
+			   f->name);
+		     free_func_def(node);
+		     break;
+		  }
+	       }
+	    }
+	    break;
+	 case OURFA_XMLAPI_NODE_FOR:
+	    {
+	       unsigned i;
+	       struct xmlapi_func_node_t *tmp;
+
+	       struct t_nodes my_nodes[]= {
+		  {&node->n.n_for.name, "name", 1},
+		  {&node->n.n_for.from, "from", 1},
+		  {&node->n.n_for.count, "count", 1}
+	       };
+
+	       ret_code=get_xml_attributes(xml_node, my_nodes, sizeof(my_nodes)/sizeof(my_nodes[0]), xmlapi);
+	       node->children = node; /* uninitialized  */
+
+	       if (ret_code == OURFA_OK) {
+		  i=1;
+		  if (cur_node && cur_node->parent) {
+		     for(tmp = cur_node->parent->children; tmp; tmp = tmp->next)
+			if (tmp->type == OURFA_XMLAPI_NODE_FOR)
+			   i++;
+		  }else
+		     i = 1;
+	       }
+	       node->n.n_for.array_name = NULL;
+	       if (asprintf(&node->n.n_for.array_name, "array-%d", i) <= 0) {
+		  ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx, "asprintf error");
+		  free_func_def(node);
+		  break;
+	       }
+	    }
+	    break;
+	 case OURFA_XMLAPI_NODE_BREAK:
+	    {
+	       unsigned node_found;
+	       struct xmlapi_func_node_t *cur;
+
+	       node_found=0;
+	       if (cur_node) {
+		  for(cur=cur_node;
+			cur && (cur->type != OURFA_XMLAPI_NODE_ROOT);
+			cur = cur->parent) {
+		     if (cur->type ==  OURFA_XMLAPI_NODE_FOR) {
+			node_found = 1;
+			break;
+		     }
+		  }
+	       }
+
+	       if (!node_found)
+		  ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+			"BREAK without FOR. Function: '%s'", f->name);
+	    }
+	    break;
+         case OURFA_XMLAPI_NODE_ERROR:
+	    {
+	       char *code_str;
+	       struct t_nodes my_nodes[]= {
+		  {&code_str, "code", 1},
+		  {&node->n.n_error.comment, "comment", 0},
+		  {&node->n.n_error.variable, "variable", 0}
+	       };
+
+	       ret_code=get_xml_attributes(xml_node, my_nodes, sizeof(my_nodes)/sizeof(my_nodes[0]), xmlapi);
+
+	       if (ret_code == OURFA_OK) {
+		  char *endptr;
+		  node->n.n_error.code = (int)strtol((const char *)code_str, &endptr, 10);
+		  if ((code_str[0] == '\0') || (*endptr != '\0')) {
+		     ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+			   "Wrong error code `%s` of node `%s`. Function: '%s'",
+			   code_str, xml_node->name, f->name);
+		     free(code_str);
+		     free(node->n.n_error.comment);
+		     free(node->n.n_error.variable);
+		     break;
+		  }
+		  free(code_str);
+	       }
+	    }
+	    break;
+	 default:
+	    ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+		  "Unknown node type `%s`. Function: '%s'", xml_node->name,
+		  f->name);
+	    break;
+      }
+
+      if (ret_code != OURFA_OK) {
+	 free(node);
 	 break;
       }
 
-get_next_node:
-      if (ctx->cur_node->next == NULL) {
-	 /* Move up a tree */
+      /* Add node to tree  */
+      if (cur_node == NULL) {
+	 node->parent = root;
+	 root->children = node;
+	 cur_node = node;
+      }else {
+	 if ( (cur_node->children == cur_node)
+	       && ((cur_node->type == OURFA_XMLAPI_NODE_FOR)
+	       || (cur_node->type == OURFA_XMLAPI_NODE_IF))) {
+	    /* insert as children */
+	    cur_node->children = node;
+	    node->parent = cur_node;
+	 }else {
+	    /* insert as sibling  */
+	    cur_node->next = node;
+	    node->parent = cur_node->parent;
+	 }
+	 cur_node = node;
+      }
+
+      if ((cur_node->type == OURFA_XMLAPI_NODE_IF)
+	    || (cur_node->type == OURFA_XMLAPI_NODE_FOR)) {
+	 /*  Move down a XML tree if possible */
+	 if (xml_node->children != NULL) {
+	    xml_node = xml_node->children;
+	    continue;
+	 }else
+	    cur_node->children = NULL;
+      }
+
+load_f_def_next_node:
+      if (xml_node->next != NULL)
+	 xml_node = xml_node->next;
+      else {
+	 /* Move UP a tree  */
 	 for(;;) {
-	    ctx->cur_node = ctx->cur_node->parent;
-	    assert(ctx->cur_node != NULL);
+	    xml_node = xml_node->parent;
 
-	    if (ctx->cur_node == ctx->end_node)
+	    if (xml_node == xml_root)
 	       break;
+	    assert(cur_node);
+	    if (cur_node->children == cur_node)
+	       cur_node->children = NULL;
+	    else
+	       cur_node = cur_node->parent;
 
-	    /* FOR node: check for next iteration */
-	    if (xmlStrcasecmp(ctx->cur_node->name, (const xmlChar *)"for") == 0){
-	       xmlChar *cnt_name;
-	       long long from, count, i;
-
-	       if (ctx->traverse_funcs.end_for_item) {
-		  ret_code = ctx->traverse_funcs.end_for_item(ctx->user_ctx);
-	       }
-
-	       if ((get_for_props(ctx, ctx->cur_node, ctx->data_h, &from, &count,
-			   &cnt_name, NULL) != 0)
-		     || (ourfa_hash_get_long(ctx->data_h, (const char *)cnt_name, NULL, &i) != 0)) {
-		  ret_code=-1;
-		  break;
-	       }
-
-	       i++;
-	       if (ourfa_hash_set_long(ctx->data_h, (const char *)cnt_name, NULL, i)){
-		  ret_code = set_ctx_err(ctx, "Cannot set 'for' counter value");
-		  xmlFree(cnt_name);
-		  break;
-	       }
-
-	       /* Next iteration  */
-	       if (i < from+count) {
-		  ctx->cur_node = ctx->cur_node->children;
-		  if (ctx->traverse_funcs.start_for_item) {
-		     ret_code = ctx->traverse_funcs.start_for_item(ctx->user_ctx);
-		  }
-		  xmlFree(cnt_name);
-		  break;
-	       }else {
-		  if (ctx->traverse_funcs.end_for) {
-		     ret_code = ctx->traverse_funcs.end_for(ctx->user_ctx);
-		  }
-	       }
-	       xmlFree(cnt_name);
-	    }
-
-	    if (ctx->cur_node->next != NULL) {
-	       ctx->cur_node = ctx->cur_node->next;
+	    if (xml_node->next != NULL) {
+	       xml_node = xml_node->next;
 	       break;
 	    }
 	 } /* for(;;) */
-      }else {
-	 /* Next sibiling  */
-	 ctx->cur_node = ctx->cur_node->next;
       }
-   } /* while  */
+   } /*  while  */
 
-   return ret_code;
-}
-
-static int set_ctx_err(ourfa_xmlapictx_t *ctx, const char *fmt, ...)
-{
-   va_list ap;
-
-   if (ctx->user_err_str) {
-      va_start(ap, fmt);
-      vsnprintf(ctx->user_err_str, ctx->user_err_str_size, fmt, ap);
-      va_end(ap);
+   if (ret_code != OURFA_OK) {
+      free_func_def(root);
+      return NULL;
    }
 
-   return -1;
+   return root;
+}
+
+static int dump_func_def(struct xmlapi_func_node_t *def, FILE *stream)
+{
+   struct xmlapi_func_node_t *root, *cur;
+   int i, level;
+
+   if (!def || !def->children)
+      return 0;
+
+   root = def;
+   cur = root->children;
+   level = 1;
+
+   while (cur != root) {
+      for (i=0; i<level; i++) fprintf(stream, "  ");
+      switch (cur->type) {
+	 case OURFA_XMLAPI_NODE_INTEGER:
+	 case OURFA_XMLAPI_NODE_STRING:
+	 case OURFA_XMLAPI_NODE_LONG:
+	 case OURFA_XMLAPI_NODE_DOUBLE:
+	 case OURFA_XMLAPI_NODE_IP:
+	    fprintf(stream, "%-8s %s", ourfa_xmlapi_node_name_by_type(cur->type),
+		  cur->n.n_val.name);
+	    if (cur->n.n_val.array_index)
+	       fprintf(stream, "[%s]", cur->n.n_val.array_index);
+	    if (cur->n.n_val.defval)
+	       fprintf(stream, " (defval: %s)", cur->n.n_val.defval);
+	    fprintf(stream, "\n");
+	    break;
+	 case OURFA_XMLAPI_NODE_IF:
+	    fprintf(stream, "%s %s %s %s\n",
+		  ourfa_xmlapi_node_name_by_type(cur->type),
+		  cur->n.n_if.variable,
+		  cur->n.n_if.condition == OURFA_XMLAPI_IF_EQ ? "eq" : "ne",
+		  cur->n.n_if.value
+		  );
+	    break;
+	 case OURFA_XMLAPI_NODE_SET:
+	    fprintf(stream, "%s", ourfa_xmlapi_node_name_by_type(cur->type));
+	    if (cur->n.n_set.src)
+	       fprintf(stream, " src: %s[%s]",
+		     cur->n.n_set.src,
+		     cur->n.n_set.src_index ? cur->n.n_set.src_index : "0");
+	    if (cur->n.n_set.dst)
+	       fprintf(stream, " dst: %s[%s]",
+		     cur->n.n_set.dst,
+		     cur->n.n_set.dst_index ? cur->n.n_set.dst_index : "0");
+	    if (cur->n.n_set.value)
+	       fprintf(stream, " value: %s", cur->n.n_set.value);
+	    fprintf(stream, "\n");
+	    break;
+	 case OURFA_XMLAPI_NODE_FOR:
+	    fprintf(stream,"%s %s from: %s count: %s\n",
+		  ourfa_xmlapi_node_name_by_type(cur->type),
+		  cur->n.n_for.name,
+		  cur->n.n_for.from,
+		  cur->n.n_for.count
+		  );
+	    break;
+	 case OURFA_XMLAPI_NODE_BREAK:
+	    fprintf(stream, "%s\n", ourfa_xmlapi_node_name_by_type(cur->type));
+	    break;
+         case OURFA_XMLAPI_NODE_ERROR:
+	    fprintf(stream, "%s %i (%s)",
+		  ourfa_xmlapi_node_name_by_type(cur->type),
+		  cur->n.n_error.code,
+		  cur->n.n_error.comment ? cur->n.n_error.comment : "no comment");
+	    if (cur->n.n_error.variable)
+	       fprintf(stream, " variable: %s", cur->n.n_error.variable);
+	    fprintf(stream, "\n");
+	    break;
+	 default:
+	    fprintf(stream, "uknown node %u\n", cur->type);
+	    break;
+      }
+
+      if (cur->children) {
+	 level++;
+	 cur = cur->children;
+      }else {
+	 if (cur->next) {
+	    cur = cur->next;
+	 }else {
+	    while (cur->next == NULL) {
+	       cur = cur->parent;
+	       level--;
+	       if (cur == root)
+		  break;
+	       for (i=0; i<level; i++) fprintf(stream, "  ");
+	       switch (cur->type) {
+		  case OURFA_XMLAPI_NODE_FOR:
+		     fprintf(stream, "endfor\n");
+		     break;
+		  case OURFA_XMLAPI_NODE_IF:
+		     fprintf(stream, "endif\n");
+		     break;
+		  default:
+		     break;
+	       }
+	    }
+	    if (cur->next)
+	       cur = cur->next;
+	 }
+      }
+   }
+
+   return 0;
+
+}
+
+void dump_func_definitions(ourfa_xmlapi_func_t *f, FILE *stream)
+{
+
+   if (!stream)
+      return;
+
+   fprintf(stream, "FUNCTION %s\n", f->name);
+
+   if (!f->in->children) {
+      fprintf(stream, "INPUT: no\n");
+   }else {
+      fprintf(stream, "INPUT: \n");
+      dump_func_def(f->in, stream);
+   }
+
+   if (!f->out->children)
+      fprintf(stream, "OUTPUT: no\n");
+   else {
+      fprintf(stream, "OUTPUT:\n");
+      dump_func_def(f->out, stream);
+   }
+
+   fprintf(stream, "END %s\n\n", f->name);
+
+}
+
+static void free_func_def(struct xmlapi_func_node_t *def)
+{
+   struct xmlapi_func_node_t *next;
+
+   while(def) {
+      next = def->next;
+      if (def->children) {
+	 assert(def->children != def);
+	 free_func_def(def->children);
+      }
+
+      switch (def->type) {
+	 case OURFA_XMLAPI_NODE_INTEGER:
+	 case OURFA_XMLAPI_NODE_STRING:
+	 case OURFA_XMLAPI_NODE_LONG:
+	 case OURFA_XMLAPI_NODE_DOUBLE:
+	 case OURFA_XMLAPI_NODE_IP:
+	    free(def->n.n_val.name);
+	    free(def->n.n_val.array_index);
+	    free(def->n.n_val.defval);
+	    break;
+	 case OURFA_XMLAPI_NODE_IF:
+	    free(def->n.n_if.variable);
+	    free(def->n.n_if.value);
+	    break;
+	 case OURFA_XMLAPI_NODE_SET:
+	    free(def->n.n_set.src);
+	    free(def->n.n_set.src_index);
+	    free(def->n.n_set.dst);
+	    free(def->n.n_set.dst_index);
+	    free(def->n.n_set.value);
+	    break;
+	 case OURFA_XMLAPI_NODE_FOR:
+	    free(def->n.n_for.name);
+	    free(def->n.n_for.from);
+	    free(def->n.n_for.count);
+	    free(def->n.n_for.array_name);
+	    break;
+         case OURFA_XMLAPI_NODE_ERROR:
+	    free(def->n.n_error.comment);
+	    free(def->n.n_error.variable);
+	    break;
+	 default:
+	    break;
+      }
+      free(def);
+      def = next;
+   }
+
 }
 
 static void xml_generic_error_func(void *ctx, const char *msg, ...)
 {
    va_list ap;
-   struct err_str_params_t *err;
+   ourfa_xmlapi_t *api;
+   char err[200];
 
-   err = (struct err_str_params_t *)ctx;
-   if ((err == NULL)
-	 || (err->err_str == NULL)
-	 || (err->err_str_size == 0))
-      return;
+   api = (ourfa_xmlapi_t *)ctx;
 
    va_start(ap, msg);
-   vsnprintf(err->err_str, err->err_str_size, msg, ap);
+   vsnprintf(err, sizeof(err), msg, ap);
+   api->printf_err(OURFA_ERROR_OTHER, api->err_ctx, err);
    va_end(ap);
 }
+
+
 

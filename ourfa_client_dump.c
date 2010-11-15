@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009 Alexey Illarionov <littlesavage@rambler.ru>
+ * Copyright (c) 2009-2010 Alexey Illarionov <littlesavage@rambler.ru>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,134 +44,191 @@ enum dump_format_t {
    DUMP_FORMAT_BATCH
 };
 
-struct dump_pkt_ctx {
-   FILE *stream;
-   ourfa_hash_t *h;
-   int tab_cnt;
-   const char *func_name;
-   enum dump_format_t dump_format;
-
-   xmlDoc *tmp_doc;
-   xmlBuffer *tmp_buf;
-
-   int err_code;
-   char err_msg[200];
-};
-
-static int node_func(const char *node_type, const char *node_name, const char *arr_index , void *ctx);
-static int start_for_func(const char *array_name,
-      const char *node_name, unsigned from, unsigned cnt, void *ctx);
-static int err_node_func(const char *err_str, unsigned err_code, void *ctx);
-static int start_for_item(void *ctx);
-static int end_for_item(void *ctx);
-static int end_for(void *ctx);
-
 static int dump_hash_fprintf(FILE *stream, unsigned tab_cnt, const char *fmt, ...);
 static int batch_print_val(ourfa_hash_t *h, FILE *stream,
       const char *name, const char *arr_idx, const char *val);
 static int attrlist2str(unsigned *attr_list, size_t attr_list_cnt,
       char *dst, size_t dst_size);
-static int dump(struct ourfa_t *ourfa,
-      const char *func_name,
+
+static int dump(
+      ourfa_func_call_ctx_t *fctx,
+      ourfa_connection_t *connection,
       FILE *stream,
-      enum dump_format_t dump_format,
-      ourfa_hash_t *in);
+      enum dump_format_t dump_format);
 
-static const ourfa_traverse_funcs_t dump_hooks = {
-   node_func,
-   start_for_func,
-   err_node_func,
-   start_for_item,
-   end_for_item,
-   end_for
-};
-
-int ourfa_dump_xml(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, FILE *stream)
+int ourfa_dump_xml(
+      ourfa_func_call_ctx_t *fctx,
+      ourfa_connection_t *connection,
+      FILE *stream)
 {
-   return dump(ourfa, func_name, stream, DUMP_FORMAT_XML, in);
+   return dump(fctx, connection, stream, DUMP_FORMAT_XML);
 }
 
-int ourfa_dump_batch(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, FILE *stream)
+int ourfa_dump_batch(
+      ourfa_func_call_ctx_t *fctx,
+      ourfa_connection_t *connection,
+      FILE *stream)
 {
-   return dump(ourfa, func_name, stream, DUMP_FORMAT_BATCH, in);
+   return dump(fctx, connection, stream, DUMP_FORMAT_BATCH);
 }
 
-static int dump(struct ourfa_t *ourfa,
-      const char *func_name,
+static int dump(
+      ourfa_func_call_ctx_t *fctx,
+      ourfa_connection_t *connection,
       FILE *stream,
-      enum dump_format_t dump_format,
-      ourfa_hash_t *in)
+      enum dump_format_t dump_format)
 {
-   struct dump_pkt_ctx my_ctx;
-   ourfa_xmlapi_t *xmlapi;
-   ourfa_conn_t *conn;
-   ourfa_hash_t *h;
-   void *loadresp_ctx;
+   int res = OURFA_OK;
+   int state = OURFA_FUNC_CALL_STATE_START;
+   int tab_cnt;
 
-   if (ourfa==NULL || func_name==NULL || stream == NULL)
-      return -1;
+   xmlDoc *tmp_doc;
+   xmlBuffer *tmp_buf;
 
-   xmlapi = ourfa_get_xmlapi(ourfa);
-   conn = ourfa_get_conn(ourfa);
-   if (xmlapi == NULL || (conn == NULL))
-      return -1;
-
-   my_ctx.stream = stream;
-   my_ctx.tab_cnt=1;
-   my_ctx.err_code=0;
-   my_ctx.err_msg[0]='\0';
-   my_ctx.func_name = func_name;
-   my_ctx.dump_format = dump_format;
-
-   my_ctx.tmp_doc = xmlNewDoc(NULL);
-   if (my_ctx.tmp_doc == NULL)
-      return -1;
-
-   my_ctx.tmp_doc->encoding=(const xmlChar *)strdup("UTF-8");
-
-   my_ctx.tmp_buf = xmlBufferCreate();
-   if (my_ctx.tmp_buf == NULL) {
-      xmlFreeDoc(my_ctx.tmp_doc);
-      return -1;
+   if (!ourfa_connection_is_connected(connection)) {
+	fprintf(stream, "ERROR: not connected\n");
+	return OURFA_ERROR_NOT_CONNECTED;
    }
 
-   loadresp_ctx = ourfa_xmlapictx_load_resp_init(
-	 xmlapi,
-	 func_name,
-	 conn,
-	 &dump_hooks,
-	 my_ctx.err_msg,
-	 sizeof(my_ctx.err_msg),
-	 &my_ctx,
-	 in
-	 );
+   ourfa_func_call_start(fctx, 0);
 
-   if (loadresp_ctx == NULL) {
-      fputs(my_ctx.err_msg, stream);
-      return -1;
-   }
+   state = OURFA_FUNC_CALL_STATE_START;
+   assert(fctx->cur);
 
-   my_ctx.h = in;
+   tab_cnt=3;
+   tmp_doc = xmlNewDoc(NULL);
+   if (tmp_doc == NULL)
+      goto dump_end;
+
+   tmp_doc->encoding=(const xmlChar *)strdup("UTF-8");
+   tmp_buf = xmlBufferCreate();
+   if (tmp_buf == NULL)
+      goto dump_end;
 
    switch (dump_format) {
       case DUMP_FORMAT_XML:
-	 fprintf(stream, "<call function=\"%s\">\n <output>\n",
-	       (const char *)func_name);
+	 {
+	    char session_id[16*2+1];
+	    fprintf(stream, "<?xml version=\"1.0\"?>\n<urfa>\n");
+
+	    if (ourfa_connection_session_id(connection, session_id, sizeof(session_id)) > 0)
+	       fprintf(stream, "  <session key=\"%s\"/>\n", session_id);
+	    fprintf(stream, "  <call function=\"%s\">\n"
+	       "    <output>\n",
+	       fctx->f->name
+	       );
+	 }
 	 break;
       case DUMP_FORMAT_BATCH:
-	 fprintf(stream, "FUNCTION %s output\n",
-	       (const char *)func_name);
+	 fprintf(stream, "FUNCTION %s output\n", fctx->f->name);
 	 break;
       default:
 	 assert(0);
 	 break;
    }
 
-   h = ourfa_xmlapictx_load_resp(loadresp_ctx);
+   for(;(state != OURFA_FUNC_CALL_STATE_END)&&(state != OURFA_FUNC_CALL_STATE_ERROR);) {
+      const char *node_type, *node_name, *arr_index;
+      struct xmlapi_func_node_t *n;
+      char *s;
+
+      state = ourfa_func_call_resp_step(fctx, connection);
+
+      n = fctx->cur;
+      node_type = ourfa_xmlapi_node_name_by_type(n->type);
+      switch (state) {
+	 case OURFA_FUNC_CALL_STATE_NODE:
+	    node_name = n->n.n_val.name;
+	    arr_index = n->n.n_val.array_index ? n->n.n_val.array_index : "0";
+
+	    if ((n->type == OURFA_XMLAPI_NODE_SET)
+		  || (n->type == OURFA_XMLAPI_NODE_BREAK))
+	       break;
+
+	    if (ourfa_hash_get_string(fctx->h, node_name, arr_index, &s) != 0 ) {
+	       switch (dump_format) {
+		  case DUMP_FORMAT_XML:
+		     dump_hash_fprintf(stream, tab_cnt, "<%-7s name=\"%s\"/>\n",
+			   node_type, node_name);
+		     break;
+		  case DUMP_FORMAT_BATCH:
+		     batch_print_val(fctx->h, stream,
+			   node_name, arr_index, NULL);
+		     break;
+		  default:
+		     assert(0);
+		     break;
+	       }
+	    }else {
+	       switch (dump_format) {
+		  case DUMP_FORMAT_XML:
+		     xmlBufferEmpty(tmp_buf);
+		     xmlAttrSerializeTxtContent(tmp_buf, tmp_doc, NULL, (const xmlChar *)s);
+
+		     dump_hash_fprintf(stream, tab_cnt, "<%s name=\"%s\" value=\"%s\"/>\n",
+			   node_type, node_name,
+			   (const char *)xmlBufferContent(tmp_buf));
+		     break;
+		  case DUMP_FORMAT_BATCH:
+		     batch_print_val(fctx->h, stream, node_name, arr_index, s);
+		     break;
+		  default:
+		     assert(0);
+		     break;
+	       }
+	       free(s);
+	    }
+	    break;
+	 case OURFA_FUNC_CALL_STATE_STARTFOR:
+	       if (dump_format != DUMP_FORMAT_XML)
+		  break;
+	       dump_hash_fprintf(stream, tab_cnt,
+		     "<array name=\"%s\">\n", /* n->n.n_for.array_name */ n->n.n_for.name );
+	       tab_cnt++;
+	       break;
+	 case OURFA_FUNC_CALL_STATE_STARTFORSTEP:
+	       if (dump_format != DUMP_FORMAT_XML)
+		  break;
+	       dump_hash_fprintf(stream, tab_cnt, "<item>\n");
+	       tab_cnt++;
+	       break;
+	 case OURFA_FUNC_CALL_STATE_ENDFORSTEP:
+	       if (dump_format != DUMP_FORMAT_XML)
+		  break;
+	       tab_cnt--;
+	       dump_hash_fprintf(stream, tab_cnt, "</item>\n");
+	       break;
+	 case OURFA_FUNC_CALL_STATE_ENDFOR:
+	       if (dump_format != DUMP_FORMAT_XML)
+		  break;
+	       tab_cnt--;
+	       dump_hash_fprintf(stream, tab_cnt, "</array>\n");
+	       break;
+	 case OURFA_FUNC_CALL_STATE_ERROR:
+	       /* XXX */
+	       switch (dump_format) {
+		  case DUMP_FORMAT_XML:
+		     dump_hash_fprintf(stream, tab_cnt, "<error>%s</error>\n",
+			   n->n.n_error.comment);
+		     break;
+		  case DUMP_FORMAT_BATCH:
+		     batch_print_val(fctx->h, stream,
+			   "ERROR", NULL, n->n.n_error.comment);
+		     break;
+		  default:
+		     assert(0);
+		     break;
+	       }
+	       break;
+	 case OURFA_FUNC_CALL_STATE_END:
+	 default:
+	    break;
+      }
+   }
 
    switch (dump_format) {
       case DUMP_FORMAT_XML:
-	 fputs(" </output>\n</call>\n", stream);
+	 fputs("    </output>\n  </call>\n</urfa>\n", stream);
 	 break;
       case DUMP_FORMAT_BATCH:
 	 fputs("\n", stream);
@@ -181,16 +238,16 @@ static int dump(struct ourfa_t *ourfa,
 	 break;
    }
 
-   if (h == NULL) {
-      fputs(my_ctx.err_msg, stream);
-      return -1;
-   }
+  if (state != OURFA_FUNC_CALL_STATE_ERROR)
+     res=0;
 
-   xmlFreeDoc(my_ctx.tmp_doc);
-   xmlBufferFree(my_ctx.tmp_buf);
+dump_end:
+   xmlFreeDoc(tmp_doc);
+   xmlBufferFree(tmp_buf);
 
    return 0;
 }
+
 
 static int dump_hash_fprintf(FILE *stream, unsigned tab_cnt, const char *fmt, ...)
 {
@@ -345,143 +402,6 @@ static int batch_print_val(ourfa_hash_t *h, FILE *stream,
    else
       fprintf(stream, "%s\t\t\t%s\n", name, escaped_val ? escaped_val : "");
    free(escaped_val);
-
-   return 0;
-}
-
-static int node_func(const char *node_type, const char *node_name, const char *arr_index , void *ctx)
-{
-   struct dump_pkt_ctx *my_ctx;
-   char *s;
-
-   my_ctx = ctx;
-
-   if (ourfa_hash_get_string(my_ctx->h, (const char *)node_name, (const char *)arr_index, &s) != 0 ) {
-      switch (my_ctx->dump_format) {
-	 case DUMP_FORMAT_XML:
-	    dump_hash_fprintf(my_ctx->stream, my_ctx->tab_cnt, "<%-7s name=\"%s\" />\n",
-		  node_type, node_name);
-	    break;
-	 case DUMP_FORMAT_BATCH:
-	    batch_print_val(my_ctx->h, my_ctx->stream,
-		  node_name, arr_index, NULL);
-	    break;
-	 default:
-	    assert(0);
-	    break;
-      }
-   }else {
-      switch (my_ctx->dump_format) {
-	 case DUMP_FORMAT_XML:
-	    xmlBufferEmpty(my_ctx->tmp_buf);
-	    xmlAttrSerializeTxtContent(my_ctx->tmp_buf, my_ctx->tmp_doc, NULL, (const xmlChar *)s);
-
-	    dump_hash_fprintf(my_ctx->stream, my_ctx->tab_cnt, "<%-7s name=\"%s\" value=\"%s\" />\n",
-		  node_type, node_name,
-		  (const char *)xmlBufferContent(my_ctx->tmp_buf));
-	    break;
-	 case DUMP_FORMAT_BATCH:
-	    batch_print_val(my_ctx->h, my_ctx->stream,
-		  node_name, arr_index, (const char *)s);
-	    break;
-	 default:
-	    assert(0);
-	    break;
-      }
-      free(s);
-   }
-
-   return 0;
-}
-
-static int start_for_func(const char *array_name,
-      const char *node_name, unsigned from, unsigned cnt, void *ctx)
-{
-   struct dump_pkt_ctx *my_ctx;
-
-   my_ctx = ctx;
-   if (from || node_name) {};
-
-   if (my_ctx->dump_format != DUMP_FORMAT_XML)
-      return 0;
-
-   if (cnt != 0) {
-      dump_hash_fprintf(my_ctx->stream, my_ctx->tab_cnt,
-	    "<array name=\"%s\">\n", array_name);
-      my_ctx->tab_cnt++;
-   }else {
-      dump_hash_fprintf(my_ctx->stream, my_ctx->tab_cnt,
-	    "<array name=\"%s\" />\n", array_name);
-   }
-
-   return 0;
-}
-
-static int start_for_item(void *ctx)
-{
-   struct dump_pkt_ctx *my_ctx;
-
-   my_ctx = ctx;
-
-   if (my_ctx->dump_format != DUMP_FORMAT_XML)
-      return 0;
-
-   dump_hash_fprintf(my_ctx->stream, my_ctx->tab_cnt, "<item>\n");
-   my_ctx->tab_cnt++;
-
-   return 0;
-}
-
-static int end_for_item(void *ctx)
-{
-   struct dump_pkt_ctx *my_ctx;
-
-   my_ctx = ctx;
-
-   if (my_ctx->dump_format != DUMP_FORMAT_XML)
-      return 0;
-
-   my_ctx->tab_cnt--;
-   dump_hash_fprintf(my_ctx->stream, my_ctx->tab_cnt, "</item>\n");
-
-   return 0;
-}
-
-static int end_for(void *ctx)
-{
-   struct dump_pkt_ctx *my_ctx;
-
-   my_ctx = ctx;
-
-   if (my_ctx->dump_format != DUMP_FORMAT_XML)
-      return 0;
-
-   my_ctx->tab_cnt--;
-   dump_hash_fprintf(my_ctx->stream, my_ctx->tab_cnt, "</array>\n");
-
-   return 0;
-}
-
-static int err_node_func(const char *err_str, unsigned err_code, void *ctx)
-{
-   struct dump_pkt_ctx *my_ctx;
-
-   my_ctx = ctx;
-   if (err_code) {};
-
-   switch (my_ctx->dump_format) {
-      case DUMP_FORMAT_XML:
-	 dump_hash_fprintf(my_ctx->stream, my_ctx->tab_cnt, "<error>%s</error> />\n",
-	       err_str);
-	 break;
-      case DUMP_FORMAT_BATCH:
-	 batch_print_val(my_ctx->h, my_ctx->stream,
-	       "ERROR", NULL, my_ctx->err_msg);
-	 break;
-      default:
-	 assert(0);
-	 break;
-   }
 
    return 0;
 }

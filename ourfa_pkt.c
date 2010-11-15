@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009 Alexey Illarionov <littlesavage@rambler.ru>
+ * Copyright (c) 2009-2010 Alexey Illarionov <littlesavage@rambler.ru>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -74,7 +74,7 @@ struct ourfa_pkt_t {
    /* Attributes */
    struct {
       struct attr_list_t all;
-      struct attr_list_t type[9];
+      struct attr_list_t type[10];
    }attrs;
    /* Data */
    size_t data_pool_size; /* in bytes */
@@ -223,7 +223,7 @@ int ourfa_pkt_add_attr(ourfa_pkt_t *pkt,
    return 0;
 }
 
-static inline int ourfa_pkt_add_int(ourfa_pkt_t *pkt, unsigned type, int val)
+int ourfa_pkt_add_int(ourfa_pkt_t *pkt, unsigned type, int val)
 {
    uint32_t v;
    if (pkt == NULL)
@@ -234,7 +234,7 @@ static inline int ourfa_pkt_add_int(ourfa_pkt_t *pkt, unsigned type, int val)
    return ourfa_pkt_add_attr(pkt, type, 4, (const void *)&v);
 }
 
-static inline int ourfa_pkt_add_string(ourfa_pkt_t *pkt, unsigned type, const char *val)
+int ourfa_pkt_add_string(ourfa_pkt_t *pkt, unsigned type, const char *val)
 {
    size_t len;
    if (val != NULL)
@@ -247,7 +247,7 @@ static inline int ourfa_pkt_add_string(ourfa_pkt_t *pkt, unsigned type, const ch
    return ourfa_pkt_add_attr(pkt, type, len, (const void *)val);
 }
 
-static inline int ourfa_pkt_add_long(ourfa_pkt_t *pkt, unsigned type, long long val)
+int ourfa_pkt_add_long(ourfa_pkt_t *pkt, unsigned type, long long val)
 {
    uint8_t v[8];
    unsigned long long v0 = (unsigned long long)val;
@@ -267,7 +267,7 @@ static inline int ourfa_pkt_add_long(ourfa_pkt_t *pkt, unsigned type, long long 
    return ourfa_pkt_add_attr(pkt, type, 8, (const void *)&v);
 }
 
-static inline int ourfa_pkt_add_double(ourfa_pkt_t *pkt, int type, double val)
+int ourfa_pkt_add_double(ourfa_pkt_t *pkt, unsigned type, double val)
 {
    uint8_t v[8];
    union {
@@ -289,40 +289,29 @@ static inline int ourfa_pkt_add_double(ourfa_pkt_t *pkt, int type, double val)
    return ourfa_pkt_add_attr(pkt, type, sizeof(tmp0.u), (const void *)v);
 }
 
-static inline int ourfa_pkt_add_ip(ourfa_pkt_t *pkt, int type, in_addr_t ip)
+int ourfa_pkt_add_ip(ourfa_pkt_t *pkt, unsigned type, in_addr_t ip)
 {
    uint32_t v;
 
-   v = ip & 0xffffffff;
+   /* XXX: OURFA_ATTR_SESSION_IP must be the same byte order as UTM server  */
+   if (type != OURFA_ATTR_SESSION_IP)
+      v = ip & 0xffffffff;
+   else
+      v = ntohl(ip & 0xffffffff);
    return ourfa_pkt_add_attr(pkt, type, 4, (const void *)&v);
 }
 
-
-int ourfa_pkt_add_data_int(ourfa_pkt_t *pkt, int val)
+size_t ourfa_pkt_space_left(const ourfa_pkt_t *pkt)
 {
-   return ourfa_pkt_add_int(pkt, OURFA_ATTR_DATA, val);
-}
+   size_t res;
 
-int ourfa_pkt_add_data_str(ourfa_pkt_t *pkt, const char *val)
-{
-   return ourfa_pkt_add_string(pkt, OURFA_ATTR_DATA, val);
-}
+   res = PKT_MAX_SIZE;
+   res -= pkt->data_p;
+   /* attribute header size */
+   res -= PKT_ATTR_HDR_SIZE;
 
-int ourfa_pkt_add_data_long(ourfa_pkt_t *pkt, long long val)
-{
-   return ourfa_pkt_add_long(pkt, OURFA_ATTR_DATA, val);
+   return res;
 }
-
-int ourfa_pkt_add_data_double(ourfa_pkt_t *pkt, double val)
-{
-   return ourfa_pkt_add_double(pkt, OURFA_ATTR_DATA, val);
-}
-
-int ourfa_pkt_add_data_ip(ourfa_pkt_t *pkt, in_addr_t ip)
-{
-   return ourfa_pkt_add_ip(pkt, OURFA_ATTR_DATA, ip);
-}
-
 
 int ourfa_pkt_add_attrs(ourfa_pkt_t *pkt, const char *fmt, ...)
 {
@@ -374,15 +363,18 @@ int ourfa_pkt_add_attrs_v(ourfa_pkt_t *pkt, const char *fmt, va_list ap)
 	    attr_type = OURFA_ATTR_DATA;
 	    break;
 	 case '6':
-	    attr_type = OURFA_ATTR_MD5_CHALLENGE;
+	    attr_type = OURFA_ATTR_SESSION_ID;
 	    break;
 	 case '7':
-	    attr_type = OURFA_ATTR_CHAP_CHALLENGE;
+	    attr_type = OURFA_ATTR_SESSION_IP;
 	    break;
 	 case '8':
-	    attr_type = OURFA_ATTR_CHAP_RESPONSE;
+	    attr_type = OURFA_ATTR_CHAP_CHALLENGE;
 	    break;
 	 case '9':
+	    attr_type = OURFA_ATTR_CHAP_RESPONSE;
+	    break;
+	 case '0':
 	    attr_type = OURFA_ATTR_SSL_REQUEST;
 	    break;
 	 case 'i':
@@ -458,15 +450,18 @@ int ourfa_pkt_add_attrs_v(ourfa_pkt_t *pkt, const char *fmt, va_list ap)
 	    attr_type = OURFA_ATTR_DATA;
 	    break;
 	 case '6':
-	    attr_type = OURFA_ATTR_MD5_CHALLENGE;
+	    attr_type = OURFA_ATTR_SESSION_ID;
 	    break;
 	 case '7':
-	    attr_type = OURFA_ATTR_CHAP_CHALLENGE;
+	    attr_type = OURFA_ATTR_SESSION_IP;
 	    break;
 	 case '8':
-	    attr_type = OURFA_ATTR_CHAP_RESPONSE;
+	    attr_type = OURFA_ATTR_CHAP_CHALLENGE;
 	    break;
 	 case '9':
+	    attr_type = OURFA_ATTR_CHAP_RESPONSE;
+	    break;
+	 case '0':
 	    attr_type = OURFA_ATTR_SSL_REQUEST;
 	    break;
 	 case 'i':
@@ -735,7 +730,7 @@ int ourfa_pkt_get_ip(const ourfa_attr_hdr_t *attr, in_addr_t *res)
    return ourfa_pkt_get_attr(attr, OURFA_ATTR_DATA_IP, res);
 }
 
-int ourfa_pkt_readd_attrs(ourfa_attr_hdr_t **head, const char *fmt, ...)
+int ourfa_pkt_read_attrs(ourfa_attr_hdr_t **head, const char *fmt, ...)
 {
    va_list ap;
    const char *p;
@@ -871,8 +866,11 @@ const char *ourfa_pkt_attr_type2str(unsigned attr_type)
       case OURFA_ATTR_DATA:
 	 res="ATTR_DATA";
 	 break;
-      case OURFA_ATTR_MD5_CHALLENGE:
-	 res="ATTR_MD5_CHALLENGE";
+      case OURFA_ATTR_SESSION_ID:
+	 res="ATTR_MD5_SESSION_ID";
+	 break;
+      case OURFA_ATTR_SESSION_IP:
+	 res="ATTR_MD5_SESSION_IP";
 	 break;
       case OURFA_ATTR_CHAP_RESPONSE:
 	 res="ATTR_CHAP_RESPONSE";
@@ -1013,11 +1011,20 @@ static int attr_list_insert_tail(struct attr_list_t *l,
    return 0;
 }
 
+const ourfa_attr_hdr_t *ourfa_pkt_get_all_attrs_list(const ourfa_pkt_t *pkt)
+{
+   if (pkt == NULL)
+      return NULL;
+
+   return pkt->attrs.all.data_pool;
+}
+
 const ourfa_attr_hdr_t *ourfa_pkt_get_attrs_list(ourfa_pkt_t *pkt, unsigned attr_type)
 {
    struct attr_list_t *l;
    if (pkt == NULL)
       return 0;
+
 
    l = list_by_attr_type(pkt, attr_type);
    if (l == NULL)
@@ -1029,9 +1036,8 @@ const ourfa_attr_hdr_t *ourfa_pkt_get_attrs_list(ourfa_pkt_t *pkt, unsigned attr
 static struct attr_list_t *list_by_attr_type(ourfa_pkt_t *pkt, unsigned attr_type)
 {
    struct attr_list_t *res;
-   pkt->err_msg[0] = '\0';
 
-   assert(sizeof(pkt->attrs.type)/sizeof(pkt->attrs.type[0]) >= 9);
+   assert(sizeof(pkt->attrs.type)/sizeof(pkt->attrs.type[0]) >= 10);
 
    switch (attr_type) {
       case OURFA_ATTR_LOGIN_TYPE:
@@ -1049,17 +1055,20 @@ static struct attr_list_t *list_by_attr_type(ourfa_pkt_t *pkt, unsigned attr_typ
       case OURFA_ATTR_DATA:
 	 res=&pkt->attrs.type[4];
 	 break;
-      case OURFA_ATTR_MD5_CHALLENGE:
+      case OURFA_ATTR_SESSION_ID:
 	 res=&pkt->attrs.type[5];
 	 break;
-      case OURFA_ATTR_CHAP_RESPONSE:
+      case OURFA_ATTR_SESSION_IP:
 	 res=&pkt->attrs.type[6];
 	 break;
-      case OURFA_ATTR_CHAP_CHALLENGE:
+      case OURFA_ATTR_CHAP_RESPONSE:
 	 res=&pkt->attrs.type[7];
 	 break;
-      case OURFA_ATTR_SSL_REQUEST:
+      case OURFA_ATTR_CHAP_CHALLENGE:
 	 res=&pkt->attrs.type[8];
+	 break;
+      case OURFA_ATTR_SSL_REQUEST:
+	 res=&pkt->attrs.type[9];
 	 break;
       default:
 	 res = NULL;
