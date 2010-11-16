@@ -417,7 +417,7 @@ static int load_config_file(struct params_t *params)
    fprintf(stderr, "Loading config file %s\n", fname);
 
    line_num=0;
-   while ( (res >= 0) && (str_p = fgets(str, sizeof(str), f)) != NULL) {
+   while ((str_p = fgets(str, sizeof(str), f)) != NULL) {
       const char *param ,*val;
       int state;
       int is_comment;
@@ -463,9 +463,20 @@ static int load_config_file(struct params_t *params)
 	    str_p++;
       }
 
+      /*
       if (params->debug)
 	 fprintf(params->debug, "line: %lu param: `%s` val: `%s`\n",
-	       line_num, param, val);
+	       line_num, param, val); */
+
+      res = load_system_param(params, param, val, 1);
+      if (res != 0)
+	 continue;
+
+      /* add to hash  */
+      if (ourfa_hash_set_string(params->h, param, NULL, val) != 0) {
+	 fprintf(stderr,  "Cannot add '%s[%s]=%s' to hash\n",
+	       param,"0",val);
+      }
 
    } /* while (fgets) */
 
@@ -474,7 +485,6 @@ static int load_config_file(struct params_t *params)
       res = -1;
    }
 
-   /* TODO */ 
 
    fclose(f);
 
