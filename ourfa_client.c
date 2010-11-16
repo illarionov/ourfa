@@ -175,8 +175,28 @@ static int load_system_param(struct params_t *params, const char *name, const ch
 {
    char *p;
    int res = 2;
+   struct string_param_t {
+      const char *short_name;
+      char ** dst;
+      const char *names[3];
+   } string_params[] = {
+      {"a",  &params->action,      { "action", NULL,}},
+      {"A",  &params->xml_api,     { "xml-api", NULL,}},
+      {"H",  &params->host,        { "host",  "core_host", NULL,}},
+      {"l",  &params->login,       { "login", "core_login", NULL,}},
+      {"p",  &params->password,    { "password", "core_password", NULL,}},
+      {"c",  &params->config_file, { "config", NULL,}},
+      {"s",  &params->session_id,  { "session_id", NULL,}},
+      {"c",  &params->ssl_cert,    { "cert", NULL,}},
+      {"k",  &params->ssl_key,     { "key", NULL,}},
+      {NULL,  NULL,     { NULL,}},
+   };
+   unsigned i;
+   int found;
+
    assert(params);
    assert(name);
+
 
    if (val) {
       p = strdup(val);
@@ -187,14 +207,28 @@ static int load_system_param(struct params_t *params, const char *name, const ch
    }else
       p = NULL;
 
-   if ( ((name[0]=='a') && (name[1]=='\0')) || strcmp(name, "action") == 0) {
-      params->action = p;
-   } else  if ( ((name[0]=='A') && (name[1]=='\0')) || strcmp(name, "xml-api") == 0) {
-      params->xml_api = p;
-   } else  if ( ((name[0]=='H') && (name[1]=='\0')) || strcmp(name, "host") == 0) {
-      params->host = p;
-   } else  if ( ((name[0]=='l') && (name[1]=='\0')) || strcmp(name, "login") == 0) {
-      params->login = p;
+   found = 0;
+   for (i=0; string_params[i].dst != NULL; i++) {
+      if ((string_params[i].short_name != NULL)
+	    &&  (strcmp(string_params[i].short_name, name) == 0)) {
+	 found = 1;
+      }else {
+	 int j;
+	 assert(string_params[i].names);
+	 for (j=0; string_params[i].names[j] && !found; j++) {
+	    if (strcmp(string_params[i].names[j], name) == 0)
+	       found = 1;
+	 }
+      }
+      if (found) {
+	 free(*string_params[i].dst);
+	 *string_params[i].dst = p;
+	 break;
+      }
+   }
+
+   if (found) {
+      /* found */
    } else  if ( ((name[0]=='o') && (name[1]=='\0')) || strcmp(name, "output-format") == 0) {
       if (p) {
 	 if (strcasecmp(p,"xml")==0)
@@ -210,10 +244,6 @@ static int load_system_param(struct params_t *params, const char *name, const ch
 	 }
 	 free(p);
       }
-   } else  if ( ((name[0]=='p') && (name[1]=='\0')) || strcmp(name, "password") == 0) {
-      params->password = p;
-   } else  if ( ((name[0]=='c') && (name[1]=='\0')) || strcmp(name, "config") == 0) {
-      params->config_file = p;
    } else  if ( ((name[0]=='t') && (name[1]=='\0')) || strcmp(name, "login-type") == 0) {
       if (p) {
 	 if (strcasecmp(p,"admin")==0)
@@ -251,8 +281,6 @@ static int load_system_param(struct params_t *params, const char *name, const ch
 	 res=-1;
       }
       free(p);
-   } else  if ( ((name[0]=='s') && (name[1]=='\0')) || strcmp(name, "session_id") == 0) {
-      params->session_id=p;
    } else  if ( ((name[0]=='i') && (name[1]=='\0')) || strcmp(name, "session_ip") == 0) {
       if (p) {
 	 if (ourfa_hash_parse_ip(p, &params->session_ip_buf) < 0) {
@@ -262,10 +290,6 @@ static int load_system_param(struct params_t *params, const char *name, const ch
 	    params->session_ip = &params->session_ip_buf;
 	 free(p);
       }
-   } else  if ( ((name[0]=='C') && (name[1]=='\0')) || strcmp(name, "cert") == 0) {
-      params->ssl_cert=p;
-   } else  if ( ((name[0]=='k') && (name[1]=='\0')) || strcmp(name, "key") == 0) {
-      params->ssl_key=p;
    } else {
       res=0;
       free(p);
@@ -366,7 +390,7 @@ static int load_config_file(struct params_t *params)
       res = -1;
    }
 
-   /* TODO */
+   /* TODO */ 
 
    fclose(f);
 
