@@ -171,25 +171,26 @@ static void free_params(struct params_t *params)
    ourfa_hash_free(params->h);
 }
 
-static int load_system_param(struct params_t *params, const char *name, const char *val)
+static int load_system_param(struct params_t *params, const char *name, const char *val, unsigned is_config_file)
 {
    char *p;
    int res = 2;
    struct string_param_t {
       const char *short_name;
+      const char *configfile_param;
       char ** dst;
       const char *names[3];
    } string_params[] = {
-      {"a",  &params->action,      { "action", NULL,}},
-      {"A",  &params->xml_api,     { "xml-api", NULL,}},
-      {"H",  &params->host,        { "host",  "core_host", NULL,}},
-      {"l",  &params->login,       { "login", "core_login", NULL,}},
-      {"p",  &params->password,    { "password", "core_password", NULL,}},
-      {"c",  &params->config_file, { "config", NULL,}},
-      {"s",  &params->session_id,  { "session_id", NULL,}},
-      {"c",  &params->ssl_cert,    { "cert", NULL,}},
-      {"k",  &params->ssl_key,     { "key", NULL,}},
-      {NULL,  NULL,     { NULL,}},
+      {"a", NULL,            &params->action,      { "action", NULL,}},
+      {"A", NULL,            &params->xml_api,     { "xml-api", NULL,}},
+      {"H", "core_host" ,    &params->host,        { "host",  "core_host", NULL,}},
+      {"l", "core_login",    &params->login,       { "login", "core_login", NULL,}},
+      {"p", "core_password", &params->password,    { "password", "core_password", NULL,}},
+      {"c", NULL,             &params->config_file, { "config", NULL,}},
+      {"s", "session_key",   &params->session_id,  { "session_id", NULL,}},
+      {"c", NULL,            &params->ssl_cert,    { "cert", NULL,}},
+      {"k", NULL,            &params->ssl_key,     { "key", NULL,}},
+      {NULL,  NULL, NULL,     { NULL,}},
    };
    unsigned i;
    int found;
@@ -512,7 +513,7 @@ int main(int argc, char **argv)
 	 int load_res;
 	 if (((name[0]=='h') && (name[1]=='\0')) || strcmp(name, "help") == 0)
 	    return help();
-	 load_res=load_system_param(&params, name, p);
+	 load_res=load_system_param(&params, name, p, 0);
 	 if (load_res < 0)
 	    goto main_end;
 	 else if (load_res == 0)
