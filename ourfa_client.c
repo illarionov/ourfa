@@ -30,12 +30,15 @@
 #include <arpa/inet.h>
 
 #include <assert.h>
+#include <ctype.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "ourfa.h"
+
+#define DEFAULT_CONFIG_FILE "/netup/utm5/utm5_urfaclient.cfg"
 
 enum output_format_t {
    OUTPUT_FORMAT_XML,
@@ -52,6 +55,7 @@ struct params_t {
    unsigned ssl_type;
    char *ssl_cert;
    char *ssl_key;
+   char *config_file;
    char *action;
    char *session_id;
    struct in_addr *session_ip;
@@ -101,12 +105,14 @@ static int help()
 	 " %-2s %-20s %s\n"
 	 " %-2s %-20s %s\n"
 	 " %-2s %-20s %s\n"
+	 " %-2s %-20s %s\n"
 	 "\n",
 	 "-h", "--help",       "This message",
 	 "-a", "--action",     "Action name",
 	 "-H", "--host",       "URFA server address:port (default: localhost:11758)",
 	 "-l", "--login",      "URFA server login. (default: init)",
 	 "-p", "--password",   "URFA server password. (default: init)",
+	 "-c", "--config",     "Config file (default: " DEFAULT_CONFIG_FILE ")",
 	 "-s", "--session_id", "Restore session with ID",
 	 "-i", "--session_ip", "Restore session with IP",
 	 "-S", "--ssl",        "SSL/TLS method: none (default), tlsv1, sslv3, cert, rsa_cert",
@@ -131,6 +137,7 @@ static int init_params(struct params_t *params)
    params->login = NULL;
    params->password = NULL;
    params->xml_api = NULL;
+   params->config_file = NULL;
    params->login_type = OURFA_LOGIN_SYSTEM;
    params->ssl_type = OURFA_SSL_TYPE_NONE;
    params->ssl_cert = NULL;
@@ -155,6 +162,7 @@ static void free_params(struct params_t *params)
    free(params->host);
    free(params->login);
    free(params->password);
+   free(params->config_file);
    free(params->xml_api);
    free(params->ssl_cert);
    free(params->ssl_key);
@@ -163,7 +171,7 @@ static void free_params(struct params_t *params)
    ourfa_hash_free(params->h);
 }
 
-int load_system_param(struct params_t *params, const char *name, const char *val)
+static int load_system_param(struct params_t *params, const char *name, const char *val)
 {
    char *p;
    int res = 2;
@@ -204,6 +212,8 @@ int load_system_param(struct params_t *params, const char *name, const char *val
       }
    } else  if ( ((name[0]=='p') && (name[1]=='\0')) || strcmp(name, "password") == 0) {
       params->password = p;
+   } else  if ( ((name[0]=='c') && (name[1]=='\0')) || strcmp(name, "config") == 0) {
+      params->config_file = p;
    } else  if ( ((name[0]=='t') && (name[1]=='\0')) || strcmp(name, "login-type") == 0) {
       if (p) {
 	 if (strcasecmp(p,"admin")==0)
@@ -265,6 +275,100 @@ int load_system_param(struct params_t *params, const char *name, const char *val
       fprintf(stderr, "Wrong parameter '%s': cannot parse value\n", name);
       res = -1;
    }
+
+   return res;
+}
+
+
+static int load_config_file(struct params_t *params)
+{
+   int res;
+   const char *fname;
+   char *str_p;
+   unsigned long line_num;
+   char str[500];
+   FILE *f;
+
+   res = 0;
+
+   fname = params->config_file ? params->config_file : DEFAULT_CONFIG_FILE;
+   assert(fname);
+
+
+   f = fopen(fname, "r");
+   if (f == NULL) {
+      fprintf(stderr, "Config file %s not readable: %s\n",
+	    fname, strerror(errno));
+      /* Do not break if config file not defined in command line */
+      if (params->config_file == NULL)
+	 return 0;
+      else
+	 return -1;
+   }
+
+   fprintf(stderr, "Loading config file %s\n", fname);
+
+   line_num=0;
+   while ( (res >= 0) && (str_p = fgets(str, sizeof(str), f)) != NULL) {
+      const char *param ,*val;
+      int state;
+      int is_comment;
+      state = 0;
+      is_comment = 0;
+      param = val = NULL;
+      line_num++;
+
+      while (isspace(*str_p))
+	 str_p++;
+
+      if ((*str_p == '\0') || (*str_p == '#'))
+	 continue;
+
+      param = str_p;
+
+      while (isalpha(*str_p) || (*str_p == '_') || (*str_p == '-'))
+	 str_p++;
+
+      if (*str_p != '\0') {
+	 if (*str_p == '=') {
+	    *str_p++ = '\0';
+	    while (isspace(*str_p))
+	       str_p++;
+	 }else {
+	    *str_p++ = '\0';
+	    while (isspace(*str_p))
+	       str_p++;
+	    if (*str_p == '=') {
+	       *str_p++ = '\0';
+	       while (isspace(*str_p))
+		  str_p++;
+	    }
+	 }
+      }
+
+      val = str_p;
+
+      while (*str_p != '\0') {
+	 if ((*str_p == '\r') || (*str_p == '\n')) {
+	    *str_p = '\0';
+	 }else
+	    str_p++;
+      }
+
+      if (params->debug)
+	 fprintf(params->debug, "line: %lu param: `%s` val: `%s`\n",
+	       line_num, param, val);
+
+   } /* while (fgets) */
+
+   if (str_p == NULL && !feof(f)) {
+      fprintf(stderr, "Config file %s not readable: %s", fname, strerror(errno));
+      res = -1;
+   }
+
+   /* TODO */
+
+   fclose(f);
 
    return res;
 }
@@ -426,6 +530,9 @@ int main(int argc, char **argv)
 
       i = i + incr_i + 1;
    } /* while(i<argc) */
+
+   if (load_config_file(&params) < 0)
+      goto main_end;
 
    if (params.action == NULL) {
       fprintf(stderr, "Action not defined\n");
