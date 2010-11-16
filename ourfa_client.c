@@ -65,6 +65,12 @@ struct params_t {
    ourfa_hash_t *h;
 };
 
+typedef int set_sysparam_f(struct params_t *params,
+      const char *name,
+      const char *val,
+      unsigned is_config_file,
+      void *data);
+
 /* ourfa_client_dump.c */
 int ourfa_dump_xml(
       ourfa_func_call_ctx_t *fctx,
@@ -171,26 +177,174 @@ static void free_params(struct params_t *params)
    ourfa_hash_free(params->h);
 }
 
+static int set_sysparam_string(struct params_t *params __unused,
+      const char *name __unused,
+      const char *val,
+      unsigned is_config_file __unused,
+      void *data)
+{
+   char **dst;
+   assert(data);
+   dst = data;
+
+   if (val == NULL)
+      return -1;
+   if (val[0] == '\0')
+      return -1;
+   assert(dst);
+   free(*dst);
+   *dst = strdup(val);
+   if (*dst == NULL)
+      return -1;
+   return 2;
+}
+
+static int set_sysparam_output_format(struct params_t *params,
+      const char *name __unused,
+      const char *val,
+      unsigned is_config_file __unused,
+      void *data __unused)
+{
+   if (val == NULL)
+      return -1;
+
+   if (strcasecmp(val,"xml")==0)
+      params->output_format = OUTPUT_FORMAT_XML;
+   else if (strcasecmp(val, "batch")==0)
+      params->output_format = OUTPUT_FORMAT_BATCH;
+   else if (strcasecmp(val, "hash")==0)
+      params->output_format = OUTPUT_FORMAT_HASH;
+   else {
+      fprintf(stderr, "Unknown output format '%s'. "
+	    "Allowed values: xml, hash, batch\n", val);
+      return -1;
+   }
+
+   return 2;
+}
+
+static int set_sysparam_login_type(struct params_t *params,
+      const char *name __unused,
+      const char *val,
+      unsigned is_config_file __unused,
+      void *data __unused)
+{
+   if (val == NULL)
+      return -1;
+
+   if (strcasecmp(val,"admin")==0)
+      params->login_type = OURFA_LOGIN_SYSTEM;
+   else if (strcasecmp(val, "user")==0)
+      params->login_type = OURFA_LOGIN_USER;
+   else if (strcasecmp(val, "dealer")==0)
+      params->login_type = OURFA_LOGIN_CARD;
+   else {
+      fprintf(stderr, "Unknown login type '%s'. "
+	    "Allowed values: admin, user, dealer\n", val);
+      return -1;
+   }
+
+   return 2;
+}
+
+static int set_sysparam_debug(struct params_t *params,
+      const char *name __unused,
+      const char *val,
+      unsigned is_config_file __unused,
+      void *data __unused)
+{
+
+   if (val && (strcasecmp(val,"no")==0))
+      params->debug = NULL;
+   else
+      params->debug = stderr;
+
+   return 1;
+}
+
+static int set_sysparam_ssl(struct params_t *params,
+      const char *name __unused,
+      const char *val,
+      unsigned is_config_file __unused,
+      void *data __unused)
+{
+   if (val==NULL) {
+      params->ssl_type=OURFA_SSL_TYPE_SSL3;
+      return 1;
+   }else if ((strcasecmp(val,"tlsv1")==0) || (strcasecmp(val,"tls1")==0) || (strcasecmp(val,"tls")==0)) {
+      params->ssl_type=OURFA_SSL_TYPE_TLS1;
+   }else if ((strcasecmp(val,"sslv3")==0) || (strcasecmp(val,"ssl3")==0)) {
+      params->ssl_type=OURFA_SSL_TYPE_SSL3;
+   }else if ((strcasecmp(val,"cert")==0) || (strcasecmp(val,"crt") == 0)) {
+      params->ssl_type=OURFA_SSL_TYPE_CRT;
+   }else if ((strcasecmp(val,"rsa_cert")==0))  {
+      params->ssl_type=OURFA_SSL_TYPE_RSA_CRT;
+   }else {
+      fprintf(stderr, "Unknown SSL/TLS method '%s'. "
+	    "Allowed methods: tlsv1, sslv3, cert, rsa_cert\n", val);
+      return -1;
+   }
+
+   return 2;
+}
+
+static int set_sysparam_session_ip(struct params_t *params,
+      const char *name __unused,
+      const char *val,
+      unsigned is_config_file __unused,
+      void *data __unused)
+{
+   if (val == NULL)
+      return -1;
+   if (ourfa_hash_parse_ip(val, &params->session_ip_buf) < 0) {
+      fprintf(stderr, "Wrong IP\n");
+      return -1;
+   }else
+      params->session_ip = &params->session_ip_buf;
+
+   return 2;
+}
+
 static int load_system_param(struct params_t *params, const char *name, const char *val, unsigned is_config_file)
 {
-   char *p;
-   int res = 2;
+   int res;
    struct string_param_t {
       const char *short_name;
       const char *configfile_param;
-      char ** dst;
+      set_sysparam_f *f;
+      void *f_data;
       const char *names[3];
    } string_params[] = {
-      {"a", NULL,            &params->action,      { "action", NULL,}},
-      {"A", NULL,            &params->xml_api,     { "xml-api", NULL,}},
-      {"H", "core_host" ,    &params->host,        { "host",  "core_host", NULL,}},
-      {"l", "core_login",    &params->login,       { "login", "core_login", NULL,}},
-      {"p", "core_password", &params->password,    { "password", "core_password", NULL,}},
-      {"c", NULL,             &params->config_file, { "config", NULL,}},
-      {"s", "session_key",   &params->session_id,  { "session_id", NULL,}},
-      {"c", NULL,            &params->ssl_cert,    { "cert", NULL,}},
-      {"k", NULL,            &params->ssl_key,     { "key", NULL,}},
-      {NULL,  NULL, NULL,     { NULL,}},
+      {"a", NULL,            set_sysparam_string,
+	 (void *)&params->action,      { "action", NULL,}},
+      {"A", NULL,            set_sysparam_string,
+	 (void *)&params->xml_api,     { "xml-api", NULL,}},
+      {"H", "core_host" ,    set_sysparam_string,
+	 (void *)&params->host,        { "host",  "core_host", NULL,}},
+      {"l", "core_login",    set_sysparam_string,
+	 (void *)&params->login,       { "login", "core_login", NULL,}},
+      {"p", "core_password", set_sysparam_string,
+	 (void *)&params->password,    { "password", "core_password", NULL,}},
+      {"c", NULL,            set_sysparam_string,
+	 (void *)&params->config_file, { "config", NULL,}},
+      {"s", "session_key",   set_sysparam_string,
+	 (void *)&params->session_id,  { "session_id", NULL,}},
+      {"c", NULL,            set_sysparam_string,
+	 (void *)&params->ssl_cert,    { "cert", NULL,}},
+      {"k", NULL,            set_sysparam_string,
+	 (void *)&params->ssl_key,     { "key", NULL,}},
+      {"o", NULL,            set_sysparam_output_format,
+	 NULL,     { "output-format", NULL,}},
+      {"t", NULL,            set_sysparam_login_type,
+	 NULL,     { "login-type", NULL,}},
+      {"d", NULL,            set_sysparam_debug,
+	 NULL,     { "debug", NULL,}},
+      {"S", NULL,            set_sysparam_ssl,
+	 NULL,     { "ssl", NULL,}},
+      {"i", NULL,            set_sysparam_session_ip,
+	 NULL,     { "session_ip", NULL,}},
+
+      {NULL,  NULL, NULL, NULL,     { NULL,}},
    };
    unsigned i;
    int found;
@@ -198,102 +352,31 @@ static int load_system_param(struct params_t *params, const char *name, const ch
    assert(params);
    assert(name);
 
-
-   if (val) {
-      p = strdup(val);
-      if (p == NULL) {
-	 perror(NULL);
-	 return -1;
-      }
-   }else
-      p = NULL;
+   res = 0; /* not system param  */
 
    found = 0;
-   for (i=0; string_params[i].dst != NULL; i++) {
-      if ((string_params[i].short_name != NULL)
-	    &&  (strcmp(string_params[i].short_name, name) == 0)) {
-	 found = 1;
+   for (i=0; string_params[i].f != NULL; i++) {
+      if (is_config_file) {
+	 if (string_params[i].configfile_param &&
+	       (strcmp(string_params[i].configfile_param, name) == 0))
+	    found = 1;
       }else {
-	 int j;
-	 assert(string_params[i].names);
-	 for (j=0; string_params[i].names[j] && !found; j++) {
-	    if (strcmp(string_params[i].names[j], name) == 0)
-	       found = 1;
+	 if ((string_params[i].short_name != NULL)
+	       &&  (strcmp(string_params[i].short_name, name) == 0)) {
+	    found = 1;
+	 }else {
+	    int j;
+	    assert(string_params[i].names);
+	    for (j=0; string_params[i].names[j] && !found; j++) {
+	       if (strcmp(string_params[i].names[j], name) == 0)
+		  found = 1;
+	    }
 	 }
       }
       if (found) {
-	 free(*string_params[i].dst);
-	 *string_params[i].dst = p;
+	 res = string_params[i].f(params, name, val, is_config_file, string_params[i].f_data);
 	 break;
       }
-   }
-
-   if (found) {
-      /* found */
-   } else  if ( ((name[0]=='o') && (name[1]=='\0')) || strcmp(name, "output-format") == 0) {
-      if (p) {
-	 if (strcasecmp(p,"xml")==0)
-	    params->output_format = OUTPUT_FORMAT_XML;
-	 else if (strcasecmp(p, "batch")==0)
-	    params->output_format = OUTPUT_FORMAT_BATCH;
-	 else if (strcasecmp(p, "hash")==0)
-	    params->output_format = OUTPUT_FORMAT_HASH;
-	 else {
-	    fprintf(stderr, "Unknown output format '%s'. "
-		  "Allowed values: xml, hash\n", p);
-	    res = -1;
-	 }
-	 free(p);
-      }
-   } else  if ( ((name[0]=='t') && (name[1]=='\0')) || strcmp(name, "login-type") == 0) {
-      if (p) {
-	 if (strcasecmp(p,"admin")==0)
-	    params->login_type = OURFA_LOGIN_SYSTEM;
-	 else if (strcasecmp(p, "user")==0)
-	    params->login_type = OURFA_LOGIN_USER;
-	 else if (strcasecmp(p, "dealer")==0)
-	    params->login_type = OURFA_LOGIN_CARD;
-	 else {
-	    fprintf(stderr, "Unknown login type '%s'. "
-		  "Allowed values: admin, user, dealer\n", p);
-	    res=-1;
-	 }
-	 free(p);
-      }
-   } else  if ( ((name[0]=='d') && (name[1]=='\0')) || strcmp(name, "debug") == 0) {
-      params->debug = stderr;
-      res=1;
-      free(p);
-   } else  if ( ((name[0]=='S') && (name[1]=='\0')) || strcmp(name, "ssl") == 0) {
-      if (p==NULL) {
-	 params->ssl_type=OURFA_SSL_TYPE_SSL3;
-	 res=1;
-      }else if ((strcasecmp(p,"tlsv1")==0) || (strcasecmp(p,"tls1")==0) || (strcasecmp(p,"tls")==0)) {
-	 params->ssl_type=OURFA_SSL_TYPE_TLS1;
-      }else if ((strcasecmp(p,"sslv3")==0) || (strcasecmp(p,"ssl3")==0)) {
-	 params->ssl_type=OURFA_SSL_TYPE_SSL3;
-      }else if ((strcasecmp(p,"cert")==0) || (strcasecmp(p,"crt") == 0)) {
-	 params->ssl_type=OURFA_SSL_TYPE_CRT;
-      }else if ((strcasecmp(p,"rsa_cert")==0))  {
-	 params->ssl_type=OURFA_SSL_TYPE_RSA_CRT;
-      }else {
-	 fprintf(stderr, "Unknown SSL/TLS method '%s'. "
-	       "Allowed methods: tlsv1, sslv3, cert, rsa_cert\n", p);
-	 res=-1;
-      }
-      free(p);
-   } else  if ( ((name[0]=='i') && (name[1]=='\0')) || strcmp(name, "session_ip") == 0) {
-      if (p) {
-	 if (ourfa_hash_parse_ip(p, &params->session_ip_buf) < 0) {
-	    fprintf(stderr, "Wrong IP\n");
-	    res=-1;
-	 }else
-	    params->session_ip = &params->session_ip_buf;
-	 free(p);
-      }
-   } else {
-      res=0;
-      free(p);
    }
 
    if ((res >= 2) && (val == NULL)) {

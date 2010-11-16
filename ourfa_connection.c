@@ -27,6 +27,8 @@
 #include <sys/errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include <assert.h>
 #include <netdb.h>
@@ -516,7 +518,16 @@ int ourfa_connection_open(ourfa_connection_t *connection)
       }
 
       if (connect(sockfd, res->ai_addr, res->ai_addrlen) < 0) {
-	 connection->printf_err(OURFA_ERROR_SYSTEM, connection->err_ctx, NULL);
+	 int last_errno;
+	 char ip[INET6_ADDRSTRLEN+1];
+	 last_errno = errno;
+
+	 if (inet_ntop(res->ai_family, &res->ai_addr, ip, sizeof(ip)) == NULL) {
+	    ip[0]='\0';
+	 }
+
+	 connection->printf_err(OURFA_ERROR_SYSTEM, connection->err_ctx,
+	       "Error connecting to `%s`: %s", ip, strerror(last_errno));
 	 close(sockfd);
 	 sockfd=-1;
 	 continue;
