@@ -110,7 +110,7 @@ static int help()
 	 "-s", "--session_id", "Restore session with ID",
 	 "-i", "--session_ip", "Restore session with IP",
 	 "-S", "--ssl",        "SSL/TLS method: none (default), tlsv1, sslv3, cert, rsa_cert",
-	 "-c", "--cert",       "Certificate file for rsa_cert SSL (PEM format)",
+	 "-C", "--cert",       "Certificate file for rsa_cert SSL (PEM format)",
 	 "-k", "--key",        "Private key file for rsa_cert SSL (PEM format)",
 	 "-x", "--xml-dir",    "URFA server xml dir. (default: xml/)",
 	 "-t", "--login-type", "Login type: admin, user, or dealer (deault: admin)",
@@ -252,7 +252,7 @@ int load_system_param(struct params_t *params, const char *name, const char *val
 	    params->session_ip = &params->session_ip_buf;
 	 free(p);
       }
-   } else  if ( ((name[0]=='c') && (name[1]=='\0')) || strcmp(name, "cert") == 0) {
+   } else  if ( ((name[0]=='C') && (name[1]=='\0')) || strcmp(name, "cert") == 0) {
       params->ssl_cert=p;
    } else  if ( ((name[0]=='k') && (name[1]=='\0')) || strcmp(name, "key") == 0) {
       params->ssl_key=p;
