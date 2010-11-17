@@ -383,7 +383,12 @@ enum xmlapi_func_node_type_t {
    OURFA_XMLAPI_NODE_FOR,
    OURFA_XMLAPI_NODE_BREAK,
    OURFA_XMLAPI_NODE_ERROR,
-   OURFA_XMLAPI_NODE_UNKNOWN,
+   OURFA_XMLAPI_NODE_CALL,
+   OURFA_XMLAPI_NODE_PARAMETER,
+   OURFA_XMLAPI_NODE_MESSAGE,
+   OURFA_XMLAPI_NODE_SHIFT,
+   OURFA_XMLAPI_NODE_REMOVE,
+   OURFA_XMLAPI_NODE_UNKNOWN
 };
 
 struct xmlapi_func_node_t {
@@ -425,6 +430,25 @@ struct xmlapi_func_node_t {
 	 char *comment;
 	 char *variable;
       } n_error;
+      struct {
+	 char *function;
+	 unsigned output; /* 0 - do not print result */
+      } n_call;
+      struct {
+	 char *name;
+	 char *value;
+	 char *comment;
+      } n_parameter;
+      struct {
+	 char *text;
+      } n_message;
+      struct {
+	 char *name;
+      } n_shift;
+      struct {
+	 char *name;
+	 char *array_index;
+      } n_remove;
    } n;
 };
 
@@ -433,6 +457,8 @@ struct ourfa_xmlapi_func_t {
 
    struct xmlapi_func_node_t *in;
    struct xmlapi_func_node_t *out;
+
+   struct xmlapi_func_node_t *script;
 
    char name[];
 };

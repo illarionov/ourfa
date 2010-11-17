@@ -65,7 +65,12 @@ static const struct {
    {OURFA_XMLAPI_NODE_SET,      "set"},
    {OURFA_XMLAPI_NODE_ERROR,    "error"},
    {OURFA_XMLAPI_NODE_ROOT,     "ROOT"},
-   {OURFA_XMLAPI_NODE_BREAK,    "break"}
+   {OURFA_XMLAPI_NODE_BREAK,    "break"},
+   {OURFA_XMLAPI_NODE_CALL,     "call"},
+   {OURFA_XMLAPI_NODE_PARAMETER, "parameter"},
+   {OURFA_XMLAPI_NODE_MESSAGE,   "message"},
+   {OURFA_XMLAPI_NODE_SHIFT,     "shift"},
+   {OURFA_XMLAPI_NODE_REMOVE,    "remove"}
 };
 
 static void xmlapi_func_free(void * payload, xmlChar *name);
@@ -205,12 +210,12 @@ int ourfa_xmlapi_load_file(ourfa_xmlapi_t *xmlapi,  const char *file)
 
       len = strlen((const char *)prop_func_name);
       f = (ourfa_xmlapi_func_t *)malloc(sizeof(*f)+len+2);
-      f->in = f->out = NULL;
       if (f == NULL) {
 	 res = xmlapi->printf_err(OURFA_ERROR_SYSTEM, xmlapi->err_ctx, NULL);
 	 free(prop_func_name);
 	 break; /* foreach function  */
       }
+      f->in = f->out = f->script = NULL;
       memcpy(f->name, prop_func_name, len+1);
       free(prop_func_name);
 
