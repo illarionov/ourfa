@@ -312,6 +312,7 @@ static void xmlapi_func_free(void * payload, xmlChar *name)
 
    free_func_def(val->in);
    free_func_def(val->out);
+   free_func_def(val->script);
 
    free(val);
 }
@@ -613,6 +614,81 @@ static struct xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_
 	       }
 	    }
 	    break;
+	 case OURFA_XMLAPI_NODE_CALL:
+	    {
+	       char *output = NULL;
+	       struct t_nodes my_nodes[]= {
+		  {&node->n.n_call.function,        "function", 1},
+		  {&output, "output", 0},
+	       };
+
+	       /* XXX: Script only node */
+
+	       ret_code=get_xml_attributes(xml_node, my_nodes, sizeof(my_nodes)/sizeof(my_nodes[0]), xmlapi);
+
+	       if (ret_code == OURFA_OK && output) {
+		  char *endptr;
+		  node->n.n_call.output = (int)strtol((const char *)output, &endptr, 10);
+		  if ((output[0] == '\0') || (*endptr != '\0')) {
+		     ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+			   "Wrong output attribute value  `%s` of node `%s`. Function: '%s'",
+			   output, xml_node->name, f->name);
+		     free(output);
+		     free_func_def(node);
+		     break;
+		  }
+	       }
+	       free(output);
+	       node->children = node; /* uninitialized  */
+	    }
+	    break;
+	 case OURFA_XMLAPI_NODE_PARAMETER:
+	    {
+	       struct t_nodes my_nodes[]= {
+		  {&node->n.n_parameter.name,     "name", 1},
+		  {&node->n.n_parameter.value,    "value", 0},
+		  {&node->n.n_parameter.comment,  "comment", 0},
+	       };
+
+	       /* XXX: Script only node */
+
+	       ret_code=get_xml_attributes(xml_node, my_nodes, sizeof(my_nodes)/sizeof(my_nodes[0]), xmlapi);
+	    }
+	    break;
+	 case OURFA_XMLAPI_NODE_MESSAGE:
+	    {
+	       struct t_nodes my_nodes[]= {
+		  {&node->n.n_message.text,     "text", 1},
+	       };
+
+	       /* XXX: Script only node */
+
+	       ret_code=get_xml_attributes(xml_node, my_nodes, sizeof(my_nodes)/sizeof(my_nodes[0]), xmlapi);
+	    }
+	    break;
+	 case OURFA_XMLAPI_NODE_SHIFT:
+	    {
+	       struct t_nodes my_nodes[]= {
+		  {&node->n.n_shift.name,     "name", 1},
+	       };
+
+	       /* XXX: Script only node */
+
+	       ret_code=get_xml_attributes(xml_node, my_nodes, sizeof(my_nodes)/sizeof(my_nodes[0]), xmlapi);
+	    }
+	    break;
+	 case OURFA_XMLAPI_NODE_REMOVE:
+	    {
+	       struct t_nodes my_nodes[]= {
+		  {&node->n.n_remove.name,     "name", 1},
+		  {&node->n.n_remove.array_index,     "array_index", 0},
+	       };
+
+	       /* XXX: Script only node */
+
+	       ret_code=get_xml_attributes(xml_node, my_nodes, sizeof(my_nodes)/sizeof(my_nodes[0]), xmlapi);
+	    }
+	    break;
 	 default:
 	    ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
 		  "Unknown node type `%s`. Function: '%s'", xml_node->name,
@@ -864,7 +940,29 @@ static void free_func_def(struct xmlapi_func_node_t *def)
 	    free(def->n.n_error.comment);
 	    free(def->n.n_error.variable);
 	    break;
+	 case OURFA_XMLAPI_NODE_CALL:
+	    free(def->n.n_call.function);
+	    break;
+	 case OURFA_XMLAPI_NODE_PARAMETER:
+	    free(def->n.n_parameter.name);
+	    free(def->n.n_parameter.value);
+	    free(def->n.n_parameter.comment);
+	    break;
+	 case OURFA_XMLAPI_NODE_MESSAGE:
+	    free(def->n.n_message.text);
+	    break;
+	 case OURFA_XMLAPI_NODE_SHIFT:
+	    free(def->n.n_shift.name);
+	    break;
+	 case OURFA_XMLAPI_NODE_REMOVE:
+	    free(def->n.n_remove.name);
+	    free(def->n.n_remove.array_index);
+	    break;
+	 case OURFA_XMLAPI_NODE_BREAK:
+	 case OURFA_XMLAPI_NODE_ROOT:
+	    break;
 	 default:
+	    assert(0);
 	    break;
       }
       free(def);
