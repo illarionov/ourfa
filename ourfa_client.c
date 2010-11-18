@@ -709,7 +709,7 @@ int main(int argc, char **argv)
       fprintf(stderr, "malloc error");
       goto main_end;
    }
-   if (ourfa_xmlapi_load_file(xmlapi, params.xml_api) != OURFA_OK)
+   if (ourfa_xmlapi_load_apixml(xmlapi, params.xml_api) != OURFA_OK)
       goto main_end;
 
    if (params.debug)

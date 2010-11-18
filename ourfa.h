@@ -349,7 +349,9 @@ int ourfa_err_f_null(int err_code, void *user_ctx, const char *fmt, ...);
 /*  XML API  */
 
 ourfa_xmlapi_t *ourfa_xmlapi_new();
-int             ourfa_xmlapi_load_file(ourfa_xmlapi_t *xmlapi,  const char *file);
+int             ourfa_xmlapi_load_apixml(ourfa_xmlapi_t *xmlapi,  const char *file);
+int             ourfa_xmlapi_load_script(ourfa_xmlapi_t *xmlapi,  const char *file, const char *function_name);
+
 void            ourfa_xmlapi_free(ourfa_xmlapi_t *api);
 
 int             ourfa_xmlapi_set_err_f(ourfa_xmlapi_t *xmlapi, ourfa_err_f_t *f, void *user_ctx);
@@ -359,6 +361,7 @@ void           *ourfa_xmlapi_err_ctx(ourfa_xmlapi_t *xmlapi);
 const char     *ourfa_xmlapi_node_name_by_type(int node_type);
 int             ourfa_xmlapi_node_type_by_name(const xmlChar *node_name);
 ourfa_xmlapi_func_t  *ourfa_xmlapi_func(ourfa_xmlapi_t *api, const char *name);
+void            ourfa_xmlapi_dump_func_definitions(ourfa_xmlapi_func_t *f, FILE *stream);
 
 /* Private  */
 /*  XML API */
