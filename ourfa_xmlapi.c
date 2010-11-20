@@ -220,6 +220,7 @@ int ourfa_xmlapi_load_apixml(ourfa_xmlapi_t *xmlapi,  const char *file)
 	 break; /* foreach function  */
       }
       f->in = f->out = f->script = NULL;
+      f->xmlapi = xmlapi;
       memcpy(f->name, prop_func_name, len+1);
       free(prop_func_name);
 

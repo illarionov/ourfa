@@ -39,6 +39,9 @@
 
 #include "ourfa.h"
 
+static int init_func_call_ctx(ourfa_func_call_ctx_t *fctx,
+      ourfa_xmlapi_func_t *f, ourfa_hash_t *h);
+
 ourfa_func_call_ctx_t *ourfa_func_call_ctx_new(
       ourfa_xmlapi_func_t *f,
       ourfa_hash_t *h)
@@ -52,6 +55,14 @@ ourfa_func_call_ctx_t *ourfa_func_call_ctx_new(
    if (fctx == NULL)
       return NULL;
 
+   init_func_call_ctx(fctx, f, h);
+
+   return fctx;
+}
+
+static int init_func_call_ctx(ourfa_func_call_ctx_t *fctx,
+      ourfa_xmlapi_func_t *f, ourfa_hash_t *h)
+{
    fctx->f = f;
    fctx->h = h;
    fctx->cur = NULL;
@@ -59,8 +70,9 @@ ourfa_func_call_ctx_t *ourfa_func_call_ctx_new(
    fctx->printf_err = ourfa_err_f_stderr;
    fctx->err_ctx = NULL;
 
-   return fctx;
+   return OURFA_OK;
 }
+
 
 void ourfa_func_call_ctx_free(ourfa_func_call_ctx_t *fctx)
 {
@@ -123,6 +135,8 @@ int ourfa_func_call_start(ourfa_func_call_ctx_t *fctx, unsigned is_req)
    if (fctx==NULL)
       return -1;
 
+   assert(fctx->f->script == NULL);
+
    if (is_req) {
       assert(fctx->f->in != NULL);
       fctx->cur = fctx->f->in;
@@ -130,7 +144,6 @@ int ourfa_func_call_start(ourfa_func_call_ctx_t *fctx, unsigned is_req)
       assert(fctx->f->out != NULL);
       fctx->cur = fctx->f->out;
    }
-
    fctx->state = OURFA_FUNC_CALL_STATE_START;
 
    return 1;
@@ -876,4 +889,150 @@ int ourfa_func_call_resp(ourfa_func_call_ctx_t *fctx,
    /* XXX */
    return res;
 }
+
+ourfa_script_call_ctx_t *ourfa_script_call_ctx_new(
+      ourfa_xmlapi_func_t *f,
+      ourfa_hash_t *h)
+{
+   ourfa_script_call_ctx_t *sctx;
+
+   assert(f);
+   assert(h);
+   assert(f->script);
+
+   sctx = malloc(sizeof(*sctx));
+   if (sctx == NULL)
+      return NULL;
+
+   sctx->state = OURFA_SCRIPT_CALL_END;
+
+   init_func_call_ctx(&sctx->script, f, h);
+   init_func_call_ctx(&sctx->func, NULL, NULL);
+
+   return sctx;
+}
+
+void ourfa_script_call_ctx_free(ourfa_script_call_ctx_t *sctx)
+{
+   free(sctx);
+}
+
+int ourfa_script_call_start(ourfa_script_call_ctx_t *sctx)
+{
+   if (sctx == NULL)
+      return -1;
+
+   assert(sctx->script.f->script);
+
+   sctx->script.cur = sctx->script.f->script;
+   sctx->script.state = OURFA_FUNC_CALL_STATE_START;
+   sctx->state = OURFA_SCRIPT_CALL_START;
+
+   return 1;
+}
+
+int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
+       ourfa_connection_t *conn)
+{
+   int state;
+
+   assert(sctx->script.cur);
+
+   switch (sctx->state) {
+      case OURFA_SCRIPT_CALL_START:
+      case OURFA_SCRIPT_CALL_NODE:
+	 state = ourfa_func_call_step(&sctx->script);
+	 switch (state) {
+	    case OURFA_FUNC_CALL_STATE_ERROR:
+	       sctx->state = OURFA_SCRIPT_CALL_ERROR;
+	       return state;
+	       break;
+	    case OURFA_FUNC_CALL_STATE_END:
+	       sctx->state = OURFA_SCRIPT_CALL_END;
+	       return state;
+	       break;
+	    case OURFA_FUNC_CALL_STATE_ENDCALL:
+	       {
+		  int last_err;
+		  ourfa_xmlapi_func_t *f;
+
+		  f = ourfa_xmlapi_func(sctx->script.f->xmlapi, sctx->script.cur->n.n_call.function);
+		  if (f == NULL) {
+		     sctx->script.printf_err(OURFA_ERROR_OTHER,
+			   sctx->script.err_ctx,
+			   "Function '%s' not found", sctx->script.cur->n.n_call.function);
+		     sctx->state = OURFA_SCRIPT_CALL_ERROR;
+		     return state;
+		  }
+		  if (f->script != NULL) {
+		     sctx->script.printf_err(OURFA_ERROR_OTHER,
+			   sctx->script.err_ctx,
+			   "Script `%s` can not be called from script `%s`: not implemented",
+			   f->name,
+			   sctx->script.f->name
+			   );
+		     sctx->state = OURFA_SCRIPT_CALL_ERROR;
+		     return state;
+		  }
+
+		  /* Begins function call  */
+		  init_func_call_ctx(&sctx->func, f, sctx->script.h);
+		  last_err = ourfa_start_call(&sctx->func, conn);
+		  if (last_err != OURFA_OK) {
+		     sctx->state = OURFA_SCRIPT_CALL_ERROR;
+		     return state;
+		  }
+		  ourfa_func_call_start(&sctx->func, 1);
+		  sctx->state = OURFA_SCRIPT_CALL_REQ;
+		  state = OURFA_FUNC_CALL_STATE_START;
+	       }
+	       break;
+	    default:
+	       break;
+	 }
+	 break;
+      case OURFA_SCRIPT_CALL_REQ:
+	 state = ourfa_func_call_req_step(&sctx->func, conn);
+	 switch (state) {
+	    case OURFA_FUNC_CALL_STATE_END:
+	       ourfa_func_call_start(&sctx->func, 0);
+	       sctx->state = OURFA_SCRIPT_CALL_RESP;
+	       state = OURFA_FUNC_CALL_STATE_START;
+	       break;
+	    case OURFA_FUNC_CALL_STATE_ERROR:
+	       sctx->state = OURFA_SCRIPT_CALL_ERROR;
+	       return state;
+	       break;
+	    default:
+	       break;
+	 }
+	 break;
+      case OURFA_SCRIPT_CALL_RESP:
+	 state = ourfa_func_call_resp_step(&sctx->func, conn);
+	 switch (state) {
+	    case OURFA_FUNC_CALL_STATE_END:
+	       sctx->state = OURFA_SCRIPT_CALL_NODE;
+	       state = OURFA_FUNC_CALL_STATE_NODE;
+	       break;
+	    case OURFA_FUNC_CALL_STATE_ERROR:
+	       sctx->state = OURFA_SCRIPT_CALL_ERROR;
+	       return state;
+	       break;
+	    default:
+	       break;
+	 }
+	 break;
+      case OURFA_SCRIPT_CALL_END:
+      case OURFA_SCRIPT_CALL_ERROR:
+	 break;
+      default:
+	 assert(0);
+	 break;
+   }
+
+   return state;
+}
+
+
+
 

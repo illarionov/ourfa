@@ -114,6 +114,7 @@ typedef struct ourfa_connection_t ourfa_connection_t;
 typedef struct ourfa_xmlapi_t ourfa_xmlapi_t;
 typedef struct ourfa_xmlapi_func_t ourfa_xmlapi_func_t;
 typedef struct ourfa_func_call_ctx_t ourfa_func_call_ctx_t;
+typedef struct ourfa_script_call_ctx_t ourfa_script_call_ctx_t;
 
 typedef struct ourfa_attr_hdr_t {
    unsigned		     attr_type;
@@ -456,6 +457,7 @@ struct xmlapi_func_node_t {
 };
 
 struct ourfa_xmlapi_func_t {
+   ourfa_xmlapi_t *xmlapi;
    int id;
 
    struct xmlapi_func_node_t *in;
@@ -492,6 +494,20 @@ struct ourfa_func_call_ctx_t {
    void *err_ctx;
 };
 
+struct ourfa_script_call_ctx_t {
+   enum {
+      OURFA_SCRIPT_CALL_START,
+      OURFA_SCRIPT_CALL_NODE,
+      OURFA_SCRIPT_CALL_REQ,
+      OURFA_SCRIPT_CALL_RESP,
+      OURFA_SCRIPT_CALL_END,
+      OURFA_SCRIPT_CALL_ERROR,
+   } state;
+
+   struct ourfa_func_call_ctx_t script;
+   struct ourfa_func_call_ctx_t func;
+};
+
 ourfa_func_call_ctx_t *ourfa_func_call_ctx_new(struct ourfa_xmlapi_func_t *f,
       ourfa_hash_t *h);
 void ourfa_func_call_ctx_free(ourfa_func_call_ctx_t *fctx);
@@ -508,6 +524,15 @@ int ourfa_func_call_req(ourfa_func_call_ctx_t *fctx, ourfa_connection_t *conn);
 int ourfa_parse_builtin_func(ourfa_hash_t *globals, const char *func, int *res);
 int ourfa_func_call_get_long_prop_val(ourfa_func_call_ctx_t *fctx,
       const char *prop, long long *res);
+
+ourfa_script_call_ctx_t *ourfa_script_call_ctx_new(
+      ourfa_xmlapi_func_t *f,
+      ourfa_hash_t *h);
+void ourfa_script_call_ctx_free(ourfa_script_call_ctx_t *sctx);
+int ourfa_script_call_start(ourfa_script_call_ctx_t *sctx);
+
+int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
+       ourfa_connection_t *conn);
 
 int ourfa_hash_parse_ip(const char *str, struct in_addr *res);
 
