@@ -39,6 +39,7 @@
 #include "ourfa.h"
 
 #define DEFAULT_CONFIG_FILE "/netup/utm5/utm5_urfaclient.cfg"
+#define DEFAULT_XML_DIR "/netup/utm5/xml"
 
 enum output_format_t {
    OUTPUT_FORMAT_XML,
@@ -51,6 +52,7 @@ struct params_t {
    char *login;
    char *password;
    char *xml_api;
+   char *xml_dir;
    unsigned login_type;
    unsigned ssl_type;
    char *ssl_cert;
@@ -124,7 +126,7 @@ static int help()
 	 "-S", "--ssl",        "SSL/TLS method: none (default), tlsv1, sslv3, cert, rsa_cert",
 	 "-C", "--cert",       "Certificate file for rsa_cert SSL (PEM format)",
 	 "-k", "--key",        "Private key file for rsa_cert SSL (PEM format)",
-	 "-x", "--xml-dir",    "URFA server xml dir. (default: xml/)",
+	 "-x", "--xml-dir",    "URFA server xml dir. (default: " DEFAULT_XML_DIR ")",
 	 "-t", "--login-type", "Login type: admin, user, or dealer (deault: admin)",
 	 "-A", "--xml-api",    "URFA server API file (default: api.xml)",
 	 "-o", "--output-format", "Output format Supported: xml (default), batch, hash ",
@@ -143,6 +145,7 @@ static int init_params(struct params_t *params)
    params->login = NULL;
    params->password = NULL;
    params->xml_api = NULL;
+   params->xml_dir = NULL;
    params->config_file = NULL;
    params->login_type = OURFA_LOGIN_SYSTEM;
    params->ssl_type = OURFA_SSL_TYPE_NONE;
@@ -170,6 +173,7 @@ static void free_params(struct params_t *params)
    free(params->password);
    free(params->config_file);
    free(params->xml_api);
+   free(params->xml_dir);
    free(params->ssl_cert);
    free(params->ssl_key);
    free(params->action);
@@ -317,7 +321,9 @@ static int load_system_param(struct params_t *params, const char *name, const ch
    } string_params[] = {
       {"a", NULL,            set_sysparam_string,
 	 (void *)&params->action,      { "action", NULL,}},
-      {"A", NULL,            set_sysparam_string,
+      {"A", "core_xml_dir",            set_sysparam_string,
+	 (void *)&params->xml_dir,     { "xml-dir", NULL,}},
+      {"x", NULL,            set_sysparam_string,
 	 (void *)&params->xml_api,     { "xml-api", NULL,}},
       {"H", "core_host" ,    set_sysparam_string,
 	 (void *)&params->host,        { "host",  "core_host", NULL,}},
@@ -496,6 +502,9 @@ int main(int argc, char **argv)
    int i, res;
    ourfa_connection_t *connection;
    ourfa_xmlapi_t *xmlapi;
+   ourfa_xmlapi_func_t *f;
+   ourfa_func_call_ctx_t *fctx;
+   int last_err;
 
    struct params_t params;
 
@@ -706,14 +715,68 @@ int main(int argc, char **argv)
 
    xmlapi = ourfa_xmlapi_new();
    if (xmlapi == NULL) {
-      fprintf(stderr, "malloc error");
+      fprintf(stderr, "malloc error\n");
       goto main_end;
    }
-   if (ourfa_xmlapi_load_apixml(xmlapi, params.xml_api) != OURFA_OK)
-      goto main_end;
 
-   if (params.debug)
-      ourfa_hash_dump(params.h, params.debug, "Function: %s. INPUT HASH:\n", params.action);
+   /* xmlapi file  */
+   {
+      char *xmlapi_fname = NULL;
+
+      asprintf(&xmlapi_fname,"%s/%s",
+	    params.xml_dir ? params.xml_dir : DEFAULT_XML_DIR,
+	    params.xml_api ? params.xml_api : "api.xml");
+
+      if (xmlapi_fname == NULL) {
+	 fprintf(stderr, "asprintf error\n");
+	 goto main_end;
+      }
+
+      if (ourfa_xmlapi_load_apixml(xmlapi, params.xml_api) != OURFA_OK) {
+	 free(xmlapi_fname);
+	 goto main_end;
+      }
+      free(xmlapi_fname);
+   }
+
+   /* action  */
+   {
+      char *script_file = NULL;
+      int action_len = strlen(params.action);
+      if ((action_len > 5)
+	    &&  ((params.action[0] == 'r') || (params.action[0] == 'R'))
+	    &&  ((params.action[1] == 'p') || (params.action[1] == 'P'))
+	    &&  ((params.action[2] == 'c') || (params.action[2] == 'C'))
+	    &&  ((params.action[3] == 'f') || (params.action[3] == 'F'))
+	    &&  ((params.action[4] == '_'))) {
+	 /* rpcf_ action  */
+      }else {
+	 asprintf(&script_file, "%s/%s.xml",
+	       params.xml_dir ? params.xml_dir : DEFAULT_XML_DIR,
+	       params.action);
+	 if (script_file == NULL) {
+	    fprintf(stderr, "asprintf error\n");
+	    goto main_end;
+	 }
+
+	 if (ourfa_xmlapi_load_script(xmlapi, script_file, params.action) != OURFA_OK) {
+	    free(script_file);
+	    goto main_end;
+	 }
+	 free(script_file);
+      }
+   }
+
+   f = ourfa_xmlapi_func(xmlapi, params.action);
+   if (f == NULL) {
+      fprintf(stderr, "Function `%s` not found in API\n", params.action);
+      goto main_end;
+   }
+
+   if (params.debug) {
+      ourfa_xmlapi_dump_func_definitions(f, stderr);
+      ourfa_hash_dump(params.h, params.debug, "INPUT HASH:\n", params.action);
+   }
 
    if (ourfa_connection_open(connection) != 0)
       goto main_end;
@@ -721,18 +784,8 @@ int main(int argc, char **argv)
    if (params.output_format == OUTPUT_FORMAT_HASH) {
       if (ourfa_call(connection, xmlapi, params.action, params.h) != OURFA_OK)
 	 goto main_end;
-      ourfa_hash_dump(params.h, stdout, "Function: %s. OUTPUT HASH:\n", params.action);
+      ourfa_hash_dump(params.h, stdout, "Action: %s. OUTPUT HASH:\n", params.action);
    }else {
-      ourfa_func_call_ctx_t *fctx;
-      int last_err;
-      ourfa_xmlapi_func_t *f;
-
-      f = ourfa_xmlapi_func(xmlapi, params.action);
-      if (f == NULL) {
-	 fprintf(stderr, "Function `%s` not found in API\n", params.action);
-	 goto main_end;
-      }
-
       fctx = ourfa_func_call_ctx_new(f, params.h);
       if (fctx == NULL) {
 	 fprintf(stderr, "Can not create fctx\n");

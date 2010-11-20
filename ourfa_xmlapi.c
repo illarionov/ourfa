@@ -355,7 +355,7 @@ int ourfa_xmlapi_load_script(ourfa_xmlapi_t *xmlapi,  const char *file,
 
    assert(xmlapi->func_by_name);
 
-   xmldoc = xmlReadFile(function_name, NULL, XML_PARSE_COMPACT);
+   xmldoc = xmlReadFile(file, NULL, XML_PARSE_COMPACT);
    if (xmldoc == NULL) {
       res = OURFA_ERROR_OTHER;
       goto load_script_end;
@@ -370,7 +370,7 @@ int ourfa_xmlapi_load_script(ourfa_xmlapi_t *xmlapi,  const char *file,
       goto load_script_end;
    }
 
-   f->script = load_func_def(urfa_root->children, xmlapi, f);
+   f->script = load_func_def(urfa_root, xmlapi, f);
    if (f->script == NULL) {
       res = OURFA_ERROR_OTHER;
       goto load_script_end;
