@@ -840,8 +840,22 @@ load_f_def_next_node:
 	    assert(cur_node);
 	    if (cur_node->children == cur_node)
 	       cur_node->children = NULL;
-	    else
+	    else {
 	       cur_node = cur_node->parent;
+
+	       /* check for child nodes of CALL  */
+	       if (cur_node->type == OURFA_XMLAPI_NODE_CALL) {
+		  struct xmlapi_func_node_t *t;
+		  for (t=cur_node->children; t; t=t->next) {
+		     if (t->type != OURFA_XMLAPI_NODE_PARAMETER) {
+			ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+			      "Wrong child `%s` of call node Function: '%s'",
+			      ourfa_xmlapi_node_name_by_type(t->type), f->name);
+			break;
+		     }
+		  }
+	       }
+	    }
 
 	    if (xml_node->next != NULL) {
 	       xml_node = xml_node->next;
