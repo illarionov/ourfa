@@ -183,12 +183,14 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 	 break;
       case OURFA_FUNC_CALL_STATE_STARTFORSTEP:
       case OURFA_FUNC_CALL_STATE_STARTIF:
+      case OURFA_FUNC_CALL_STATE_STARTCALL:
 	 assert(fctx->cur->children);
 	 fctx->cur = fctx->cur->children;
 	 break;
       case OURFA_FUNC_CALL_STATE_NODE:
       case OURFA_FUNC_CALL_STATE_ENDIF:
       case OURFA_FUNC_CALL_STATE_ENDFOR:
+      case OURFA_FUNC_CALL_STATE_ENDCALL:
 	 if (fctx->cur->next != NULL)
 	    fctx->cur = fctx->cur->next;
 	 else {
@@ -204,6 +206,8 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 		  break;
 	       case OURFA_XMLAPI_NODE_ROOT:
 		  fctx->state = OURFA_FUNC_CALL_STATE_END;
+	       case OURFA_XMLAPI_NODE_CALL:
+		  fctx->state = OURFA_FUNC_CALL_STATE_ENDCALL;
 		  break;
 	       default:
 		  assert(0);
@@ -275,6 +279,7 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
       case OURFA_XMLAPI_NODE_LONG:
       case OURFA_XMLAPI_NODE_DOUBLE:
       case OURFA_XMLAPI_NODE_IP:
+      case OURFA_XMLAPI_NODE_MESSAGE:
 	 fctx->state = OURFA_FUNC_CALL_STATE_NODE;
 	 break;
       case OURFA_XMLAPI_NODE_IF:
@@ -355,7 +360,37 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 	       fctx->state = OURFA_FUNC_CALL_STATE_ERROR;
 	    }
 	    break;
-      default:
+	 case OURFA_XMLAPI_NODE_CALL:
+	    fctx->state = OURFA_FUNC_CALL_STATE_STARTCALL;
+	    break;
+	 case OURFA_XMLAPI_NODE_PARAMETER:
+	    fctx->state = OURFA_FUNC_CALL_STATE_NODE;
+	    if (fctx->cur->n.n_parameter.value) {
+	       char *s1;
+	       assert(fctx->cur->n.n_parameter.name);
+	       if (ourfa_hash_get_string(fctx->h, fctx->cur->n.n_parameter.name, NULL, &s1) == 0 ) {
+		  free(s1);
+		  break;
+	       }
+
+	       if (ourfa_hash_set_string(
+			fctx->h,
+			fctx->cur->n.n_parameter.name,
+			NULL,
+			fctx->cur->n.n_parameter.value) != 0) {
+		  fctx->printf_err(OURFA_ERROR_OTHER, fctx->err_ctx, "Cannot set hash value ('%s(%s)'='%s') in function %s",
+			fctx->cur->n.n_parameter.name,
+			"0",
+			fctx->cur->n.n_parameter.value,
+			fctx->f->name);
+		  fctx->state = OURFA_FUNC_CALL_STATE_ERROR;
+	       }
+	    }
+	    break;
+	 case OURFA_XMLAPI_NODE_SHIFT:
+	 case OURFA_XMLAPI_NODE_REMOVE:
+	    /* XXX */
+	 default:
 	    assert(0);
 	    break;
    }
