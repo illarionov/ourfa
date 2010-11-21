@@ -65,7 +65,8 @@ struct params_t {
    FILE *debug;
    unsigned show_help;
    enum output_format_t output_format;
-   ourfa_hash_t *h;
+   ourfa_hash_t *work_h;
+   ourfa_hash_t *orig_h;
 };
 
 typedef int set_sysparam_f(struct params_t *params,
@@ -141,21 +142,21 @@ static int help(ourfa_xmlapi_func_t *f)
 	 " %-2s %-20s %s\n"
 	 " %-2s %-20s %s\n"
 	 "\n",
-	 "-h", "--help",       "This message",
-	 "-a", "--action",     "Action name",
-	 "-H", "--host",       "URFA server address:port (default: localhost:11758)",
-	 "-l", "--login",      "URFA server login. (default: init)",
-	 "-p", "--password",   "URFA server password. (default: init)",
-	 "-c", "--config",     "Config file (default: " DEFAULT_CONFIG_FILE ")",
-	 "-s", "--session_id", "Restore session with ID",
-	 "-i", "--session_ip", "Restore session with IP",
-	 "-S", "--ssl",        "SSL/TLS method: none (default), tlsv1, sslv3, cert, rsa_cert",
-	 "-C", "--cert",       "Certificate file for rsa_cert SSL (PEM format)",
-	 "-k", "--key",        "Private key file for rsa_cert SSL (PEM format)",
-	 "-x", "--xml-dir",    "URFA server xml dir. (default: " DEFAULT_XML_DIR ")",
-	 "-t", "--login-type", "Login type: admin, user, or dealer (deault: admin)",
-	 "-A", "--xml-api",    "URFA server API file (default: api.xml)",
-	 "-o", "--output-format", "Output format Supported: xml (default), batch, hash ",
+	 "-h", "--help", "This message",
+	 "-a", "", "Action name",
+	 "-H", "", "URFA server address:port (default: localhost:11758)",
+	 "-l", "", "URFA server login. (default: init)",
+	 "-p", "", "URFA server password. (default: init)",
+	 "-c", "", "Config file (default: " DEFAULT_CONFIG_FILE ")",
+	 "-s", "", "Restore session with ID",
+	 "-i", "", "Restore session with IP",
+	 "-S", "", "SSL/TLS method: none (default), tlsv1, sslv3, cert, rsa_cert",
+	 "-C", "", "Certificate file for rsa_cert SSL (PEM format)",
+	 "-k", "", "Private key file for rsa_cert SSL (PEM format)",
+	 "-x", "", "URFA server xml dir. (default: " DEFAULT_XML_DIR ")",
+	 "-t", "", "Login type: admin, user, or dealer (deault: admin)",
+	 "-A", "", "URFA server API file (default: api.xml)",
+	 "-o", "", "Output format Supported: xml (default), batch, hash ",
 	 "-d", "--debug",      "Turn on debug",
 	 "",   "--<param>[:idx]", "Set input parameter param(idx)"
 	 );
@@ -189,8 +190,14 @@ static int init_params(struct params_t *params)
    params->debug = NULL;
    params->show_help = 0;
    params->output_format = OUTPUT_FORMAT_XML;
-   params->h = ourfa_hash_new(0);
-   if (params->h == NULL) {
+   params->work_h = ourfa_hash_new(0);
+   if (params->work_h == NULL) {
+      fprintf(stderr, "Cannot create hash\n");
+      return -1;
+   }
+   params->orig_h = ourfa_hash_new(0);
+   if(params->orig_h == NULL) {
+      ourfa_hash_free(params->work_h);
       fprintf(stderr, "Cannot create hash\n");
       return -1;
    }
@@ -211,7 +218,8 @@ static void free_params(struct params_t *params)
    free(params->ssl_key);
    free(params->action);
    free(params->session_id);
-   ourfa_hash_free(params->h);
+   ourfa_hash_free(params->work_h);
+   ourfa_hash_free(params->orig_h);
 }
 
 static int set_sysparam_string(struct params_t *params __unused,
@@ -364,35 +372,35 @@ static int load_system_param(struct params_t *params, const char *name, const ch
       const char *names[3];
    } string_params[] = {
       {"a", NULL,            set_sysparam_string,
-	 (void *)&params->action,      { "action", NULL,}},
+	 (void *)&params->action,      { NULL,}},
       {"x", "core_xml_dir",            set_sysparam_string,
-	 (void *)&params->xml_dir,     { "xml-dir", NULL,}},
+	 (void *)&params->xml_dir,     { NULL,}},
       {"A", NULL,            set_sysparam_string,
-	 (void *)&params->xml_api,     { "xml-api", NULL,}},
+	 (void *)&params->xml_api,     { NULL,}},
       {"H", "core_host" ,    set_sysparam_string,
-	 (void *)&params->host,        { "host",  "core_host", NULL,}},
+	 (void *)&params->host,        { NULL,}},
       {"l", "core_login",    set_sysparam_string,
-	 (void *)&params->login,       { "login", "core_login", NULL,}},
+	 (void *)&params->login,       { NULL,}},
       {"p", "core_password", set_sysparam_string,
-	 (void *)&params->password,    { "password", "core_password", NULL,}},
+	 (void *)&params->password,    { NULL,}},
       {"c", NULL,            set_sysparam_string,
-	 (void *)&params->config_file, { "config", NULL,}},
+	 (void *)&params->config_file, { NULL,}},
       {"s", "session_key",   set_sysparam_string,
-	 (void *)&params->session_id,  { "session_id", NULL,}},
+	 (void *)&params->session_id,  { NULL,}},
       {"c", NULL,            set_sysparam_string,
-	 (void *)&params->ssl_cert,    { "cert", NULL,}},
+	 (void *)&params->ssl_cert,    { NULL,}},
       {"k", NULL,            set_sysparam_string,
-	 (void *)&params->ssl_key,     { "key", NULL,}},
+	 (void *)&params->ssl_key,     { NULL,}},
       {"o", NULL,            set_sysparam_output_format,
-	 NULL,     { "output-format", NULL,}},
+	 NULL,     { NULL,}},
       {"t", NULL,            set_sysparam_login_type,
-	 NULL,     { "login-type", NULL,}},
+	 NULL,     { NULL,}},
       {"d", NULL,            set_sysparam_debug,
 	 NULL,     { "debug", NULL,}},
       {"S", NULL,            set_sysparam_ssl,
-	 NULL,     { "ssl", NULL,}},
+	 NULL,     { NULL,}},
       {"i", NULL,            set_sysparam_session_ip,
-	 NULL,     { "session_ip", NULL,}},
+	 NULL,     { NULL,}},
       {"h", NULL,            set_sysparam_show_help,
 	 NULL,     { "help", NULL,}},
 
@@ -525,7 +533,10 @@ static int load_config_file(struct params_t *params)
 	 continue;
 
       /* add to hash  */
-      if (ourfa_hash_set_string(params->h, param, NULL, val) != 0) {
+      if (
+	   (ourfa_hash_set_string(params->work_h, param, NULL, val) != 0)
+	   || (ourfa_hash_set_string(params->orig_h, param, NULL, val) != 0)
+	   ) {
 	 fprintf(stderr,  "Cannot add '%s[%s]=%s' to hash\n",
 	       param,"0",val);
       }
@@ -679,10 +690,15 @@ int main(int argc, char **argv)
 	 else
 	    p_name = &name[0];
 
-	 if (ourfa_hash_set_string(params.h,
+	 if ((ourfa_hash_set_string(params.work_h,
 		  p_name,
 		  idx[0] == '\0' ? NULL : idx,
 		  p) != 0)
+	       || (ourfa_hash_set_string(params.orig_h,
+		     p_name,
+		     idx[0] == '\0' ? NULL : idx,
+		     p) != 0)
+	       )
 	 {
 	    fprintf(stderr,  "Cannot add '%s(%s)=%s' to hash\n",
 		  p_name,
@@ -825,22 +841,18 @@ int main(int argc, char **argv)
 
    if (params.debug) {
       ourfa_xmlapi_dump_func_definitions(f, stderr);
-      ourfa_hash_dump(params.h, params.debug, "INPUT HASH:\n", params.action);
+      ourfa_hash_dump(params.orig_h, params.debug, "INPUT HASH:\n", params.action);
    }
 
    if (ourfa_connection_open(connection) != 0)
       goto main_end;
 
-   if (params.output_format == OUTPUT_FORMAT_HASH) {
-      if (ourfa_call(connection, xmlapi, params.action, params.h) != OURFA_OK)
-	 goto main_end;
-      ourfa_hash_dump(params.h, stdout, "Action: %s. OUTPUT HASH:\n", params.action);
-   }else {
+   {
       int state;
       ourfa_script_call_ctx_t *sctx;
       void *dump_ctx;
 
-      sctx = ourfa_script_call_ctx_new(f, params.h);
+      sctx = ourfa_script_call_ctx_new(f, params.work_h);
       if (sctx == NULL) {
 	 fprintf(stderr, "malloc error");
 	 goto main_end;
@@ -869,7 +881,7 @@ int main(int argc, char **argv)
 		  switch (params.output_format) {
 		     case OUTPUT_FORMAT_BATCH:
 			if (state == OURFA_SCRIPT_CALL_END_RESP)
-			   ourfa_hash_dump(params.h, stdout, "CALL FUNC %s END HASH:\n",
+			   ourfa_hash_dump(params.work_h, stdout, "CALL FUNC %s END HASH:\n",
 				 sctx->func.f->name);
 			break;
 		     default:
@@ -881,16 +893,30 @@ int main(int argc, char **argv)
 	    case OURFA_SCRIPT_CALL_ERROR:
 	       res = 1;
 	       if (params.debug)
-		  ourfa_hash_dump(params.h, stderr, " ERROR HASH:\n");
-	       dump_free(dump_ctx);
-	       ourfa_script_call_ctx_free(sctx);
-	       goto main_end;
+		  ourfa_hash_dump(params.work_h, stderr, " ERROR HASH:\n");
+	       break;
+	    case OURFA_SCRIPT_CALL_NODE:
+	       if (sctx->script.cur->type == OURFA_XMLAPI_NODE_PARAMETER) {
+		  /* Set parameter from original hash  */
+		  char *s1;
+		  if (ourfa_hash_get_string(params.orig_h,
+			   sctx->script.cur->n.n_parameter.name, NULL, &s1) == 0) {
+		     if (ourfa_hash_set_string(params.work_h,
+			       sctx->script.cur->n.n_parameter.name, NULL, s1) != 0) {
+			fprintf(stderr,  "Can not add '%s[%s]=%s' to hash\n",
+			      sctx->script.cur->n.n_parameter.name, "0", s1);
+			free(s1);
+			state = sctx->state = OURFA_SCRIPT_CALL_ERROR;
+		     }
+		  }
+	       }
+	       break;
 	    default:
 	       break;
 	 }
       }
       if (params.debug)
-	 ourfa_hash_dump(params.h, stdout, "OUTPUT HASH:\n");
+	 ourfa_hash_dump(params.work_h, stdout, "OUTPUT HASH:\n");
       dump_free(dump_ctx);
       ourfa_script_call_ctx_free(sctx);
    }
