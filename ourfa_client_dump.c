@@ -50,200 +50,209 @@ static int batch_print_val(ourfa_hash_t *h, FILE *stream,
 static int attrlist2str(unsigned *attr_list, size_t attr_list_cnt,
       char *dst, size_t dst_size);
 
-static int dump(
-      ourfa_func_call_ctx_t *fctx,
-      ourfa_connection_t *connection,
-      FILE *stream,
-      enum dump_format_t dump_format);
-
-int ourfa_dump_xml(
-      ourfa_func_call_ctx_t *fctx,
-      ourfa_connection_t *connection,
-      FILE *stream)
-{
-   return dump(fctx, connection, stream, DUMP_FORMAT_XML);
-}
-
-int ourfa_dump_batch(
-      ourfa_func_call_ctx_t *fctx,
-      ourfa_connection_t *connection,
-      FILE *stream)
-{
-   return dump(fctx, connection, stream, DUMP_FORMAT_BATCH);
-}
-
-static int dump(
-      ourfa_func_call_ctx_t *fctx,
-      ourfa_connection_t *connection,
-      FILE *stream,
-      enum dump_format_t dump_format)
-{
-   int res = OURFA_OK;
-   int state = OURFA_FUNC_CALL_STATE_START;
+struct dump_t {
    int tab_cnt;
-
    xmlDoc *tmp_doc;
    xmlBuffer *tmp_buf;
+   ourfa_func_call_ctx_t *fctx;
+   ourfa_connection_t *connection;
+   FILE *stream;
+   enum dump_format_t dump_format;
+};
 
-   if (!ourfa_connection_is_connected(connection)) {
-	fprintf(stream, "ERROR: not connected\n");
+void *dump_new(
+      ourfa_func_call_ctx_t *fctx,
+      ourfa_connection_t *connection,
+      FILE *stream,
+      unsigned dump_xml)
+{
+   struct dump_t *res;
+
+   res = malloc(sizeof(*res));
+   if (res == NULL)
+      return NULL;
+
+   res->tab_cnt = 3;
+   res->fctx = fctx;
+   res->connection = connection;
+   res->stream = stream;
+   res->dump_format = dump_xml ? DUMP_FORMAT_XML : DUMP_FORMAT_BATCH;
+   res->tmp_doc = xmlNewDoc(NULL);
+   if (res->tmp_doc == NULL) {
+      free(res);
+      return NULL;
+   }
+
+   res->tmp_doc->encoding=(const xmlChar *)strdup("UTF-8");
+   res->tmp_buf = xmlBufferCreate();
+   if (res->tmp_buf == NULL) {
+      xmlFreeDoc(res->tmp_doc);
+      free(res);
+      return NULL;
+   }
+
+   return res;
+};
+
+void dump_free(void *dump)
+{
+   struct dump_t *res;
+   res = dump;
+
+   if (res == NULL)
+      return;
+   xmlFreeDoc(res->tmp_doc);
+   xmlBufferFree(res->tmp_buf);
+
+   free(dump);
+}
+
+int dump_step(void *vdump)
+{
+   char *s;
+   struct dump_t *dump;
+   const char *node_type, *node_name, *arr_index;
+   struct xmlapi_func_node_t *n;
+
+   dump = vdump;
+
+   if (!ourfa_connection_is_connected(dump->connection)) {
+	fprintf(dump->stream, "ERROR: not connected\n");
 	return OURFA_ERROR_NOT_CONNECTED;
    }
 
-   ourfa_func_call_start(fctx, 0);
+   assert(dump->fctx->cur);
 
-   state = OURFA_FUNC_CALL_STATE_START;
-   assert(fctx->cur);
+   n = dump->fctx->cur;
+   node_type = ourfa_xmlapi_node_name_by_type(n->type);
 
-   tab_cnt=3;
-   tmp_doc = xmlNewDoc(NULL);
-   if (tmp_doc == NULL)
-      goto dump_end;
+   switch (dump->fctx->state) {
+      case OURFA_FUNC_CALL_STATE_START:
+	 switch (dump->dump_format) {
+	    case DUMP_FORMAT_XML:
+	       {
+		  char session_id[16*2+1];
+		  fprintf(dump->stream, "<?xml version=\"1.0\"?>\n<urfa>\n");
 
-   tmp_doc->encoding=(const xmlChar *)strdup("UTF-8");
-   tmp_buf = xmlBufferCreate();
-   if (tmp_buf == NULL)
-      goto dump_end;
-
-   switch (dump_format) {
-      case DUMP_FORMAT_XML:
-	 {
-	    char session_id[16*2+1];
-	    fprintf(stream, "<?xml version=\"1.0\"?>\n<urfa>\n");
-
-	    if (ourfa_connection_session_id(connection, session_id, sizeof(session_id)) > 0)
-	       fprintf(stream, "  <session key=\"%s\"/>\n", session_id);
-	    fprintf(stream, "  <call function=\"%s\">\n"
-	       "    <output>\n",
-	       fctx->f->name
-	       );
+		  if (ourfa_connection_session_id(dump->connection, session_id, sizeof(session_id)) > 0)
+		     fprintf(dump->stream, "  <session key=\"%s\"/>\n", session_id);
+		  fprintf(dump->stream, "  <call function=\"%s\">\n"
+			"    <output>\n",
+			dump->fctx->f->name
+			);
+	       }
+	       break;
+	    case DUMP_FORMAT_BATCH:
+	       fprintf(dump->stream, "FUNCTION %s output\n", dump->fctx->f->name);
+	       break;
+	    default:
+	       assert(0);
+	       break;
 	 }
 	 break;
-      case DUMP_FORMAT_BATCH:
-	 fprintf(stream, "FUNCTION %s output\n", fctx->f->name);
-	 break;
-      default:
-	 assert(0);
-	 break;
-   }
+      case OURFA_FUNC_CALL_STATE_NODE:
+	 node_name = n->n.n_val.name;
+	 arr_index = n->n.n_val.array_index ? n->n.n_val.array_index : "0";
 
-   for(;(state != OURFA_FUNC_CALL_STATE_END)&&(state != OURFA_FUNC_CALL_STATE_ERROR);) {
-      const char *node_type, *node_name, *arr_index;
-      struct xmlapi_func_node_t *n;
-      char *s;
+	 if ((n->type == OURFA_XMLAPI_NODE_SET)
+	       || (n->type == OURFA_XMLAPI_NODE_BREAK)
+	       || (n->type == OURFA_XMLAPI_NODE_PARAMETER)
+	       || (n->type == OURFA_XMLAPI_NODE_MESSAGE)
+	       || (n->type == OURFA_XMLAPI_NODE_SHIFT)
+	       || (n->type == OURFA_XMLAPI_NODE_REMOVE))
+	    break;
 
-      state = ourfa_func_call_resp_step(fctx, connection);
-
-      n = fctx->cur;
-      node_type = ourfa_xmlapi_node_name_by_type(n->type);
-      switch (state) {
-	 case OURFA_FUNC_CALL_STATE_NODE:
-	    node_name = n->n.n_val.name;
-	    arr_index = n->n.n_val.array_index ? n->n.n_val.array_index : "0";
-
-	    if ((n->type == OURFA_XMLAPI_NODE_SET)
-		  || (n->type == OURFA_XMLAPI_NODE_BREAK))
-	       break;
-
-	    if (ourfa_hash_get_string(fctx->h, node_name, arr_index, &s) != 0 ) {
-	       switch (dump_format) {
-		  case DUMP_FORMAT_XML:
-		     dump_hash_fprintf(stream, tab_cnt, "<%-7s name=\"%s\"/>\n",
-			   node_type, node_name);
-		     break;
-		  case DUMP_FORMAT_BATCH:
-		     batch_print_val(fctx->h, stream,
-			   node_name, arr_index, NULL);
-		     break;
-		  default:
-		     assert(0);
-		     break;
-	       }
-	    }else {
-	       switch (dump_format) {
-		  case DUMP_FORMAT_XML:
-		     xmlBufferEmpty(tmp_buf);
-		     xmlAttrSerializeTxtContent(tmp_buf, tmp_doc, NULL, (const xmlChar *)s);
-
-		     dump_hash_fprintf(stream, tab_cnt, "<%s name=\"%s\" value=\"%s\"/>\n",
-			   node_type, node_name,
-			   (const char *)xmlBufferContent(tmp_buf));
-		     break;
-		  case DUMP_FORMAT_BATCH:
-		     batch_print_val(fctx->h, stream, node_name, arr_index, s);
-		     break;
-		  default:
-		     assert(0);
-		     break;
-	       }
-	       free(s);
+	 if (ourfa_hash_get_string(dump->fctx->h, node_name, arr_index, &s) != 0 ) {
+	    switch (dump->dump_format) {
+	       case DUMP_FORMAT_XML:
+		  dump_hash_fprintf(dump->stream, dump->tab_cnt, "<%-7s name=\"%s\"/>\n",
+			node_type, node_name);
+		  break;
+	       case DUMP_FORMAT_BATCH:
+		  batch_print_val(dump->fctx->h, dump->stream,
+			node_name, arr_index, NULL);
+		  break;
+	       default:
+		  assert(0);
+		  break;
 	    }
-	    break;
-	 case OURFA_FUNC_CALL_STATE_STARTFOR:
-	       if (dump_format != DUMP_FORMAT_XML)
-		  break;
-	       dump_hash_fprintf(stream, tab_cnt,
-		     "<array name=\"%s\">\n", /* n->n.n_for.array_name */ n->n.n_for.name );
-	       tab_cnt++;
-	       break;
-	 case OURFA_FUNC_CALL_STATE_STARTFORSTEP:
-	       if (dump_format != DUMP_FORMAT_XML)
-		  break;
-	       dump_hash_fprintf(stream, tab_cnt, "<item>\n");
-	       tab_cnt++;
-	       break;
-	 case OURFA_FUNC_CALL_STATE_ENDFORSTEP:
-	       if (dump_format != DUMP_FORMAT_XML)
-		  break;
-	       tab_cnt--;
-	       dump_hash_fprintf(stream, tab_cnt, "</item>\n");
-	       break;
-	 case OURFA_FUNC_CALL_STATE_ENDFOR:
-	       if (dump_format != DUMP_FORMAT_XML)
-		  break;
-	       tab_cnt--;
-	       dump_hash_fprintf(stream, tab_cnt, "</array>\n");
-	       break;
-	 case OURFA_FUNC_CALL_STATE_ERROR:
-	       /* XXX */
-	       switch (dump_format) {
-		  case DUMP_FORMAT_XML:
-		     dump_hash_fprintf(stream, tab_cnt, "<error>%s</error>\n",
-			   n->n.n_error.comment);
-		     break;
-		  case DUMP_FORMAT_BATCH:
-		     batch_print_val(fctx->h, stream,
-			   "ERROR", NULL, n->n.n_error.comment);
-		     break;
-		  default:
-		     assert(0);
-		     break;
-	       }
-	       break;
-	 case OURFA_FUNC_CALL_STATE_END:
-	 default:
-	    break;
-      }
-   }
+	 }else {
+	    switch (dump->dump_format) {
+	       case DUMP_FORMAT_XML:
+		  xmlBufferEmpty(dump->tmp_buf);
+		  xmlAttrSerializeTxtContent(dump->tmp_buf, dump->tmp_doc, NULL, (const xmlChar *)s);
 
-   switch (dump_format) {
-      case DUMP_FORMAT_XML:
-	 fputs("    </output>\n  </call>\n</urfa>\n", stream);
+		  dump_hash_fprintf(dump->stream, dump->tab_cnt, "<%s name=\"%s\" value=\"%s\"/>\n",
+			node_type, node_name,
+			(const char *)xmlBufferContent(dump->tmp_buf));
+		  break;
+	       case DUMP_FORMAT_BATCH:
+		  batch_print_val(dump->fctx->h, dump->stream, node_name, arr_index, s);
+		  break;
+	       default:
+		  assert(0);
+		  break;
+	    }
+	    free(s);
+	 }
 	 break;
-      case DUMP_FORMAT_BATCH:
-	 fputs("\n", stream);
+      case OURFA_FUNC_CALL_STATE_STARTFOR:
+	 if (dump->dump_format != DUMP_FORMAT_XML)
+	    break;
+	 dump_hash_fprintf(dump->stream, dump->tab_cnt,
+	       "<array name=\"%s\">\n", /* n->n.n_for.array_name */ n->n.n_for.name );
+	 dump->tab_cnt++;
+	 break;
+      case OURFA_FUNC_CALL_STATE_STARTFORSTEP:
+	 if (dump->dump_format != DUMP_FORMAT_XML)
+	    break;
+	 dump_hash_fprintf(dump->stream, dump->tab_cnt, "<item>\n");
+	 dump->tab_cnt++;
+	 break;
+      case OURFA_FUNC_CALL_STATE_ENDFORSTEP:
+	 if (dump->dump_format != DUMP_FORMAT_XML)
+	    break;
+	 dump->tab_cnt--;
+	 dump_hash_fprintf(dump->stream, dump->tab_cnt, "</item>\n");
+	 break;
+      case OURFA_FUNC_CALL_STATE_ENDFOR:
+	 if (dump->dump_format != DUMP_FORMAT_XML)
+	    break;
+	 dump->tab_cnt--;
+	 dump_hash_fprintf(dump->stream, dump->tab_cnt, "</array>\n");
+	 break;
+      case OURFA_FUNC_CALL_STATE_ERROR:
+	 /* XXX */
+	 switch (dump->dump_format) {
+	    case DUMP_FORMAT_XML:
+	       dump_hash_fprintf(dump->stream, dump->tab_cnt, "<error>%s</error>\n",
+		     n->n.n_error.comment);
+	       break;
+	    case DUMP_FORMAT_BATCH:
+	       batch_print_val(dump->fctx->h, dump->stream,
+		     "ERROR", NULL, n->n.n_error.comment);
+	       break;
+	    default:
+	       assert(0);
+	       break;
+	 }
+	 break;
+      case OURFA_FUNC_CALL_STATE_END:
+	 switch (dump->dump_format) {
+	    case DUMP_FORMAT_XML:
+	       fputs("    </output>\n  </call>\n</urfa>\n", dump->stream);
+	       break;
+	    case DUMP_FORMAT_BATCH:
+	       fputs("\n", dump->stream);
+	       break;
+	    default:
+	       assert(0);
+	       break;
+	 }
 	 break;
       default:
-	 assert(0);
 	 break;
    }
-
-  if (state != OURFA_FUNC_CALL_STATE_ERROR)
-     res=0;
-
-dump_end:
-   xmlFreeDoc(tmp_doc);
-   xmlBufferFree(tmp_buf);
 
    return 0;
 }

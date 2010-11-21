@@ -731,7 +731,8 @@ static struct xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_
 		     free_func_def(node);
 		     break;
 		  }
-	       }
+	       }else
+		  node->n.n_call.output = 1;
 	       free(output);
 	       node->children = node; /* uninitialized  */
 	    }

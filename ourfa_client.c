@@ -74,14 +74,14 @@ typedef int set_sysparam_f(struct params_t *params,
       void *data);
 
 /* ourfa_client_dump.c */
-int ourfa_dump_xml(
+void *dump_new(
       ourfa_func_call_ctx_t *fctx,
       ourfa_connection_t *connection,
-      FILE *stream);
-int ourfa_dump_batch(
-      ourfa_func_call_ctx_t *fctx,
-      ourfa_connection_t *connection,
-      FILE *stream);
+      FILE *stream,
+      unsigned dump_xml);
+void dump_free(void *dump);
+int dump_step(void *vdump);
+
 
 static int usage()
 {
@@ -788,36 +788,67 @@ int main(int argc, char **argv)
    }else if (f->script) {
       int state;
       ourfa_script_call_ctx_t *sctx;
+      void *dump_ctx;
 
       sctx = ourfa_script_call_ctx_new(f, params.h);
       if (sctx == NULL) {
 	 fprintf(stderr, "malloc error");
 	 goto main_end;
       }
+      dump_ctx = dump_new(&sctx->func, connection,
+	    stderr, params.output_format == OUTPUT_FORMAT_XML ? 1 : 0);
+      if (dump_ctx == NULL) {
+	 fprintf(stderr, "malloc error");
+	 goto main_end;
+      }
+
       ourfa_script_call_start(sctx);
       state = OURFA_SCRIPT_CALL_START;
       while(state != OURFA_SCRIPT_CALL_END) {
 	 state = ourfa_script_call_step(sctx, connection);
-	 if ((state == OURFA_SCRIPT_CALL_REQ) &&
-	       (sctx->func.state == OURFA_FUNC_CALL_STATE_START)) {
-	    ourfa_hash_dump(params.h, stderr, " CALL FUNC %s START HASH:\n",
-		  sctx->func.f->name
-		  );
-	 }else if ((state == OURFA_SCRIPT_CALL_RESP) &&
-	       (sctx->func.state == OURFA_FUNC_CALL_STATE_END)) {
-	    ourfa_hash_dump(params.h, stderr, "CALL FUNC %s END HASH:\n",
-		  sctx->func.f->name
-		  );
-	 }
-	 if (state == OURFA_SCRIPT_CALL_ERROR) {
-	    res = 1;
-	    ourfa_script_call_ctx_free(sctx);
-	    ourfa_hash_dump(params.h, stderr, " ERROR HASH:\n");
-	    goto main_end;
+	 switch (state) {
+	    case OURFA_SCRIPT_CALL_REQ:
+	       if (params.debug && (sctx->func.state == OURFA_FUNC_CALL_STATE_START)) {
+		  ourfa_hash_dump(params.h, stderr, " CALL FUNC %s START HASH:\n",
+			sctx->func.f->name);
+	       }
+	       break;
+	    case OURFA_SCRIPT_CALL_RESP:
+	       if (params.debug && sctx->func.state == OURFA_FUNC_CALL_STATE_END) {
+		  ourfa_hash_dump(params.h, stderr, "CALL FUNC %s END HASH:\n",
+			sctx->func.f->name);
+	       }
+	       assert(sctx->script.cur);
+	       assert(sctx->script.cur->type == OURFA_XMLAPI_NODE_CALL);
+	       if (sctx->script.cur->n.n_call.output) {
+		  switch (params.output_format) {
+		     case OUTPUT_FORMAT_BATCH:
+			if (sctx->func.state == OURFA_FUNC_CALL_STATE_END)
+			   ourfa_hash_dump(params.h, stdout, "CALL FUNC %s END HASH:\n",
+				 sctx->func.f->name);
+			break;
+		     default:
+			dump_step(dump_ctx);
+			break;
+		  }
+	       }
+	       break;
+	    case OURFA_SCRIPT_CALL_ERROR:
+	       res = 1;
+	       if (params.debug)
+		  ourfa_hash_dump(params.h, stderr, " ERROR HASH:\n");
+	       dump_free(dump_ctx);
+	       ourfa_script_call_ctx_free(sctx);
+	       goto main_end;
+	    default:
+	       break;
 	 }
       }
-      ourfa_hash_dump(params.h, stdout, "OUTPUT HASH:\n");
+      if (params.debug)
+	 ourfa_hash_dump(params.h, stdout, "OUTPUT HASH:\n");
+      dump_free(dump_ctx);
    }else {
+      /*
       fctx = ourfa_func_call_ctx_new(f, params.h);
       if (fctx == NULL) {
 	 fprintf(stderr, "Can not create fctx\n");
@@ -849,6 +880,7 @@ int main(int argc, char **argv)
 	    break;
       }
       ourfa_func_call_ctx_free(fctx);
+      */
    }
 
 
