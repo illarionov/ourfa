@@ -16,20 +16,20 @@ XML2_LIBS?=	`xml2-config --libs`
 DESTDIR?=/
 PREFIX?=netup/utm5
 
-OBJS= ourfa_hash.o \
-      ourfa_xmlapi.o \
-      ourfa_pkt.o \
-      ourfa_error.o \
-      ourfa_connection.o \
-      ourfa_func_call.o \
-      ourfa_ssl_ctx.o
+OBJS= hash.o \
+      xmlapi.o \
+      pkt.o \
+      error.o \
+      connection.o \
+      func_call.o \
+      ssl_ctx.o
 
 all: libourfa.a ourfa_client
 
-ourfa_client: ourfa.h libourfa.a ourfa_client.o ourfa_client_dump.o
+ourfa_client: ourfa.h libourfa.a client.o client_dump.o
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) $(LDFLAGS) $(XML2_LIBS) \
 	  -o ourfa_client \
-	  ourfa_client.o ourfa_client_dump.o -L. -lourfa
+	  client.o client_dump.o -L. -lourfa
 
 libourfa.a: $(OBJS)
 	rm -f libourfa.a
@@ -49,22 +49,22 @@ install: ourfa_client
 clean:
 	rm -f *.o ourfa_client libourfa.a
 
-ourfa_hash.o: ourfa_hash.c ourfa.h
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c ourfa_hash.c
-ourfa_pkt.o: ourfa_pkt.c ourfa.h
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c ourfa_pkt.c
-ourfa_error.o: ourfa_error.c ourfa.h
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c ourfa_error.c
-ourfa_connection.o: ourfa_connection.c ourfa.h
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c ourfa_connection.c
-ourfa_func_call.o: ourfa_func_call.c ourfa.h
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c ourfa_func_call.c
-ourfa_ssl_ctx.o: ourfa_ssl_ctx.c ourfa.h
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c ourfa_ssl_ctx.c
-ourfa_xmlapi.o: ourfa_xmlapi.c ourfa.h
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c ourfa_xmlapi.c
-ourfa_client.o: ourfa_client.c ourfa.h
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c ourfa_client.c
-ourfa_client_dump.o: ourfa_client_dump.c ourfa.h
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c ourfa_client_dump.c
+hash.o: hash.c ourfa.h
+	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c hash.c
+pkt.o: pkt.c ourfa.h
+	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c pkt.c
+error.o: error.c ourfa.h
+	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c error.c
+connection.o: connection.c ourfa.h
+	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c connection.c
+func_call.o: func_call.c ourfa.h
+	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c func_call.c
+ssl_ctx.o: ssl_ctx.c ourfa.h
+	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c ssl_ctx.c
+xmlapi.o: xmlapi.c ourfa.h
+	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c xmlapi.c
+client.o: client.c ourfa.h
+	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c client.c
+client_dump.o: client_dump.c ourfa.h
+	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c client_dump.c
 
