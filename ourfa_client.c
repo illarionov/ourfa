@@ -86,10 +86,10 @@ int dump_step(void *vdump);
 static int usage()
 {
    fprintf(stdout,
-	 "ourfa_client, URFA (UTM Remote Function Access) client. Version %s\n\n "
+	 "ourfa_client, URFA (UTM Remote Function Access) client. Version %u\n\n "
 	 " usage: ourfa_client -a action \n"
 	 "   [-H addr:port] [-l login] [-p pass] [-A api.xml] [-h]\n\n",
-	 OURFA_VERSION);
+	 ourfa_lib_version());
    return 0;
 }
 

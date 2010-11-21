@@ -36,7 +36,8 @@
 #include <libxml/hash.h>
 #include <openssl/ssl.h>
 
-#define OURFA_PROTO_VERSION	   0x23
+#define OURFA_LIB_VERSION	 3001
+#define OURFA_PROTO_VERSION	 0x23
 
 #define OURFA_PKT_SESSION_INIT   0xc0
 #define OURFA_PKT_ACCESS_REQUEST 0xc1
@@ -136,6 +137,8 @@ struct ourfa_traverse_funcs_t {
 };
 
 typedef struct ourfa_traverse_funcs_t ourfa_traverse_funcs_t;
+
+unsigned ourfa_lib_version();
 
 /* Packet */
 ourfa_pkt_t *ourfa_pkt_new (unsigned pkt_code, const char *fmt, ...);

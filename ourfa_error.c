@@ -88,6 +88,11 @@ int ourfa_err_f_null(int err_code, void *user_ctx, const char *fmt, ...)
    return err_code;
 }
 
+unsigned ourfa_lib_version()
+{
+   static unsigned v = OURFA_LIB_VERSION;
+   return v;
+}
 
 
 

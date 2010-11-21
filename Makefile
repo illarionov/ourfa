@@ -1,7 +1,5 @@
 SHELL=/bin/sh
 
-OURFA_VERSION=\"0.3-beta1\"
-
 CC?=gcc
 AR?=ar
 CFLAGS?= -W -Wall -O2 -DNDEBUG -s
@@ -66,7 +64,7 @@ ourfa_ssl_ctx.o: ourfa_ssl_ctx.c ourfa.h
 ourfa_xmlapi.o: ourfa_xmlapi.c ourfa.h
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c ourfa_xmlapi.c
 ourfa_client.o: ourfa_client.c ourfa.h
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) -DOURFA_VERSION=${OURFA_VERSION} -c ourfa_client.c
+	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c ourfa_client.c
 ourfa_client_dump.o: ourfa_client_dump.c ourfa.h
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c ourfa_client_dump.c
 
