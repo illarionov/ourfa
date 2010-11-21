@@ -33,6 +33,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
@@ -90,10 +91,32 @@ int ourfa_parse_builtin_func(ourfa_hash_t *globals, const char *func, int *res)
       *res = OURFA_TIME_MAX;
    else {
       char arr_name[40];
+      char *arr_idx;
       unsigned u_res;
-      if (sscanf(func, "size(%40[a-zA-Z0-9_-])", arr_name) != 1)
+      if (sscanf(func, "size(%40[a-zA-Z0-9_,-])", arr_name) != 1)
 	 return -1;
-      if (ourfa_hash_get_arr_size(globals, arr_name, NULL, &u_res) != 0)
+      arr_idx = index(arr_name, ',');
+      if (arr_idx) {
+	 char *t;
+	 if (arr_idx == &arr_name[0])
+	    return -1;
+
+	 t = arr_idx-1;
+
+	 for (t=arr_idx-1; t != &arr_name[0]; t--) {
+	    if (isspace(*t))
+	       *t = '\0';
+	    else
+	       break;
+	 }
+	 if (arr_name[0] == '\0')
+	    return -1;
+
+	 *arr_idx++ = '\0';
+	 if (*arr_idx == '\0')
+	    return -1;
+	 }
+      if (ourfa_hash_get_arr_size(globals, arr_name, arr_idx, &u_res) != 0)
 	 u_res = 0;
       *res = (int)u_res;
    }

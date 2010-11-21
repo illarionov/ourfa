@@ -745,11 +745,22 @@ int ourfa_hash_get_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr
 int ourfa_hash_get_arr_size(ourfa_hash_t *h, const char *key, const char *idx, unsigned *res)
 {
    struct hash_val_t *arr;
-   arr = findncreate_arr_by_idx(h, 0, key, idx, 1, NULL);
+   unsigned last_idx_res;
+
+   arr = findncreate_arr_by_idx(h, 0, key, idx, 1, &last_idx_res);
    if (arr == NULL)
       return -1;
-   if (res)
-      *res = (unsigned)arr->elm_cnt;
+   if (idx) {
+      if (arr->type != OURFA_ELM_ARRAY)
+	 return -1;
+      if (arr->elm_cnt <= last_idx_res)
+	 return -1;
+      if (res)
+	 *res = (unsigned)((struct hash_val_t **)arr->data)[last_idx_res]->elm_cnt;
+   }else {
+      if (res)
+	 *res = (unsigned)arr->elm_cnt;
+   }
 
    return 0;
 }
@@ -997,7 +1008,7 @@ static int convert_hashval2string(struct hash_val_t *val)
       case OURFA_ELM_ARRAY:
       case OURFA_ELM_HASH:
       default:
-	 assert(0);
+	 return -1;
    }
 
    tmp = hash_val_new(OURFA_ELM_STRING, val->elm_cnt);
