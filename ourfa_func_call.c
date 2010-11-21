@@ -992,19 +992,21 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 		     return sctx->state;
 		  }
 		  ourfa_func_call_start(&sctx->func, 1);
-		  sctx->state = OURFA_SCRIPT_CALL_REQ;
+		  sctx->state = OURFA_SCRIPT_CALL_START_REQ;
 	       }
 	       break;
 	    default:
 	       break;
 	 }
 	 break;
+      case OURFA_SCRIPT_CALL_START_REQ:
+	 sctx->state = OURFA_SCRIPT_CALL_REQ;
+	 break;
       case OURFA_SCRIPT_CALL_REQ:
 	 state = ourfa_func_call_req_step(&sctx->func, conn);
 	 switch (state) {
 	    case OURFA_FUNC_CALL_STATE_END:
-	       ourfa_func_call_start(&sctx->func, 0);
-	       sctx->state = OURFA_SCRIPT_CALL_RESP;
+	       sctx->state = OURFA_SCRIPT_CALL_END_REQ;
 	       break;
 	    case OURFA_FUNC_CALL_STATE_ERROR:
 	       sctx->state = OURFA_SCRIPT_CALL_ERROR;
@@ -1014,11 +1016,18 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 	       break;
 	 }
 	 break;
+      case OURFA_SCRIPT_CALL_END_REQ:
+	 sctx->state = OURFA_SCRIPT_CALL_START_RESP;
+	 ourfa_func_call_start(&sctx->func, 0);
+	 break;
+      case OURFA_SCRIPT_CALL_START_RESP:
+	 sctx->state = OURFA_SCRIPT_CALL_RESP;
+	 break;
       case OURFA_SCRIPT_CALL_RESP:
 	 state = ourfa_func_call_resp_step(&sctx->func, conn);
 	 switch (state) {
 	    case OURFA_FUNC_CALL_STATE_END:
-	       sctx->state = OURFA_SCRIPT_CALL_NODE;
+	       sctx->state = OURFA_SCRIPT_CALL_END_RESP;
 	       break;
 	    case OURFA_FUNC_CALL_STATE_ERROR:
 	       sctx->state = OURFA_SCRIPT_CALL_ERROR;
@@ -1026,6 +1035,9 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 	    default:
 	       break;
 	 }
+	 break;
+      case OURFA_SCRIPT_CALL_END_RESP:
+	 sctx->state = OURFA_SCRIPT_CALL_NODE;
 	 break;
       case OURFA_SCRIPT_CALL_END:
       case OURFA_SCRIPT_CALL_ERROR:

@@ -807,23 +807,18 @@ int main(int argc, char **argv)
       while(state != OURFA_SCRIPT_CALL_END) {
 	 state = ourfa_script_call_step(sctx, connection);
 	 switch (state) {
+	    case OURFA_SCRIPT_CALL_START_REQ:
 	    case OURFA_SCRIPT_CALL_REQ:
-	       if (params.debug && (sctx->func.state == OURFA_FUNC_CALL_STATE_START)) {
-		  ourfa_hash_dump(params.h, stderr, " CALL FUNC %s START HASH:\n",
-			sctx->func.f->name);
-	       }
+	    case OURFA_SCRIPT_CALL_START_RESP:
 	       break;
 	    case OURFA_SCRIPT_CALL_RESP:
-	       if (params.debug && sctx->func.state == OURFA_FUNC_CALL_STATE_END) {
-		  ourfa_hash_dump(params.h, stderr, "CALL FUNC %s END HASH:\n",
-			sctx->func.f->name);
-	       }
+	    case OURFA_SCRIPT_CALL_END_RESP:
 	       assert(sctx->script.cur);
 	       assert(sctx->script.cur->type == OURFA_XMLAPI_NODE_CALL);
-	       if (sctx->script.cur->n.n_call.output) {
+	       if (params.debug || sctx->script.cur->n.n_call.output) {
 		  switch (params.output_format) {
 		     case OUTPUT_FORMAT_BATCH:
-			if (sctx->func.state == OURFA_FUNC_CALL_STATE_END)
+			if (state == OURFA_SCRIPT_CALL_END_RESP)
 			   ourfa_hash_dump(params.h, stdout, "CALL FUNC %s END HASH:\n",
 				 sctx->func.f->name);
 			break;
