@@ -114,6 +114,7 @@ typedef struct ourfa_ssl_ctx_t ourfa_ssl_ctx_t;
 typedef struct ourfa_connection_t ourfa_connection_t;
 typedef struct ourfa_xmlapi_t ourfa_xmlapi_t;
 typedef struct ourfa_xmlapi_func_t ourfa_xmlapi_func_t;
+typedef struct ourfa_xmlapi_func_node_t ourfa_xmlapi_func_node_t;
 typedef struct ourfa_func_call_ctx_t ourfa_func_call_ctx_t;
 typedef struct ourfa_script_call_ctx_t ourfa_script_call_ctx_t;
 
@@ -378,7 +379,7 @@ struct ourfa_xmlapi_t {
 };
 
 /* XML API Function */
-enum xmlapi_func_node_type_t {
+enum ourfa_xmlapi_func_node_type_t {
    OURFA_XMLAPI_NODE_ROOT,
    OURFA_XMLAPI_NODE_INTEGER,
    OURFA_XMLAPI_NODE_STRING,
@@ -398,12 +399,12 @@ enum xmlapi_func_node_type_t {
    OURFA_XMLAPI_NODE_UNKNOWN
 };
 
-struct xmlapi_func_node_t {
-   struct xmlapi_func_node_t *parent;
-   struct xmlapi_func_node_t *next;
-   struct xmlapi_func_node_t *children;
+struct ourfa_xmlapi_func_node_t {
+   ourfa_xmlapi_func_node_t *parent;
+   ourfa_xmlapi_func_node_t *next;
+   ourfa_xmlapi_func_node_t *children;
 
-   enum xmlapi_func_node_type_t type;
+   enum ourfa_xmlapi_func_node_type_t type;
    union {
       struct {
 	 char *name;
@@ -463,10 +464,10 @@ struct ourfa_xmlapi_func_t {
    ourfa_xmlapi_t *xmlapi;
    int id;
 
-   struct xmlapi_func_node_t *in;
-   struct xmlapi_func_node_t *out;
+   ourfa_xmlapi_func_node_t *in;
+   ourfa_xmlapi_func_node_t *out;
 
-   struct xmlapi_func_node_t *script;
+   ourfa_xmlapi_func_node_t *script;
 
    char name[];
 };
@@ -491,7 +492,7 @@ struct ourfa_func_call_ctx_t {
       OURFA_FUNC_CALL_STATE_END,
       OURFA_FUNC_CALL_STATE_ERROR
    } state;
-   struct xmlapi_func_node_t *cur;
+   ourfa_xmlapi_func_node_t *cur;
 
    ourfa_err_f_t *printf_err;
    void *err_ctx;

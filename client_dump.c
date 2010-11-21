@@ -112,7 +112,7 @@ int dump_step(void *vdump)
    char *s;
    struct dump_t *dump;
    const char *node_type, *node_name, *arr_index;
-   struct xmlapi_func_node_t *n;
+   ourfa_xmlapi_func_node_t *n;
 
    dump = vdump;
 

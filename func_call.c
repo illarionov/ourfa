@@ -428,7 +428,7 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
    int state;
    int res = OURFA_OK;
    const char *node_type, *node_name, *arr_index;
-   struct xmlapi_func_node_t *n;
+   ourfa_xmlapi_func_node_t *n;
 
    assert(fctx->cur);
 
@@ -719,7 +719,7 @@ int ourfa_func_call_resp_step(ourfa_func_call_ctx_t *fctx,
    int res = OURFA_OK;
    int func_ret_code;
    const char *node_type, *node_name, *arr_index;
-   struct xmlapi_func_node_t *n;
+   ourfa_xmlapi_func_node_t *n;
 
    assert(fctx->cur);
 

@@ -76,12 +76,12 @@ static const struct {
 
 static void xmlapi_func_free(void * payload, xmlChar *name);
 static void xml_generic_error_func(void *ctx, const char *msg, ...);
-static struct xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t *api, ourfa_xmlapi_func_t *f);
+static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t *api, ourfa_xmlapi_func_t *f);
 static int get_xml_attributes(xmlNode *xml_node,
       struct t_nodes *nodes,
       unsigned size,
       ourfa_xmlapi_t *api);
-static void free_func_def(struct xmlapi_func_node_t *def);
+static void free_func_def(ourfa_xmlapi_func_node_t *def);
 void dump_func_definitions(ourfa_xmlapi_func_t *f, FILE *stream);
 
 
@@ -501,9 +501,9 @@ static int get_xml_attributes(xmlNode *xml_node,
    return res;
 }
 
-static struct xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t *xmlapi, ourfa_xmlapi_func_t *f)
+static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t *xmlapi, ourfa_xmlapi_func_t *f)
 {
-   struct xmlapi_func_node_t *root, *cur_node;
+   ourfa_xmlapi_func_node_t *root, *cur_node;
    int ret_code;
    xmlNode *xml_node;
 
@@ -528,7 +528,7 @@ static struct xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_
    ret_code = OURFA_OK;
 
    while (xml_node != xml_root) {
-      struct xmlapi_func_node_t *node;
+      ourfa_xmlapi_func_node_t *node;
 
       if ((xml_node->type != XML_ELEMENT_NODE) || (xml_node->name == NULL))
 	 goto load_f_def_next_node;
@@ -631,7 +631,7 @@ static struct xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_
 	 case OURFA_XMLAPI_NODE_FOR:
 	    {
 	       unsigned i;
-	       struct xmlapi_func_node_t *tmp;
+	       ourfa_xmlapi_func_node_t *tmp;
 
 	       struct t_nodes my_nodes[]= {
 		  {&node->n.n_for.name, "name", 1},
@@ -662,7 +662,7 @@ static struct xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_
 	 case OURFA_XMLAPI_NODE_BREAK:
 	    {
 	       unsigned node_found;
-	       struct xmlapi_func_node_t *cur;
+	       ourfa_xmlapi_func_node_t *cur;
 
 	       node_found=0;
 	       if (cur_node) {
@@ -848,7 +848,7 @@ load_f_def_next_node:
 
 	       /* check for child nodes of CALL  */
 	       if (cur_node->type == OURFA_XMLAPI_NODE_CALL) {
-		  struct xmlapi_func_node_t *t;
+		  ourfa_xmlapi_func_node_t *t;
 		  for (t=cur_node->children; t; t=t->next) {
 		     if (t->type != OURFA_XMLAPI_NODE_PARAMETER) {
 			ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
@@ -876,9 +876,9 @@ load_f_def_next_node:
    return root;
 }
 
-static int dump_func_def(struct xmlapi_func_node_t *def, FILE *stream)
+static int dump_func_def(ourfa_xmlapi_func_node_t *def, FILE *stream)
 {
-   struct xmlapi_func_node_t *root, *cur;
+   ourfa_xmlapi_func_node_t *root, *cur;
    int i, level;
 
    if (!def || !def->children)
@@ -1042,9 +1042,9 @@ void ourfa_xmlapi_dump_func_definitions(ourfa_xmlapi_func_t *f, FILE *stream)
 
 }
 
-static void free_func_def(struct xmlapi_func_node_t *def)
+static void free_func_def(ourfa_xmlapi_func_node_t *def)
 {
-   struct xmlapi_func_node_t *next;
+   ourfa_xmlapi_func_node_t *next;
 
    while(def) {
       next = def->next;
