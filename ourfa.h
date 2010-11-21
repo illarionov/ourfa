@@ -236,7 +236,7 @@ int ourfa_hash_get_arr_size(ourfa_hash_t *h, const char *key, const char *idx, u
 void ourfa_hash_dump(ourfa_hash_t *h, FILE *stream, const char *annotation_fmt, ...);
 int ourfa_hash_parse_idx_list(ourfa_hash_t *h, const char *idx_list,
       unsigned *res, size_t res_size);
-
+int ourfa_hash_parse_ip(const char *str, struct in_addr *res);
 
 /* SSL CTX  */
 ourfa_ssl_ctx_t *ourfa_ssl_ctx_new();
@@ -530,7 +530,6 @@ int ourfa_script_call_start(ourfa_script_call_ctx_t *sctx);
 int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
        ourfa_connection_t *conn);
 
-int ourfa_hash_parse_ip(const char *str, struct in_addr *res);
 
 
 #endif  /* _OURFA_H */
