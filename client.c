@@ -63,6 +63,7 @@ struct params_t {
    struct in_addr *session_ip;
    struct in_addr session_ip_buf;
    FILE *debug;
+   unsigned show_help;
    enum output_format_t output_format;
    ourfa_hash_t *h;
 };
@@ -93,7 +94,32 @@ static int usage()
    return 0;
 }
 
-static int help()
+static int help_params(FILE *stream, ourfa_xmlapi_func_node_t *n)
+{
+   unsigned delimiter_printed = 0;
+
+   if (n == NULL)
+      return 0;
+   while (n != NULL) {
+      if (n->children)
+	 help_params(stream, n->children);
+      else if (n->type == OURFA_XMLAPI_NODE_PARAMETER) {
+	 if (!delimiter_printed) {
+	    fprintf(stream, "---\n");
+	    delimiter_printed=1;
+	 }
+	 fprintf(stream, "  -%-20s  %-50s\n",
+	       n->n.n_parameter.name,
+	       n->n.n_parameter.comment ? n->n.n_parameter.comment : ""
+	       );
+      }
+      n = n->next;
+   }
+
+   return 1;
+}
+
+static int help(ourfa_xmlapi_func_t *f)
 {
    usage();
    fprintf(stdout,
@@ -134,6 +160,12 @@ static int help()
 	 "",   "--<param>[:idx]", "Set input parameter param(idx)"
 	 );
 
+   if (f && f->script) {
+      fprintf(stdout, "Special patameters for action `%s`:\n", f->name);
+      help_params(stdout, f->script);
+      fprintf(stdout, "\n");
+   }
+
    return 0;
 }
 
@@ -155,6 +187,7 @@ static int init_params(struct params_t *params)
    params->action = NULL;
    params->session_id = NULL;
    params->debug = NULL;
+   params->show_help = 0;
    params->output_format = OUTPUT_FORMAT_XML;
    params->h = ourfa_hash_new(0);
    if (params->h == NULL) {
@@ -308,6 +341,17 @@ static int set_sysparam_session_ip(struct params_t *params,
 
    return 2;
 }
+static int set_sysparam_show_help(struct params_t *params,
+      const char *name __unused,
+      const char *val __unused,
+      unsigned is_config_file __unused,
+      void *data __unused)
+{
+   params->show_help=1;
+
+   return 1;
+}
+
 
 static int load_system_param(struct params_t *params, const char *name, const char *val, unsigned is_config_file)
 {
@@ -321,9 +365,9 @@ static int load_system_param(struct params_t *params, const char *name, const ch
    } string_params[] = {
       {"a", NULL,            set_sysparam_string,
 	 (void *)&params->action,      { "action", NULL,}},
-      {"A", "core_xml_dir",            set_sysparam_string,
+      {"x", "core_xml_dir",            set_sysparam_string,
 	 (void *)&params->xml_dir,     { "xml-dir", NULL,}},
-      {"x", NULL,            set_sysparam_string,
+      {"A", NULL,            set_sysparam_string,
 	 (void *)&params->xml_api,     { "xml-api", NULL,}},
       {"H", "core_host" ,    set_sysparam_string,
 	 (void *)&params->host,        { "host",  "core_host", NULL,}},
@@ -349,6 +393,8 @@ static int load_system_param(struct params_t *params, const char *name, const ch
 	 NULL,     { "ssl", NULL,}},
       {"i", NULL,            set_sysparam_session_ip,
 	 NULL,     { "session_ip", NULL,}},
+      {"h", NULL,            set_sysparam_show_help,
+	 NULL,     { "help", NULL,}},
 
       {NULL,  NULL, NULL, NULL,     { NULL,}},
    };
@@ -517,13 +563,8 @@ int main(int argc, char **argv)
 
    connection = NULL;
    xmlapi = NULL;
+   f = NULL;
    res=1;
-
-   connection = ourfa_connection_new(NULL);
-   if (connection == NULL) {
-      fprintf(stderr, "Initialization error\n");
-      goto main_end;
-   }
 
    i=1;
    while (i<argc) {
@@ -611,8 +652,6 @@ int main(int argc, char **argv)
       /* Compare values with system parameters */
       if (idx[0] == '\0') {
 	 int load_res;
-	 if (((name[0]=='h') && (name[1]=='\0')) || strcmp(name, "help") == 0)
-	    return help();
 	 load_res=load_system_param(&params, name, p, 0);
 	 if (load_res < 0)
 	    goto main_end;
@@ -659,8 +698,75 @@ int main(int argc, char **argv)
    if (load_config_file(&params) < 0)
       goto main_end;
 
+   xmlapi = ourfa_xmlapi_new();
+   if (xmlapi == NULL) {
+      fprintf(stderr, "malloc error\n");
+      goto main_end;
+   }
+
+   if (params.action) {
+      /* xmlapi file  */
+      char *xmlapi_fname = NULL;
+      char *script_file = NULL;
+      int action_len = strlen(params.action);
+
+      asprintf(&xmlapi_fname,"%s/%s",
+	    params.xml_dir ? params.xml_dir : DEFAULT_XML_DIR,
+	    params.xml_api ? params.xml_api : "api.xml");
+
+      if (xmlapi_fname == NULL) {
+	 fprintf(stderr, "asprintf error\n");
+	 goto main_end;
+      }
+
+      fprintf(stderr,"Loading API XML: %s\n", xmlapi_fname);
+      if (ourfa_xmlapi_load_apixml(xmlapi, xmlapi_fname) != OURFA_OK) {
+	 free(xmlapi_fname);
+	 goto main_end;
+      }
+      free(xmlapi_fname);
+
+      /* action  */
+      if ((action_len > 5)
+	    &&  ((params.action[0] == 'r') || (params.action[0] == 'R'))
+	    &&  ((params.action[1] == 'p') || (params.action[1] == 'P'))
+	    &&  ((params.action[2] == 'c') || (params.action[2] == 'C'))
+	    &&  ((params.action[3] == 'f') || (params.action[3] == 'F'))
+	    &&  ((params.action[4] == '_'))) {
+	 /* rpcf_ action  */
+      }else {
+	 asprintf(&script_file, "%s/%s.xml",
+	       params.xml_dir ? params.xml_dir : DEFAULT_XML_DIR,
+	       params.action);
+	 if (script_file == NULL) {
+	    fprintf(stderr, "asprintf error\n");
+	    goto main_end;
+	 }
+
+	 fprintf(stderr,"Loading Script XML: %s\n", script_file);
+	 if (ourfa_xmlapi_load_script(xmlapi, script_file, params.action) != OURFA_OK) {
+	    free(script_file);
+	    goto main_end;
+	 }
+	 free(script_file);
+      }
+      f = ourfa_xmlapi_func(xmlapi, params.action);
+   }
+
+   if (params.show_help) {
+      help(f);
+      params.show_help=0;
+      goto main_end;
+   }
+
    if (params.action == NULL) {
       fprintf(stderr, "Action not defined\n");
+      goto main_end;
+   }
+
+   connection = ourfa_connection_new(NULL);
+   if (connection == NULL) {
+      fprintf(stderr, "Initialization error\n");
       goto main_end;
    }
 
@@ -711,61 +817,7 @@ int main(int argc, char **argv)
 
    res=1;
 
-   xmlapi = ourfa_xmlapi_new();
-   if (xmlapi == NULL) {
-      fprintf(stderr, "malloc error\n");
-      goto main_end;
-   }
 
-   /* xmlapi file  */
-   {
-      char *xmlapi_fname = NULL;
-
-      asprintf(&xmlapi_fname,"%s/%s",
-	    params.xml_dir ? params.xml_dir : DEFAULT_XML_DIR,
-	    params.xml_api ? params.xml_api : "api.xml");
-
-      if (xmlapi_fname == NULL) {
-	 fprintf(stderr, "asprintf error\n");
-	 goto main_end;
-      }
-
-      if (ourfa_xmlapi_load_apixml(xmlapi, params.xml_api) != OURFA_OK) {
-	 free(xmlapi_fname);
-	 goto main_end;
-      }
-      free(xmlapi_fname);
-   }
-
-   /* action  */
-   {
-      char *script_file = NULL;
-      int action_len = strlen(params.action);
-      if ((action_len > 5)
-	    &&  ((params.action[0] == 'r') || (params.action[0] == 'R'))
-	    &&  ((params.action[1] == 'p') || (params.action[1] == 'P'))
-	    &&  ((params.action[2] == 'c') || (params.action[2] == 'C'))
-	    &&  ((params.action[3] == 'f') || (params.action[3] == 'F'))
-	    &&  ((params.action[4] == '_'))) {
-	 /* rpcf_ action  */
-      }else {
-	 asprintf(&script_file, "%s/%s.xml",
-	       params.xml_dir ? params.xml_dir : DEFAULT_XML_DIR,
-	       params.action);
-	 if (script_file == NULL) {
-	    fprintf(stderr, "asprintf error\n");
-	    goto main_end;
-	 }
-
-	 if (ourfa_xmlapi_load_script(xmlapi, script_file, params.action) != OURFA_OK) {
-	    free(script_file);
-	    goto main_end;
-	 }
-	 free(script_file);
-      }
-   }
-
-   f = ourfa_xmlapi_func(xmlapi, params.action);
    if (f == NULL) {
       fprintf(stderr, "Function `%s` not found in API\n", params.action);
       goto main_end;
@@ -844,6 +896,9 @@ int main(int argc, char **argv)
    }
 
 main_end:
+   if (params.show_help)
+      help(NULL);
+
    free_params(&params);
    ourfa_connection_free(connection);
    ourfa_xmlapi_free(xmlapi);
