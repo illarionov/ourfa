@@ -503,8 +503,6 @@ int main(int argc, char **argv)
    ourfa_connection_t *connection;
    ourfa_xmlapi_t *xmlapi;
    ourfa_xmlapi_func_t *f;
-   ourfa_func_call_ctx_t *fctx;
-   int last_err;
 
    struct params_t params;
 
@@ -785,7 +783,7 @@ int main(int argc, char **argv)
       if (ourfa_call(connection, xmlapi, params.action, params.h) != OURFA_OK)
 	 goto main_end;
       ourfa_hash_dump(params.h, stdout, "Action: %s. OUTPUT HASH:\n", params.action);
-   }else if (f->script) {
+   }else {
       int state;
       ourfa_script_call_ctx_t *sctx;
       void *dump_ctx;
@@ -796,7 +794,7 @@ int main(int argc, char **argv)
 	 goto main_end;
       }
       dump_ctx = dump_new(&sctx->func, connection,
-	    stderr, params.output_format == OUTPUT_FORMAT_XML ? 1 : 0);
+	    stdout, params.output_format == OUTPUT_FORMAT_XML ? 1 : 0);
       if (dump_ctx == NULL) {
 	 fprintf(stderr, "malloc error");
 	 goto main_end;
@@ -809,13 +807,13 @@ int main(int argc, char **argv)
 	 switch (state) {
 	    case OURFA_SCRIPT_CALL_START_REQ:
 	    case OURFA_SCRIPT_CALL_REQ:
-	    case OURFA_SCRIPT_CALL_START_RESP:
 	       break;
+	    case OURFA_SCRIPT_CALL_START_RESP:
 	    case OURFA_SCRIPT_CALL_RESP:
 	    case OURFA_SCRIPT_CALL_END_RESP:
-	       assert(sctx->script.cur);
-	       assert(sctx->script.cur->type == OURFA_XMLAPI_NODE_CALL);
-	       if (params.debug || sctx->script.cur->n.n_call.output) {
+	       if (params.debug
+		     || (sctx->script.cur == NULL)
+		     || (sctx->script.cur->n.n_call.output != 0)) {
 		  switch (params.output_format) {
 		     case OUTPUT_FORMAT_BATCH:
 			if (state == OURFA_SCRIPT_CALL_END_RESP)
@@ -842,42 +840,8 @@ int main(int argc, char **argv)
       if (params.debug)
 	 ourfa_hash_dump(params.h, stdout, "OUTPUT HASH:\n");
       dump_free(dump_ctx);
-   }else {
-      /*
-      fctx = ourfa_func_call_ctx_new(f, params.h);
-      if (fctx == NULL) {
-	 fprintf(stderr, "Can not create fctx\n");
-	 goto main_end;
-      }
-
-      last_err = ourfa_start_call(fctx, connection);
-
-      if (last_err != OURFA_OK) {
-	 ourfa_func_call_ctx_free(fctx);
-	 goto main_end;
-      }
-
-      last_err = ourfa_func_call_req(fctx, connection);
-      if (last_err  != OURFA_OK) {
-	 ourfa_func_call_ctx_free(fctx);
-	 goto main_end;
-      }
-
-      switch (params.output_format) {
-	 case OUTPUT_FORMAT_XML:
-	    res = ourfa_dump_xml(fctx, connection, stdout);
-	    break;
-	 case OUTPUT_FORMAT_BATCH:
-	    res = ourfa_dump_batch(fctx, connection, stdout);
-	    break;
-	 default:
-	    assert(0);
-	    break;
-      }
-      ourfa_func_call_ctx_free(fctx);
-      */
+      ourfa_script_call_ctx_free(sctx);
    }
-
 
 main_end:
    free_params(&params);

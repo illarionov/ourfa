@@ -909,7 +909,6 @@ ourfa_script_call_ctx_t *ourfa_script_call_ctx_new(
 
    assert(f);
    assert(h);
-   assert(f->script);
 
    sctx = malloc(sizeof(*sctx));
    if (sctx == NULL)
@@ -933,8 +932,6 @@ int ourfa_script_call_start(ourfa_script_call_ctx_t *sctx)
    if (sctx == NULL)
       return -1;
 
-   assert(sctx->script.f->script);
-
    sctx->script.cur = sctx->script.f->script;
    sctx->script.state = OURFA_FUNC_CALL_STATE_START;
    sctx->state = OURFA_SCRIPT_CALL_START;
@@ -947,12 +944,15 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 {
    int state;
 
-   assert(sctx->script.cur);
+   /* sctx->script.cur == null - execute XML API function as script */
 
    switch (sctx->state) {
       case OURFA_SCRIPT_CALL_START:
       case OURFA_SCRIPT_CALL_NODE:
-	 state = ourfa_func_call_step(&sctx->script);
+	 if (sctx->script.cur)
+	    state = ourfa_func_call_step(&sctx->script);
+	 else
+	    state = OURFA_FUNC_CALL_STATE_ENDCALL;
 	 switch (state) {
 	    case OURFA_FUNC_CALL_STATE_ERROR:
 	       sctx->state = OURFA_SCRIPT_CALL_ERROR;
@@ -965,23 +965,28 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 		  int last_err;
 		  ourfa_xmlapi_func_t *f;
 
-		  f = ourfa_xmlapi_func(sctx->script.f->xmlapi, sctx->script.cur->n.n_call.function);
-		  if (f == NULL) {
-		     sctx->script.printf_err(OURFA_ERROR_OTHER,
-			   sctx->script.err_ctx,
-			   "Function '%s' not found", sctx->script.cur->n.n_call.function);
-		     sctx->state = OURFA_SCRIPT_CALL_ERROR;
-		     return sctx->state;
-		  }
-		  if (f->script != NULL) {
-		     sctx->script.printf_err(OURFA_ERROR_OTHER,
-			   sctx->script.err_ctx,
-			   "Script `%s` can not be called from script `%s`: not implemented",
-			   f->name,
-			   sctx->script.f->name
-			   );
-		     sctx->state = OURFA_SCRIPT_CALL_ERROR;
-		     return sctx->state;
+		  if (sctx->script.cur) {
+		     f = ourfa_xmlapi_func(sctx->script.f->xmlapi, sctx->script.cur->n.n_call.function);
+		     if (f == NULL) {
+			sctx->script.printf_err(OURFA_ERROR_OTHER,
+			      sctx->script.err_ctx,
+			      "Function '%s' not found", sctx->script.cur->n.n_call.function);
+			sctx->state = OURFA_SCRIPT_CALL_ERROR;
+			return sctx->state;
+		     }
+		     if (f->script != NULL) {
+			sctx->script.printf_err(OURFA_ERROR_OTHER,
+			      sctx->script.err_ctx,
+			      "Script `%s` can not be called from script `%s`: not implemented",
+			      f->name,
+			      sctx->script.f->name
+			      );
+			sctx->state = OURFA_SCRIPT_CALL_ERROR;
+			return sctx->state;
+		     }
+		  }else {
+		     /* sctx->script.f - XMLAPI function  */
+		     f = sctx->script.f;
 		  }
 
 		  /* Begins function call  */
@@ -1017,12 +1022,10 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 	 }
 	 break;
       case OURFA_SCRIPT_CALL_END_REQ:
-	 sctx->state = OURFA_SCRIPT_CALL_START_RESP;
 	 ourfa_func_call_start(&sctx->func, 0);
+	 sctx->state = OURFA_SCRIPT_CALL_START_RESP;
 	 break;
       case OURFA_SCRIPT_CALL_START_RESP:
-	 sctx->state = OURFA_SCRIPT_CALL_RESP;
-	 break;
       case OURFA_SCRIPT_CALL_RESP:
 	 state = ourfa_func_call_resp_step(&sctx->func, conn);
 	 switch (state) {
@@ -1037,7 +1040,10 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 	 }
 	 break;
       case OURFA_SCRIPT_CALL_END_RESP:
-	 sctx->state = OURFA_SCRIPT_CALL_NODE;
+	 if (sctx->script.cur)
+	    sctx->state = OURFA_SCRIPT_CALL_NODE;
+	 else
+	    sctx->state = OURFA_SCRIPT_CALL_END;
 	 break;
       case OURFA_SCRIPT_CALL_END:
       case OURFA_SCRIPT_CALL_ERROR:
