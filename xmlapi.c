@@ -411,12 +411,12 @@ static void xmlapi_func_free(void * payload, xmlChar *name)
    free(val);
 }
 
-int ourfa_xmlapi_node_type_by_name(const xmlChar *node_name)
+int ourfa_xmlapi_node_type_by_name(const char *node_name)
 {
    unsigned n;
 
     for (n=0; n < sizeof(node_types)/sizeof(node_types[0]); n++) {
-      if (xmlStrcasecmp(node_name, (const xmlChar *)node_types[n].name)==0)
+      if (strcasecmp(node_name, node_types[n].name)==0)
 	 return node_types[n].type;
    }
    return OURFA_XMLAPI_NODE_UNKNOWN;
@@ -540,7 +540,7 @@ static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t
       }
       node->children = node->next = NULL;
 
-      node->type = ourfa_xmlapi_node_type_by_name(xml_node->name);
+      node->type = ourfa_xmlapi_node_type_by_name((const char *)xml_node->name);
       switch (node->type) {
 	 case OURFA_XMLAPI_NODE_INTEGER:
 	 case OURFA_XMLAPI_NODE_STRING:

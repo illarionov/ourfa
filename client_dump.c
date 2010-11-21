@@ -37,6 +37,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <libxml/parser.h>
+#include <libxml/tree.h>
+
 #include "ourfa.h"
 
 enum dump_format_t {

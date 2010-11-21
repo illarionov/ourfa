@@ -33,7 +33,6 @@
 #include <stdio.h>
 #include <time.h>
 
-#include <libxml/hash.h>
 #include <openssl/ssl.h>
 
 #define OURFA_LIB_VERSION	 3001
@@ -108,7 +107,7 @@ typedef enum {
 } ourfa_attr_data_type_t;
 
 typedef struct ourfa_pkt_t ourfa_pkt_t;
-typedef xmlHashTable ourfa_hash_t;
+typedef struct _xmlHashTable ourfa_hash_t;
 typedef struct ourfa_array_t ourfa_array_t;
 typedef struct ourfa_ssl_ctx_t ourfa_ssl_ctx_t;
 typedef struct ourfa_connection_t ourfa_connection_t;
@@ -352,14 +351,14 @@ ourfa_err_f_t  *ourfa_xmlapi_err_f(ourfa_xmlapi_t *xmlapi);
 void           *ourfa_xmlapi_err_ctx(ourfa_xmlapi_t *xmlapi);
 
 const char     *ourfa_xmlapi_node_name_by_type(int node_type);
-int             ourfa_xmlapi_node_type_by_name(const xmlChar *node_name);
+int             ourfa_xmlapi_node_type_by_name(const char *node_name);
 ourfa_xmlapi_func_t  *ourfa_xmlapi_func(ourfa_xmlapi_t *api, const char *name);
 void            ourfa_xmlapi_dump_func_definitions(ourfa_xmlapi_func_t *f, FILE *stream);
 
 /* Private  */
 /*  XML API */
 struct ourfa_xmlapi_t {
-   xmlHashTable *func_by_name;
+   struct _xmlHashTable *func_by_name;
    char *file;
 
    ourfa_err_f_t *printf_err;

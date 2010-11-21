@@ -847,7 +847,7 @@ main_end:
    free_params(&params);
    ourfa_connection_free(connection);
    ourfa_xmlapi_free(xmlapi);
-   xmlCleanupParser();
+   /* xmlCleanupParser(); */
 
    ERR_free_strings();
    EVP_cleanup();

@@ -49,22 +49,23 @@ install: ourfa_client
 clean:
 	rm -f *.o ourfa_client libourfa.a
 
+
+pkt.o: pkt.c ourfa.h
+	$(CC) $(CFLAGS) -c pkt.c
+error.o: error.c ourfa.h
+	$(CC) $(CFLAGS) -c error.c
+connection.o: connection.c ourfa.h
+	$(CC) $(CFLAGS) -c connection.c
+func_call.o: func_call.c ourfa.h
+	$(CC) $(CFLAGS) -c func_call.c
+ssl_ctx.o: ssl_ctx.c ourfa.h
+	$(CC) $(CFLAGS) -c ssl_ctx.c
 hash.o: hash.c ourfa.h
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c hash.c
-pkt.o: pkt.c ourfa.h
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c pkt.c
-error.o: error.c ourfa.h
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c error.c
-connection.o: connection.c ourfa.h
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c connection.c
-func_call.o: func_call.c ourfa.h
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c func_call.c
-ssl_ctx.o: ssl_ctx.c ourfa.h
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c ssl_ctx.c
 xmlapi.o: xmlapi.c ourfa.h
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c xmlapi.c
 client.o: client.c ourfa.h
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c client.c
+	$(CC) $(CFLAGS) -c client.c
 client_dump.o: client_dump.c ourfa.h
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c client_dump.c
 
