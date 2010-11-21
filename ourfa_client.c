@@ -785,6 +785,38 @@ int main(int argc, char **argv)
       if (ourfa_call(connection, xmlapi, params.action, params.h) != OURFA_OK)
 	 goto main_end;
       ourfa_hash_dump(params.h, stdout, "Action: %s. OUTPUT HASH:\n", params.action);
+   }else if (f->script) {
+      int state;
+      ourfa_script_call_ctx_t *sctx;
+
+      sctx = ourfa_script_call_ctx_new(f, params.h);
+      if (sctx == NULL) {
+	 fprintf(stderr, "malloc error");
+	 goto main_end;
+      }
+      ourfa_script_call_start(sctx);
+      state = OURFA_SCRIPT_CALL_START;
+      while(state != OURFA_SCRIPT_CALL_END) {
+	 state = ourfa_script_call_step(sctx, connection);
+	 if ((state == OURFA_SCRIPT_CALL_REQ) &&
+	       (sctx->func.state == OURFA_FUNC_CALL_STATE_START)) {
+	    ourfa_hash_dump(params.h, stderr, " CALL FUNC %s START HASH:\n",
+		  sctx->func.f->name
+		  );
+	 }else if ((state == OURFA_SCRIPT_CALL_RESP) &&
+	       (sctx->func.state == OURFA_FUNC_CALL_STATE_END)) {
+	    ourfa_hash_dump(params.h, stderr, "CALL FUNC %s END HASH:\n",
+		  sctx->func.f->name
+		  );
+	 }
+	 if (state == OURFA_SCRIPT_CALL_ERROR) {
+	    res = 1;
+	    ourfa_script_call_ctx_free(sctx);
+	    ourfa_hash_dump(params.h, stderr, " ERROR HASH:\n");
+	    goto main_end;
+	 }
+      }
+      ourfa_hash_dump(params.h, stdout, "OUTPUT HASH:\n");
    }else {
       fctx = ourfa_func_call_ctx_new(f, params.h);
       if (fctx == NULL) {

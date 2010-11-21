@@ -857,7 +857,7 @@ int ourfa_connection_start_func_call(ourfa_connection_t *connection, int func_id
    if (pkt == NULL)
       return connection->printf_err(OURFA_ERROR_SYSTEM, connection->err_ctx, NULL);
 
-   if (ourfa_connection_send_packet(connection, pkt, "SEND START FUNC CALL PKT ...") <= 0)
+   if (ourfa_connection_send_packet(connection, pkt, "SEND START FUNC CALL PKT ...\n") <= 0)
       goto ourfa_start_call_exit;
 
    if (ourfa_connection_recv_packet(connection, &recv_pkt, "RECVD START FUNC CALL RESPONSE PKT ...\n") <= 0)
@@ -1177,8 +1177,9 @@ static int read_attr_type(ourfa_connection_t *conn, const ourfa_attr_hdr_t **att
    if ((*attr)->attr_type != type)
       return conn->printf_err(OURFA_ERROR_WRONG_ATTRIBUTE, conn->err_ctx,
 	    "Received %s instead of %s attribute",
-	    ourfa_pkt_attr_type2str(type),
-	    ourfa_pkt_attr_type2str((*attr)->attr_type));
+	    ourfa_pkt_attr_type2str((*attr)->attr_type),
+	    ourfa_pkt_attr_type2str(type)
+	    );
 
    return OURFA_OK;
 }

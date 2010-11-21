@@ -219,6 +219,7 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 		  break;
 	       case OURFA_XMLAPI_NODE_ROOT:
 		  fctx->state = OURFA_FUNC_CALL_STATE_END;
+		  break;
 	       case OURFA_XMLAPI_NODE_CALL:
 		  fctx->state = OURFA_FUNC_CALL_STATE_ENDCALL;
 		  break;
@@ -297,13 +298,20 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 	 break;
       case OURFA_XMLAPI_NODE_IF:
 	 {
-	    char *s1;
+	    char *s1, *s2;
 	    int is_equal;
 	    int if_res;
 
 	    if (ourfa_hash_get_string(fctx->h, fctx->cur->n.n_if.variable, NULL, &s1) == 0) {
-	       /* XXX: wrong comparsion of double type  */
-	       is_equal = (strcmp(s1, fctx->cur->n.n_if.value) == 0);
+	       /* XXX: wrong comparsion of double type
+		*      n_if.value can be variable name or compared value
+		*      itself
+		*/
+	       if (ourfa_hash_get_string(fctx->h, fctx->cur->n.n_if.value, NULL, &s2) == 0) {
+		  is_equal = (strcmp(s1, s2) == 0);
+		  free(s2);
+	       }else
+		  is_equal = (strcmp(s1, fctx->cur->n.n_if.value) == 0);
 	       free(s1);
 	    }else
 	       /* Variable undefined Not equal */
@@ -374,7 +382,10 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 	    }
 	    break;
 	 case OURFA_XMLAPI_NODE_CALL:
-	    fctx->state = OURFA_FUNC_CALL_STATE_STARTCALL;
+	    if (fctx->cur->children)
+	       fctx->state = OURFA_FUNC_CALL_STATE_STARTCALL;
+	    else
+	       fctx->state = OURFA_FUNC_CALL_STATE_ENDCALL;
 	    break;
 	 case OURFA_XMLAPI_NODE_PARAMETER:
 	    fctx->state = OURFA_FUNC_CALL_STATE_NODE;
@@ -945,11 +956,9 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 	 switch (state) {
 	    case OURFA_FUNC_CALL_STATE_ERROR:
 	       sctx->state = OURFA_SCRIPT_CALL_ERROR;
-	       return state;
 	       break;
 	    case OURFA_FUNC_CALL_STATE_END:
 	       sctx->state = OURFA_SCRIPT_CALL_END;
-	       return state;
 	       break;
 	    case OURFA_FUNC_CALL_STATE_ENDCALL:
 	       {
@@ -962,7 +971,7 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 			   sctx->script.err_ctx,
 			   "Function '%s' not found", sctx->script.cur->n.n_call.function);
 		     sctx->state = OURFA_SCRIPT_CALL_ERROR;
-		     return state;
+		     return sctx->state;
 		  }
 		  if (f->script != NULL) {
 		     sctx->script.printf_err(OURFA_ERROR_OTHER,
@@ -972,7 +981,7 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 			   sctx->script.f->name
 			   );
 		     sctx->state = OURFA_SCRIPT_CALL_ERROR;
-		     return state;
+		     return sctx->state;
 		  }
 
 		  /* Begins function call  */
@@ -980,11 +989,10 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 		  last_err = ourfa_start_call(&sctx->func, conn);
 		  if (last_err != OURFA_OK) {
 		     sctx->state = OURFA_SCRIPT_CALL_ERROR;
-		     return state;
+		     return sctx->state;
 		  }
 		  ourfa_func_call_start(&sctx->func, 1);
 		  sctx->state = OURFA_SCRIPT_CALL_REQ;
-		  state = OURFA_FUNC_CALL_STATE_START;
 	       }
 	       break;
 	    default:
@@ -997,11 +1005,10 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 	    case OURFA_FUNC_CALL_STATE_END:
 	       ourfa_func_call_start(&sctx->func, 0);
 	       sctx->state = OURFA_SCRIPT_CALL_RESP;
-	       state = OURFA_FUNC_CALL_STATE_START;
 	       break;
 	    case OURFA_FUNC_CALL_STATE_ERROR:
 	       sctx->state = OURFA_SCRIPT_CALL_ERROR;
-	       return state;
+	       return sctx->state;
 	       break;
 	    default:
 	       break;
@@ -1012,11 +1019,9 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 	 switch (state) {
 	    case OURFA_FUNC_CALL_STATE_END:
 	       sctx->state = OURFA_SCRIPT_CALL_NODE;
-	       state = OURFA_FUNC_CALL_STATE_NODE;
 	       break;
 	    case OURFA_FUNC_CALL_STATE_ERROR:
 	       sctx->state = OURFA_SCRIPT_CALL_ERROR;
-	       return state;
 	       break;
 	    default:
 	       break;
@@ -1030,7 +1035,7 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 	 break;
    }
 
-   return state;
+   return sctx->state;
 }
 
 

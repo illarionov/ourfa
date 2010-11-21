@@ -342,6 +342,7 @@ int ourfa_xmlapi_load_script(ourfa_xmlapi_t *xmlapi,  const char *file,
 
    f->in = f->out = f->script = NULL;
    f->id = 0;
+   f->xmlapi = xmlapi;
    memcpy(f->name, function_name ? function_name : file, funcname_len+1);
    if (funcname_len > 4
 	 && (f->name[funcname_len-4] == '.')
@@ -784,7 +785,7 @@ static struct xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_
 	    break;
 	 default:
 	    ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
-		  "Unknown node type `%s`. Function: '%s'", xml_node->name,
+		  "Unknown node type `%s`. Function: '%s'\n", xml_node->name,
 		  f->name);
 	    break;
       }
