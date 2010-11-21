@@ -127,18 +127,6 @@ typedef struct ourfa_attr_hdr_t {
 
 typedef int ourfa_err_f_t (int err_code, void *user_ctx, const char *fmt, ...);
 
-struct ourfa_traverse_funcs_t {
-   int (* node)(/* struct xmlapi_func_node_t */void *node, void *user_ctx);
-   int (* start_for)(/* struct xmlapi_func_node_t */void *node,
-	 unsigned from, unsigned cnt, void *ctx);
-   int (* err_node)(const char *err_str, unsigned err_code, void *ctx);
-   int (* start_for_item)(void *ctx);
-   int (* end_for_item)(void *ctx);
-   int (* end_for)(void *ctx);
-};
-
-typedef struct ourfa_traverse_funcs_t ourfa_traverse_funcs_t;
-
 unsigned ourfa_lib_version();
 
 /* Packet */
