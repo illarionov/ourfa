@@ -914,6 +914,9 @@ int main(int argc, char **argv)
 	    default:
 	       break;
 	 }
+
+	 if (state == OURFA_SCRIPT_CALL_ERROR)
+	    break;
       }
       if (params.debug)
 	 ourfa_hash_dump(params.work_h, stdout, "OUTPUT HASH:\n");
