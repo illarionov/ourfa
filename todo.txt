@@ -5,6 +5,6 @@ errors
 -tclass_b 104 -size_b 400 -cost_b 0 -tclass_b 104 -size_b 0 -cost_b 1
 message,out nodes
 data file
-if gt condition
+
 
 

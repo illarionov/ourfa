@@ -410,6 +410,7 @@ struct ourfa_xmlapi_func_node_t {
 	 enum {
 	    OURFA_XMLAPI_IF_NE,
 	    OURFA_XMLAPI_IF_EQ,
+	    OURFA_XMLAPI_IF_GT
 	 } condition;
       } n_if;
       struct {

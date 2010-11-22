@@ -325,22 +325,41 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 	    int is_equal;
 	    int if_res;
 
-	    if (ourfa_hash_get_string(fctx->h, fctx->cur->n.n_if.variable, NULL, &s1) == 0) {
-	       /* XXX: wrong comparsion of double type
-		*      n_if.value can be variable name or compared value
-		*      itself
-		*/
-	       if (ourfa_hash_get_string(fctx->h, fctx->cur->n.n_if.value, NULL, &s2) == 0) {
-		  is_equal = (strcmp(s1, s2) == 0);
-		  free(s2);
+	    if (fctx->cur->n.n_if.condition == OURFA_XMLAPI_IF_GT) {
+	       double d1, d2;
+	       /* variable */
+	       if (ourfa_hash_get_double(fctx->h, fctx->cur->n.n_if.variable, NULL, &d1) != 0)
+		  d1 = 0;
+	       /* value */
+	       d2 = strtod(fctx->cur->n.n_if.value, &s1);
+	       if ((s1 == fctx->cur->n.n_if.value) || (*s1 != '\0')) {
+		  if (ourfa_hash_get_double(fctx->h, fctx->cur->n.n_if.value, NULL, &d2) != 0) {
+		     long long val;
+		     if (ourfa_func_call_get_long_prop_val(fctx, fctx->cur->n.n_if.value, &val) != OURFA_OK)
+			d2 = 0;
+		     else
+			d2 = val;
+		  }
+	       }
+	       if_res = (d1 > d2);
+	    }else {
+	       if (ourfa_hash_get_string(fctx->h, fctx->cur->n.n_if.variable, NULL, &s1) == 0) {
+		  /* XXX: wrong comparsion of double type
+		   *      n_if.value can be variable name or compared value
+		   *      itself
+		   */
+		  if (ourfa_hash_get_string(fctx->h, fctx->cur->n.n_if.value, NULL, &s2) == 0) {
+		     is_equal = (strcmp(s1, s2) == 0);
+		     free(s2);
+		  }else
+		     is_equal = (strcmp(s1, fctx->cur->n.n_if.value) == 0);
+		  free(s1);
 	       }else
-		  is_equal = (strcmp(s1, fctx->cur->n.n_if.value) == 0);
-	       free(s1);
-	    }else
-	       /* Variable undefined Not equal */
-	       is_equal = 0;
+		  /* Variable undefined Not equal */
+		  is_equal = 0;
 
-	    if_res = fctx->cur->n.n_if.condition == OURFA_XMLAPI_IF_EQ ? is_equal : !is_equal;
+	       if_res = fctx->cur->n.n_if.condition == OURFA_XMLAPI_IF_EQ ? is_equal : !is_equal;
+	    }
 
 	    if (if_res && fctx->cur->children != NULL)
 	       fctx->state = OURFA_FUNC_CALL_STATE_STARTIF;

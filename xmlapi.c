@@ -583,6 +583,10 @@ static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t
 		     && ((condition[1] == 'e') || (condition[1] == 'E'))
 		     && (condition[2] == '\0'))
 		  node->n.n_if.condition = OURFA_XMLAPI_IF_NE;
+	       else if ( ((condition[0] == 'g') || (condition[0] == 'G'))
+		     && ((condition[1] == 't') || (condition[1] == 'T'))
+		     && (condition[2] == '\0'))
+		  node->n.n_if.condition = OURFA_XMLAPI_IF_NE;
 	       else {
 		  ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
 			"Wrong condition on node `%s`. Function: '%s'",
@@ -940,7 +944,8 @@ static int dump_func_def(ourfa_xmlapi_func_node_t *def, FILE *stream)
 	    fprintf(stream, "%s %s %s %s\n",
 		  ourfa_xmlapi_node_name_by_type(cur->type),
 		  cur->n.n_if.variable,
-		  cur->n.n_if.condition == OURFA_XMLAPI_IF_EQ ? "eq" : "ne",
+		  cur->n.n_if.condition == OURFA_XMLAPI_IF_EQ ?
+		     "eq" : (cur->n.n_if.condition == OURFA_XMLAPI_IF_NE ? "ne" : "gt"),
 		  cur->n.n_if.value
 		  );
 	    break;
