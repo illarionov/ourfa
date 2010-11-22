@@ -383,6 +383,11 @@ enum ourfa_xmlapi_func_node_type_t {
    OURFA_XMLAPI_NODE_MESSAGE,
    OURFA_XMLAPI_NODE_SHIFT,
    OURFA_XMLAPI_NODE_REMOVE,
+   OURFA_XMLAPI_NODE_ADD,
+   OURFA_XMLAPI_NODE_SUB,
+   OURFA_XMLAPI_NODE_DIV,
+   OURFA_XMLAPI_NODE_MUL,
+   OURFA_XMLAPI_NODE_OUT,
    OURFA_XMLAPI_NODE_UNKNOWN
 };
 
@@ -444,6 +449,14 @@ struct ourfa_xmlapi_func_node_t {
 	 char *name;
 	 char *array_index;
       } n_remove;
+      struct {
+	 char *arg1;
+	 char *arg2;
+	 char *dst;
+      } n_math;
+      struct {
+	 char *var;
+      } n_out;
    } n;
 };
 

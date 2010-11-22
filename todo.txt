@@ -2,8 +2,9 @@ ATTR_TERMINATION err code
 tests, test server
 load config from file
 errors
-add,mul functions
 -tclass_b 104 -size_b 400 -cost_b 0 -tclass_b 104 -size_b 0 -cost_b 1
-message
+message,out nodes
+data file
+if gt condition
 
 
