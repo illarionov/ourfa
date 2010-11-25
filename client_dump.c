@@ -40,6 +40,8 @@
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
+#include <openssl/ssl.h>
+
 #include "ourfa.h"
 
 enum dump_format_t {

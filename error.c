@@ -31,6 +31,7 @@
 #include <arpa/inet.h>
 #include <assert.h>
 #include <string.h>
+#include <openssl/ssl.h>
 #include "ourfa.h"
 
 const char *ourfa_error_strerror(int err_code)

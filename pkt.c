@@ -39,6 +39,8 @@
 #include <string.h>
 #include <stdio.h>
 
+#include <openssl/ssl.h>
+
 #include "ourfa.h"
 
 #define PKT_HDR_SIZE	   4

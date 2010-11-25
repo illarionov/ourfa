@@ -39,6 +39,8 @@
 #include <string.h>
 #include <libxml/hash.h>
 
+#include <openssl/ssl.h>
+
 #include "ourfa.h"
 
 #define DEFAULT_ARRAY_SIZE 5

@@ -27,8 +27,6 @@
 #ifndef _OURFA_H
 #define _OURFA_H
 
-#include <openssl/ssl.h>
-
 #define OURFA_LIB_VERSION	 3001
 #define OURFA_PROTO_VERSION	 0x23
 
