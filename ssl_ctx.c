@@ -24,9 +24,11 @@
  * SUCH DAMAGE.
  */
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <sys/errno.h>
-#include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 
 #include <assert.h>
 #include <netdb.h>

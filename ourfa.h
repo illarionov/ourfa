@@ -27,12 +27,6 @@
 #ifndef _OURFA_H
 #define _OURFA_H
 
-#include <sys/types.h>
-#include <netinet/in.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <time.h>
-
 #include <openssl/ssl.h>
 
 #define OURFA_LIB_VERSION	 3001

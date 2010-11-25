@@ -31,6 +31,7 @@
 #include <sys/endian.h>
 #endif
 #include <sys/types.h>
+#include <netinet/in.h>
 #include <assert.h>
 #include <ctype.h>
 #include <stdarg.h>
