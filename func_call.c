@@ -325,22 +325,41 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 	    int is_equal;
 	    int if_res;
 
-	    if (ourfa_hash_get_string(fctx->h, fctx->cur->n.n_if.variable, NULL, &s1) == 0) {
-	       /* XXX: wrong comparsion of double type
-		*      n_if.value can be variable name or compared value
-		*      itself
-		*/
-	       if (ourfa_hash_get_string(fctx->h, fctx->cur->n.n_if.value, NULL, &s2) == 0) {
-		  is_equal = (strcmp(s1, s2) == 0);
-		  free(s2);
+	    if (fctx->cur->n.n_if.condition == OURFA_XMLAPI_IF_GT) {
+	       double d1, d2;
+	       /* variable */
+	       if (ourfa_hash_get_double(fctx->h, fctx->cur->n.n_if.variable, NULL, &d1) != 0)
+		  d1 = 0;
+	       /* value */
+	       d2 = strtod(fctx->cur->n.n_if.value, &s1);
+	       if ((s1 == fctx->cur->n.n_if.value) || (*s1 != '\0')) {
+		  if (ourfa_hash_get_double(fctx->h, fctx->cur->n.n_if.value, NULL, &d2) != 0) {
+		     long long val;
+		     if (ourfa_func_call_get_long_prop_val(fctx, fctx->cur->n.n_if.value, &val) != OURFA_OK)
+			d2 = 0;
+		     else
+			d2 = val;
+		  }
+	       }
+	       if_res = (d1 > d2);
+	    }else {
+	       if (ourfa_hash_get_string(fctx->h, fctx->cur->n.n_if.variable, NULL, &s1) == 0) {
+		  /* XXX: wrong comparsion of double type
+		   *      n_if.value can be variable name or compared value
+		   *      itself
+		   */
+		  if (ourfa_hash_get_string(fctx->h, fctx->cur->n.n_if.value, NULL, &s2) == 0) {
+		     is_equal = (strcmp(s1, s2) == 0);
+		     free(s2);
+		  }else
+		     is_equal = (strcmp(s1, fctx->cur->n.n_if.value) == 0);
+		  free(s1);
 	       }else
-		  is_equal = (strcmp(s1, fctx->cur->n.n_if.value) == 0);
-	       free(s1);
-	    }else
-	       /* Variable undefined Not equal */
-	       is_equal = 0;
+		  /* Variable undefined Not equal */
+		  is_equal = 0;
 
-	    if_res = fctx->cur->n.n_if.condition == OURFA_XMLAPI_IF_EQ ? is_equal : !is_equal;
+	       if_res = fctx->cur->n.n_if.condition == OURFA_XMLAPI_IF_EQ ? is_equal : !is_equal;
+	    }
 
 	    if (if_res && fctx->cur->children != NULL)
 	       fctx->state = OURFA_FUNC_CALL_STATE_STARTIF;
@@ -434,8 +453,76 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 	       }
 	    }
 	    break;
+	 case OURFA_XMLAPI_NODE_ADD:
+	 case OURFA_XMLAPI_NODE_SUB:
+	 case OURFA_XMLAPI_NODE_DIV:
+	 case OURFA_XMLAPI_NODE_MUL:
+	    {
+	       double arg1, arg2, dst;
+	       if (ourfa_hash_get_double(fctx->h,
+			fctx->cur->n.n_math.arg1,
+			NULL, &arg1) != 0) {
+		  fctx->printf_err(OURFA_ERROR_OTHER,
+			fctx->err_ctx,
+			"Can not get '%s' value of '%s' node in function %s",
+			"arg1", ourfa_xmlapi_node_name_by_type(fctx->cur->type),
+			fctx->f->name);
+		  fctx->state = OURFA_FUNC_CALL_STATE_ERROR;
+		  break;
+	       }
+	       if (ourfa_hash_get_double(fctx->h,
+			fctx->cur->n.n_math.arg2, NULL, &arg1) != 0) {
+		  fctx->printf_err(OURFA_ERROR_OTHER,
+			fctx->err_ctx,
+			"Can not get '%s' value of '%s' node in function %s",
+			"arg2", ourfa_xmlapi_node_name_by_type(fctx->cur->type),
+			fctx->f->name);
+		  fctx->state = OURFA_FUNC_CALL_STATE_ERROR;
+		  break;
+	       }
+	       switch (fctx->cur->type) {
+		  case OURFA_XMLAPI_NODE_ADD:
+		     dst = arg1 + arg2;
+		     break;
+		  case OURFA_XMLAPI_NODE_SUB:
+		     dst = arg1 - arg2;
+		     break;
+		  case OURFA_XMLAPI_NODE_DIV:
+		     if (arg2 == 0) {
+			fctx->printf_err(OURFA_ERROR_OTHER,
+			      fctx->err_ctx,
+			      "Division by zero in function %s",
+			      fctx->f->name
+			      );
+			fctx->state = OURFA_FUNC_CALL_STATE_ERROR;
+		     }else
+			dst = arg1 / arg2;
+		     break;
+		  case OURFA_XMLAPI_NODE_MUL:
+		     dst = arg1 * arg2;
+		     break;
+		  default:
+		     assert(0);
+		     break;
+	       }
+	       if (fctx->state == OURFA_FUNC_CALL_STATE_ERROR)
+		  break;
+	       if (ourfa_hash_set_double(fctx->h, fctx->cur->n.n_math.dst,
+			NULL, dst) != 0) {
+		  fctx->printf_err(OURFA_ERROR_OTHER, fctx->err_ctx, "Cannot set hash value ('%s(%s)'=%.2f) in function %s",
+			fctx->cur->n.n_math.dst,
+			"0",
+			dst,
+			fctx->f->name);
+		  fctx->state = OURFA_FUNC_CALL_STATE_ERROR;
+		  break;
+	       }
+	       fctx->state = OURFA_FUNC_CALL_STATE_NODE;
+	    }
+	    break;
 	 case OURFA_XMLAPI_NODE_SHIFT:
 	 case OURFA_XMLAPI_NODE_REMOVE:
+	 case OURFA_XMLAPI_NODE_OUT:
 	    /* XXX */
 	 default:
 	    assert(0);

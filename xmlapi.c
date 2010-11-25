@@ -71,7 +71,11 @@ static const struct {
    {OURFA_XMLAPI_NODE_PARAMETER, "parameter"},
    {OURFA_XMLAPI_NODE_MESSAGE,   "message"},
    {OURFA_XMLAPI_NODE_SHIFT,     "shift"},
-   {OURFA_XMLAPI_NODE_REMOVE,    "remove"}
+   {OURFA_XMLAPI_NODE_REMOVE,    "remove"},
+   {OURFA_XMLAPI_NODE_ADD,       "add"},
+   {OURFA_XMLAPI_NODE_DIV,       "div"},
+   {OURFA_XMLAPI_NODE_MUL,       "mul"},
+   {OURFA_XMLAPI_NODE_OUT,       "out"}
 };
 
 static void xmlapi_func_free(void * payload, xmlChar *name);
@@ -579,6 +583,10 @@ static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t
 		     && ((condition[1] == 'e') || (condition[1] == 'E'))
 		     && (condition[2] == '\0'))
 		  node->n.n_if.condition = OURFA_XMLAPI_IF_NE;
+	       else if ( ((condition[0] == 'g') || (condition[0] == 'G'))
+		     && ((condition[1] == 't') || (condition[1] == 'T'))
+		     && (condition[2] == '\0'))
+		  node->n.n_if.condition = OURFA_XMLAPI_IF_NE;
 	       else {
 		  ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
 			"Wrong condition on node `%s`. Function: '%s'",
@@ -784,6 +792,34 @@ static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t
 	       ret_code=get_xml_attributes(xml_node, my_nodes, sizeof(my_nodes)/sizeof(my_nodes[0]), xmlapi);
 	    }
 	    break;
+	 case OURFA_XMLAPI_NODE_ADD:
+	 case OURFA_XMLAPI_NODE_SUB:
+	 case OURFA_XMLAPI_NODE_MUL:
+	 case OURFA_XMLAPI_NODE_DIV:
+	    {
+	       struct t_nodes my_nodes[]= {
+		  {&node->n.n_math.arg1,     "arg1", 1},
+		  {&node->n.n_math.arg2,     "arg2", 1},
+		  {&node->n.n_math.dst,     "dst", 1},
+	       };
+
+	       /* XXX: Script only node */
+
+	       ret_code=get_xml_attributes(xml_node, my_nodes, sizeof(my_nodes)/sizeof(my_nodes[0]), xmlapi);
+	    }
+	    break;
+	 case OURFA_XMLAPI_NODE_OUT:
+	    {
+	       struct t_nodes my_nodes[]= {
+		  {&node->n.n_out.var,     "val", 1},
+	       };
+
+	       /* XXX: Script only node */
+
+	       ret_code=get_xml_attributes(xml_node, my_nodes, sizeof(my_nodes)/sizeof(my_nodes[0]), xmlapi);
+
+	    }
+	    break;
 	 default:
 	    ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
 		  "Unknown node type `%s`. Function: '%s'\n", xml_node->name,
@@ -908,7 +944,8 @@ static int dump_func_def(ourfa_xmlapi_func_node_t *def, FILE *stream)
 	    fprintf(stream, "%s %s %s %s\n",
 		  ourfa_xmlapi_node_name_by_type(cur->type),
 		  cur->n.n_if.variable,
-		  cur->n.n_if.condition == OURFA_XMLAPI_IF_EQ ? "eq" : "ne",
+		  cur->n.n_if.condition == OURFA_XMLAPI_IF_EQ ?
+		     "eq" : (cur->n.n_if.condition == OURFA_XMLAPI_IF_NE ? "ne" : "gt"),
 		  cur->n.n_if.value
 		  );
 	    break;
@@ -970,6 +1007,20 @@ static int dump_func_def(ourfa_xmlapi_func_node_t *def, FILE *stream)
 	    fprintf(stream, "remove %s[%s]\n", cur->n.n_remove.name,
 		  cur->n.n_remove.array_index ? cur->n.n_remove.array_index : "0"
 		  );
+	    break;
+	 case OURFA_XMLAPI_NODE_ADD:
+	 case OURFA_XMLAPI_NODE_SUB:
+	 case OURFA_XMLAPI_NODE_DIV:
+	 case OURFA_XMLAPI_NODE_MUL:
+	    fprintf(stream, "%s %s, %s; dst: %s\n",
+		  ourfa_xmlapi_node_name_by_type(cur->type),
+		  cur->n.n_math.arg1,
+		  cur->n.n_math.arg2,
+		  cur->n.n_math.dst
+		  );
+	    break;
+	 case OURFA_XMLAPI_NODE_OUT:
+	    fprintf(stream, "out %s\n", cur->n.n_out.var);
 	    break;
 	 default:
 	    fprintf(stream, "uknown node %u\n", cur->type);
@@ -1101,6 +1152,17 @@ static void free_func_def(ourfa_xmlapi_func_node_t *def)
 	 case OURFA_XMLAPI_NODE_REMOVE:
 	    free(def->n.n_remove.name);
 	    free(def->n.n_remove.array_index);
+	    break;
+	 case OURFA_XMLAPI_NODE_ADD:
+	 case OURFA_XMLAPI_NODE_SUB:
+	 case OURFA_XMLAPI_NODE_DIV:
+	 case OURFA_XMLAPI_NODE_MUL:
+	    free(def->n.n_math.arg1);
+	    free(def->n.n_math.arg2);
+	    free(def->n.n_math.dst);
+	    break;
+	 case OURFA_XMLAPI_NODE_OUT:
+	    free(def->n.n_out.var);
 	    break;
 	 case OURFA_XMLAPI_NODE_BREAK:
 	 case OURFA_XMLAPI_NODE_ROOT:
