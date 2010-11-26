@@ -27,34 +27,25 @@
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
-
 #include "ppport.h"
-
 #include "const-c.inc"
-#include "ourfa/ourfa.h"
 
 #include <assert.h>
 #include <openssl/ssl.h>
+#include "ourfa.h"
 
 #define NEED_newRV_noinc
 #define NEED_newSVpvn_flags
 #define NEED_sv_2pv_flags
 
-static int node_func(const char *node_type, const char *node_name, const char *arr_index , void *ctx);
-static int start_for_func(const char *array_name,
-   const char *node_name, unsigned from, unsigned cnt, void *ctx);
-static int start_for_item(void *ctx);
-static int end_for_item(void *ctx);
-static int end_for(void *ctx);
-
-static const ourfa_traverse_funcs_t hooks = {
-   node_func,
-   start_for_func,
-   NULL,
-   start_for_item,
-   end_for_item,
-   end_for
-};
+/*  Debugging output */
+#if 0
+#define PR(s) printf(s);
+#define PRN(s,n) printf("'%s' (%d)\n",s,n);
+#else
+#define PR(s)
+#define PRN(s,n)
+#endif
 
 #define OURFA2HV_S_SIZE 20
 struct ourfah2hv_ctx {
@@ -260,282 +251,22 @@ int hv2ourfah(HV *hv, ourfa_hash_t **h)
    return 1;
 }
 
-int ourfa_exec(ourfa_t *ourfa, const char *func_name, ourfa_hash_t *in, HV **res,
-   char *err_msg, size_t err_msg_size)
-{
-   struct ourfah2hv_ctx my_ctx;
-   ourfa_xmlapi_t *xmlapi;
-   ourfa_conn_t *conn;
-   ourfa_hash_t *h;
-   void *loadresp_ctx;
-
-   if (!ourfa) { if (err_msg){snprintf(err_msg, err_msg_size, "ourfa is NULL");} return -2;}
-   if (!func_name) { if (err_msg){snprintf(err_msg, err_msg_size, "undefined function");} return -2;}
-   if (!res) { if (err_msg){snprintf(err_msg, err_msg_size, "undefined function");} return -2;}
-
-   xmlapi = ourfa_get_xmlapi(ourfa);
-   if (!xmlapi) {
-      if(err_msg){snprintf(err_msg, err_msg_size, "XML API not loaded");}
-      return -2;
-   }
-
-   my_ctx.res_h=newHV();
-
-   if (!my_ctx.res_h) {
-      if (err_msg) {
-	 snprintf(err_msg, err_msg_size, "no HV");
-      }
-      return -2;
-   }
-
-   if (ourfa_start_call(ourfa, func_name, in) < 0) {
-      if (err_msg) {
-	 snprintf(err_msg, err_msg_size, "%s", ourfa_last_err_str(ourfa));
-      }
-      hv_undef(my_ctx.res_h);
-      return -2;
-   }
-
-   my_ctx.s[0]=(SV *)my_ctx.res_h;
-   my_ctx.top_idx=0;
-
-   conn = ourfa_get_conn(ourfa);
-   if (!conn) {
-      if(err_msg){snprintf(err_msg, err_msg_size, "Connection closed");}
-      hv_undef(my_ctx.res_h);
-      return -2;
-   }
-
-   loadresp_ctx = ourfa_xmlapictx_load_resp_init(
-	 xmlapi,
-	 func_name,
-	 conn,
-	 &hooks,
-	 err_msg,
-	 err_msg_size,
-	 &my_ctx,
-	 in
-	 );
-
-   if (loadresp_ctx == NULL) {
-      hv_undef(my_ctx.res_h);
-      return -3;
-   }
-
-   my_ctx.h = in;
-
-   h = ourfa_xmlapictx_load_resp(loadresp_ctx);
-
-   if (h == NULL) {
-      hv_undef(my_ctx.res_h);
-      return -3;
-   }
-
-   *res = my_ctx.res_h;
-
-   return 0;
-}
-
-static int node_func(const char *node_type, const char *node_name, const char *arr_index , void *ctx)
-{
-   struct ourfah2hv_ctx *my_ctx;
-   HV *h;
-   SV *sv;
-   int ret_code=0;
-
-   my_ctx = ctx;
-
-   sv = my_ctx->s[my_ctx->top_idx];
-
-   assert(SvTYPE(sv) == SVt_PVHV);
-   h = (HV *)sv;
-
-   assert(h);
-   if (arr_index==NULL)
-      arr_index="0";
-
-   /*   printf("node_func: '%s' '%s'('%s')\n", node_type, node_name, arr_index); */
-
-   if (strcasecmp(node_type, "integer") == 0
-	 || (strcasecmp(node_type, "long") == 0)) {
-      long long val;
-      SV *tmp;
-      if (ourfa_hash_get_long(my_ctx->h, node_name, arr_index, &val) == 0 ) {
-	 /* printf("node_func: integer: '%s'('%s')=%li\n", node_name, arr_index, val); */
-	 tmp = newSViv(val);
-	 if (hv_store(h, node_name, strlen(node_name), tmp, 0)==NULL) {
-	    SvREFCNT_dec(tmp);
-	    ret_code = -1;
-	 }
-      }
-   } else if (strcasecmp(node_type, "double") == 0) {
-      double val;
-      SV *tmp;
-      if (ourfa_hash_get_double(my_ctx->h, node_name, arr_index, &val) == 0 ) {
-	 tmp = newSVnv(val);
-	 if (hv_store(h, node_name, strlen(node_name), tmp, 0)==NULL) {
-	    SvREFCNT_dec(tmp);
-	    ret_code = -1;
-	 }
-      }
-   } else if (strcasecmp(node_type, "string") == 0
-	 || (strcasecmp(node_type, "ip_address") == 0)) {
-      char *s;
-      SV *tmp;
-      if (ourfa_hash_get_string(my_ctx->h, node_name, arr_index, &s) == 0 ) {
-	 tmp = newSVpvn(s, strlen(s));
-	 SvUTF8_on(tmp);
-	 /* tmp = newSVpvn_utf8(s, strlen(s), 1); */
-	 if (hv_store(h, node_name, strlen(node_name), tmp, 0)==NULL) {
-	    SvREFCNT_dec(tmp);
-	    ret_code = -1;
-	 }
-	 free(s);
-      }
-   } else {
-      /* UNREACHABLE  */
-      assert(0);
-   }
-
-   my_ctx->err_code = ret_code;
-
-   return ret_code;
-}
-
-
-static int start_for_func(const char *array_name,
-   const char *node_name, unsigned from, unsigned cnt, void *ctx)
-{
-   struct ourfah2hv_ctx *my_ctx;
-   HV *h;
-   AV *arr;
-   SV *rvav;
-   SV **res;
-
-   if (from || node_name) {};
-
-   my_ctx = ctx;
-   /* printf("start_fot_func: '%s' from: %u cnt: %u\n", node_name, from, cnt); */
-
-   if (cnt == 0)
-      return 0;
-
-   h = (HV *)my_ctx->s[my_ctx->top_idx];
-
-   if (my_ctx->top_idx+1 >= OURFA2HV_S_SIZE)
-      return -1;
-
-   arr = newAV();
-   if (!arr)
-      return -1;
-
-   rvav = newRV_noinc((SV *)arr);
-   if (!rvav) {
-      SvREFCNT_dec(arr);
-      return -1;
-   }
-
-   if ((res = hv_store(h, array_name, strlen(array_name), rvav, 0))==NULL) {
-      SvREFCNT_dec(rvav);
-      return -1;
-   }
-
-   my_ctx->s[++my_ctx->top_idx]=*res;
-
-   return 0;
-}
-
-static int start_for_item(void *ctx)
-{
-   struct ourfah2hv_ctx *my_ctx;
-   HV *h0;
-   SV *sv, *rvhv;
-   AV *av;
-
-   my_ctx = ctx;
-
-   sv = my_ctx->s[my_ctx->top_idx];
-
-   if (my_ctx->top_idx+1 >= OURFA2HV_S_SIZE)
-      return -1;
-
-   assert(SvROK(sv));
-   assert(SvTYPE(SvRV(sv)) == SVt_PVAV);
-   /* printf("start_fot_item\n"); */
-
-   h0 = newHV();
-   if (!h0)
-      return -1;
-
-   rvhv = newRV_noinc((SV *)h0);
-   if (!rvhv) {
-      SvREFCNT_dec(h0);
-      return -1;
-   }
-
-   av = (AV *)SvRV(sv);
-   av_push(av, (SV *)rvhv);
-
-   my_ctx->s[++my_ctx->top_idx]=(SV *)h0;
-
-   return 0;
-}
-
-static int end_for_item(void *ctx)
-{
-   struct ourfah2hv_ctx *my_ctx;
-   SV *sv;
-
-   my_ctx = ctx;
-
-   assert(my_ctx->top_idx > 0);
-   /* printf("end_fot_item\n"); */
-
-   sv = my_ctx->s[my_ctx->top_idx];
-   assert(SvTYPE(sv) == SVt_PVHV);
-
-   my_ctx->top_idx--;
-
-   sv = my_ctx->s[my_ctx->top_idx];
-   assert(SvROK(sv) && (SvTYPE(SvRV(sv)) == SVt_PVAV));
-
-   return 0;
-}
-
-static int end_for(void *ctx)
-{
-   struct ourfah2hv_ctx *my_ctx;
-   SV *sv;
-
-   my_ctx = ctx;
-
-   assert(my_ctx->top_idx > 0);
-
-   sv = my_ctx->s[my_ctx->top_idx];
-   assert(SvROK(sv) && (SvTYPE(SvRV(sv)) == SVt_PVAV));
-
-   my_ctx->top_idx--;
-
-   return 0;
-}
-
-
-
 MODULE = Ourfa		PACKAGE = Ourfa
 
 INCLUDE: const-xs.inc
+PROTOTYPES: ENABLE
 
-void BEGIN()
-   CODE:
-      SSL_load_error_strings();
-      SSL_library_init();
+BOOT:
+   SSL_load_error_strings();
+   SSL_library_init();
+
 
 void
 new(...)
    PREINIT:
       SV *    sv;
       SV **   sv0;
-      ourfa_t *ourfa;
+      ourfa_connection_t *ourfa;
       char *login = NULL;
       char *password = NULL;
       char *server_port = NULL;
@@ -571,11 +302,6 @@ new(...)
       /* /printf("Ourfa::new\n"); */
       if ((items == 0) || ((items % 2) == 0)) {
 	 croak("Wrong argument list. Usage: Ourfa->new(%%params)");
-      }
-
-      ourfa = ourfa_new();
-      if (!ourfa) {
-	 croak("Can not create OURFA object");
       }
 
       for(i=1; i<items; i += 2) {
@@ -653,30 +379,8 @@ new(...)
 
       if (res != 0) {
 	 char *err;
-	 sv = newSVpv(ourfa_last_err_str(ourfa),0);
-	 err = SvPV_nolen(sv);
-	 ourfa_free(ourfa);
 	 croak("test1");
       }
-
-      if (debug) {
-	 ourfa_set_debug_stream(ourfa, stdout);
-      }
-      ourfa_set_auto_reconnect(ourfa, auto_reconnect);
-      ourfa_set_ssl(ourfa, ssl_type, ssl_cert, ssl_key);
-
-      res = ourfa_connect(ourfa);
-      if (res != 0) {
-	 char *err;
-	 sv = newSVpv(ourfa_last_err_str(ourfa),0);
-	 err = SvPV_nolen(sv);
-	 ourfa_free(ourfa);
-	 croak(err);
-      }
-
-      sv = newSViv(PTR2IV(ourfa));
-      sv = newRV_noinc(sv);
-      sv_bless(sv, gv_stashpv("Ourfa",0));
 
       mPUSHs(sv);
 
@@ -689,43 +393,18 @@ call(self, func_name, in)
    PREINIT:
       SV *    sv;
       HV *    res_h;
-      ourfa_t *ourfa;
+      ourfa_connection_t *ourfa;
       ourfa_hash_t *ourfa_in;
       int res;
       const char *err_str;
       char err_msg[500];
    PPCODE:
       /*   printf("Ourfa::call\n"); */
-      err_str=NULL;
-      if (!SvROK(self))
-	 croak("Not a reference");
-      else if (!sv_isa(self, "Ourfa"))
-	 croak("Wrong reference type");
-      else if (!SvROK(in) || (SvTYPE(SvRV(in)) != SVt_PVHV))
-	 croak("Wrong input parameters");
-
-      ourfa = INT2PTR(void *, SvIV(SvRV(self)));
-      if (hv2ourfah((HV *) SvRV(in), &ourfa_in) <= 0) {
-	 croak("Can not parse input parameters");
-      }
-
-      snprintf(err_msg, sizeof(err_msg), "Unknown error");
-      /* ourfa_hash_dump(ourfa_in, stdout, "func %s. INPUT parameters:\n", func_name); */
-      if ((res = ourfa_exec(ourfa, func_name, ourfa_in, &res_h,
-	    err_msg, sizeof(err_msg)))) {
-	 /* /printf("error: %s\n", err_msg); */
-	 ourfa_hash_free(ourfa_in);
-	 croak(err_msg);
-      }
-
-      ourfa_hash_free(ourfa_in);
-
-      sv = newRV_noinc((SV *)res_h);
 
       mXPUSHs(sv);
 
 
-     
+
 
 void DESTROY(self)
    SV *self

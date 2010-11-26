@@ -1,0 +1,11 @@
+TYPEMAP
+ourfa_pkt_t *			T_PTROBJ
+ourfa_hash_t *			T_PTROBJ
+ourfa_ssl_ctx_t *		T_PTROBJ
+ourfa_connection_t *		T_PTROBJ
+ourfa_xmlapi_t *		T_PTROBJ
+ourfa_xmlapi_func_t *		T_PTROBJ
+ourfa_xmlapi_func_node_t *	T_PTROBJ
+ourfa_func_call_ctx_t *		T_PTROBJ
+ourfa_script_call_ctx_t *	T_PTROBJ
+ourfa_attr_hdr_t *		T_PTRREF

@@ -100,7 +100,6 @@ typedef enum {
 
 typedef struct ourfa_pkt_t ourfa_pkt_t;
 typedef struct _xmlHashTable ourfa_hash_t;
-typedef struct ourfa_array_t ourfa_array_t;
 typedef struct ourfa_ssl_ctx_t ourfa_ssl_ctx_t;
 typedef struct ourfa_connection_t ourfa_connection_t;
 typedef struct ourfa_xmlapi_t ourfa_xmlapi_t;
