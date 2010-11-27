@@ -253,6 +253,49 @@ int hv2ourfah(HV *hv, ourfa_hash_t **h)
    return 1;
 }
 
+static in_addr_t sv2in_addr_t(SV *val, const char *proc)
+{
+   STRLEN addrlen;
+   struct in_addr addr;
+   char * ip_address;
+   if (DO_UTF8(val) && !sv_utf8_downgrade(val, 1))
+      croak("Wide character in %s", proc);
+   ip_address = SvPVbyte(val, addrlen);
+   if (addrlen != sizeof(addr) && addrlen != 4)
+      croak("Bad arg length for %s, length is %d, should be %d",
+	    "Ourfa::Connection::session_ip",
+	    addrlen, sizeof(addr));
+
+   return (ip_address[0] & 0xFF) << 24 |
+      (ip_address[1] & 0xFF) << 16 |
+      (ip_address[2] & 0xFF) <<  8 |
+      (ip_address[3] & 0xFF);
+}
+
+int ourfa_err_f_warn(int err_code, void *user_ctx, const char *fmt, ...)
+{
+
+   va_list ap;
+   SV * saved_error;
+
+   if (user_ctx) {}
+
+   saved_error = sv_newmortal();
+
+   if (fmt) {
+      va_start(ap, fmt);
+      sv_vsetpvf(saved_error, fmt, &ap);
+      va_end(ap);
+   }else if (err_code == OURFA_ERROR_SYSTEM) {
+      sv_setpv(saved_error, strerror(errno));
+   }else
+      sv_setpv(saved_error, ourfa_error_strerror(err_code));
+   
+   warn(SvPVbyte_nolen(saved_error));
+
+   return err_code;
+}
+
 MODULE = Ourfa		PACKAGE = Ourfa
 
 INCLUDE: const-xs.inc
@@ -268,6 +311,9 @@ MODULE = Ourfa::Connection PACKAGE = Ourfa::Connection PREFIX = ourfa_connection
 ourfa_connection_t *
 ourfa_connection_new(ssl_ctx=NULL)
    ourfa_ssl_ctx_t *ssl_ctx
+   POSTCALL:
+      if (RETVAL)
+	 ourfa_connection_set_err_f(RETVAL, ourfa_err_f_warn, NULL);
 
 bool
 ourfa_connection_is_connected(connection)
@@ -433,24 +479,19 @@ ourfa_connection_session_ip(connection, val)
    SV *val=NO_INIT
    PREINIT:
       const in_addr_t *ip0;
+      int res;
    CODE:
       if (items > 1) {
 	 STRLEN addrlen;
-	 struct in_addr addr;
+	 in_addr_t addr;
 	 char * ip_address;
-	 if (DO_UTF8(val) && !sv_utf8_downgrade(val, 1))
-	    croak("Wide character in %s","Ourfa::Connection::session_ip");
-	 ip_address = SvPVbyte(val, addrlen);
-	 if (addrlen == sizeof(addr) || addrlen == 4)
-	    addr.s_addr =
-	       (ip_address[0] & 0xFF) << 24 |
-	       (ip_address[1] & 0xFF) << 16 |
-	       (ip_address[2] & 0xFF) <<  8 |
-	       (ip_address[3] & 0xFF);
-	 else
-	    croak("Bad arg length for %s, length is %d, should be %d",
-		  "Ourfa::Connection::session_ip",
-		  addrlen, sizeof(addr));
+	 if (SvOK(val)) {
+	    addr = sv2in_addr_t(val, "Ourfa::Connection::session_ip");
+	    res = ourfa_connection_set_session_ip(connection, &addr);
+	 }else
+	    res = ourfa_connection_set_session_ip(connection, NULL);
+	 if (res != OURFA_OK)
+	    croak("%s: %s", "Ourfa::Connection::session_ip", ourfa_error_strerror(res));
       }
       ip0 = ourfa_connection_session_ip(connection);
       if (ip0) {
@@ -465,11 +506,27 @@ BIO *
 ourfa_connection_bio(connection)
    ourfa_connection_t *connection
 
+FILE *
+ourfa_connection_debug_stream(connection, val)
+   ourfa_connection_t *connection
+   FILE *val=NO_INIT
+   PREINIT:
+      int res;
+   CODE:
+      if (items > 1) {
+	 res = ourfa_connection_set_debug_stream(connection, val);
+	 if (res != OURFA_OK)
+	    croak("%s: %s", "Ourfa::Connection::debug_stream", ourfa_error_strerror(res));
+	 RETVAL=val;
+      }else
+	 RETVAL = ourfa_connection_debug_stream(connection);
+   OUTPUT:
+      RETVAL
+
+
 #ourfa_connection_err_f
-#ourfa_connection_set_debug_stream
 #ourfa_connection_set_err_f
 #ourfa_connection_err_ctx
-#ourfa_connection_debug_stream
 
 void
 ourfa_connection_open(connection)
@@ -578,6 +635,69 @@ ourfa_connection_read_ip(connection, type=OURFA_ATTR_DATA)
       ST(0) = sv_newmortal();
       sv_setpvn(ST(0), (char *)&ip, sizeof(ip));
 
+
+#ourfa_connection_write_attr
+
+NO_OUTPUT int
+ourfa_connection_write_int(connection, val, type=OURFA_ATTR_DATA)
+   ourfa_connection_t *connection
+   unsigned type
+   int val
+   CODE:
+      RETVAL = ourfa_connection_write_int(connection, type, val);
+      if (RETVAL != OURFA_OK)
+	 croak("%s: %s", "Ourfa::Connection::write_int", ourfa_error_strerror(RETVAL));
+
+NO_OUTPUT int
+ourfa_connection_write_long(connection, val, type=OURFA_ATTR_DATA)
+   ourfa_connection_t *connection
+   unsigned type
+   long long val
+   CODE:
+      RETVAL = ourfa_connection_write_int(connection, type, val);
+      if (RETVAL != OURFA_OK)
+	 croak("%s: %s", "Ourfa::Connection::write_long", ourfa_error_strerror(RETVAL));
+
+NO_OUTPUT int
+ourfa_connection_write_double(connection, val, type=OURFA_ATTR_DATA)
+   ourfa_connection_t *connection
+   unsigned type
+   double val
+   CODE:
+      RETVAL = ourfa_connection_write_double(connection, type, val);
+      if (RETVAL != OURFA_OK)
+	 croak("%s: %s", "Ourfa::Connection::write_double", ourfa_error_strerror(RETVAL));
+
+NO_OUTPUT int
+ourfa_connection_write_string(connection, val, type=OURFA_ATTR_DATA)
+   ourfa_connection_t *connection
+   unsigned type
+   const char *val
+   CODE:
+      RETVAL = ourfa_connection_write_string(connection, type, val);
+      if (RETVAL != OURFA_OK)
+	 croak("%s: %s", "Ourfa::Connection::write_string", ourfa_error_strerror(RETVAL));
+
+NO_OUTPUT int
+ourfa_connection_write_ip(connection, val, type=OURFA_ATTR_DATA)
+   ourfa_connection_t *connection
+   unsigned type
+   SV *val
+   PREINIT:
+      in_addr_t addr;
+   CODE:
+      addr = sv2in_addr_t(val, "Ourfa::Connection::write_ip");
+      RETVAL = ourfa_connection_write_ip(connection, type, addr);
+      if (RETVAL != OURFA_OK)
+	 croak("%s: %s", "Ourfa::Connection::write_string", ourfa_error_strerror(RETVAL));
+
+int
+ourfa_connection_flush_read(connection)
+   ourfa_connection_t *connection
+
+int
+ourfa_connection_flush_write(connection)
+   ourfa_connection_t *connection
 
 
 void
