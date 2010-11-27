@@ -9,3 +9,5 @@ ourfa_xmlapi_func_node_t *	T_PTROBJ
 ourfa_func_call_ctx_t *		T_PTROBJ
 ourfa_script_call_ctx_t *	T_PTROBJ
 ourfa_attr_hdr_t *		T_PTRREF
+SSL_CTX *			T_IV
+BIO *				T_PTRREF

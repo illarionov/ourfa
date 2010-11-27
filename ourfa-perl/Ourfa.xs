@@ -261,156 +261,95 @@ BOOT:
    SSL_library_init();
 
 
-void
-new(...)
-   PREINIT:
-      SV *    sv;
-      SV **   sv0;
-      ourfa_connection_t *ourfa;
-      char *login = NULL;
-      char *password = NULL;
-      char *server_port = NULL;
-      char *api_xml_dir = NULL;
-      char *api_xml_file = NULL;
-      char *ssl_cert = NULL;
-      char *ssl_key = NULL;
-      int debug = 0;
-      unsigned login_type = -1;
-      unsigned ssl_type = OURFA_SSL_TYPE_NONE;
-      int timeout = -1;
-      int auto_reconnect = 0;
-      unsigned i;
+MODULE = Ourfa::Connection PACKAGE = Ourfa::Connection PREFIX = ourfa_connection_
 
-      struct t_str_params {
-	 char *key;
-	 char **val;
-      } str_params[]={
-	    {"login", &login  },
-	    {"password", &password  },
-	    {"server", &server_port  },
-	    {"api_xml_dir", &api_xml_dir  },
-	    {"api_xml_file", &api_xml_file  },
-	    {"ssl_cert", &ssl_cert  },
-	    {"ssl_key", &ssl_key  },
-	    {NULL, NULL}
-      };
-      struct t_str_params *t;
-      int res;
+ourfa_connection_t *
+ourfa_connection_new(ssl_ctx=NULL)
+   ourfa_ssl_ctx_t *ssl_ctx
 
-   PPCODE:
+bool
+ourfa_connection_is_connected(connection)
+   ourfa_connection_t *connection
 
-      /* /printf("Ourfa::new\n"); */
-      if ((items == 0) || ((items % 2) == 0)) {
-	 croak("Wrong argument list. Usage: Ourfa->new(%%params)");
-      }
+unsigned
+ourfa_connection_proto(connection)
+   ourfa_connection_t *connection
 
-      for(i=1; i<items; i += 2) {
-	 const char *p;
-	 int found = 0;
+# XXX: check ref count
+ourfa_ssl_ctx_t *
+ourfa_connection_ssl_ctx(connection)
+   ourfa_connection_t *connection
 
-	 p = SvPV_nolen(ST(i));
-	 if (!p) {
-	    croak("Wrong parameter num %u: not a string", i);
-	 }
+# XXX
+unsigned
+ourfa_connection_login_type(connection)
+   ourfa_connection_t *connection
 
-	 for (t=&str_params[0]; t->key && !found; t++) {
-	    if (strcmp(p, t->key) == 0) {
-	       if (SvOK(ST(i+1))) {
-		  *t->val = SvPV_nolen(ST(i+1));
-	       }else {
-		  *t->val = NULL;
-	       }
-	       found=1;
-	    }
-	 }
-	 if (!found) {
-	    if(strcmp(p, "debug") == 0) {
-	       debug = SvTRUE(ST(i+1));
-	    }else if(strcmp(p, "auto_reconnect") == 0) {
-	       auto_reconnect = SvTRUE(ST(i+1));
-	    }else if (strcmp(p, "login_type") == 0) {
-	       const char *type;
-	       type = SvPV_nolen(ST(i+1));
-	       if (!type) {
-		  croak("Wrong parameter `login_type`: not a string");
-	       }
-	       if (strcmp(type, "admin") == 0) {
-		  login_type = OURFA_LOGIN_SYSTEM;
-	       }else if (strcmp(type, "user") == 0) {
-		  login_type = OURFA_LOGIN_USER;
-	       }else if (strcmp(type, "dealer") == 0) {
-		  login_type = OURFA_LOGIN_CARD;
-	       }else if (SvOK(ST(i+1))){
-		  croak("Wrong parameter `login_type`: unknown type `%s`. "
-			"Allowed types: admin, user, dealer", type);
-	       }
-	    }else if(strcmp(p, "ssl") == 0) {
-	       const char *p;
-	       p = SvPV_nolen(ST(i+1));
+unsigned
+ourfa_connection_timeout(connection)
+   ourfa_connection_t *connection
 
-	       if (strcmp(p,"tlsv1")==0) {
-		  ssl_type=OURFA_SSL_TYPE_TLS1;
-	       }else if (strcmp(p,"sslv3")==0) {
-		  ssl_type=OURFA_SSL_TYPE_SSL3;
-	       }else if (strcmp(p,"rsa_cert")==0)  {
-		  ssl_type=OURFA_SSL_TYPE_RSA_CRT;
-	       }else if ((strcmp(p,"none")==0) || (!SvTRUE(ST(i+1))))  {
-		  ssl_type=OURFA_SSL_TYPE_NONE;
-	       }else{
-		  croak("Wrong parameter `ssl`: unknown type `%s`. "
-			"Allowed types: none, tlsv1, sslv3, rsa_cert", p);
-	       }
-	    }else if (strcmp(p, "timeout") == 0) {
-	       if (SvOK(ST(i+1))) {
-		  timeout = SvUV(ST(i+1));
-	       }
-	    }else {
-	       croak("Unknown parameter `%s`", p);
-	    }
-	 }
-      }
+bool
+ourfa_connection_auto_reconnect(connection)
+   ourfa_connection_t *connection
 
-      res = ourfa_set_conf(ourfa,
-	 login, password, server_port,
-	 (login_type == (unsigned)-1) ? NULL : &login_type,
-	 &ssl_type,
-	 api_xml_dir, api_xml_file,
-	 (timeout == -1) ? NULL : &timeout);
+const char *
+ourfa_connection_login(connection)
+   ourfa_connection_t *connection
 
-      if (res != 0) {
-	 char *err;
-	 croak("test1");
-      }
+const char *
+ourfa_connection_password(connection)
+   ourfa_connection_t *connection
 
-      mPUSHs(sv);
-
+const char *
+ourfa_connection_hostname(connection)
+   ourfa_connection_t *connection
 
 void
-call(self, func_name, in)
-   SV *self
-   char *func_name
-   SV *in
+ourfa_connection_session_id(connection)
+   ourfa_connection_t *connection
    PREINIT:
-      SV *    sv;
-      HV *    res_h;
-      ourfa_connection_t *ourfa;
-      ourfa_hash_t *ourfa_in;
-      int res;
-      const char *err_str;
-      char err_msg[500];
-   PPCODE:
-      /*   printf("Ourfa::call\n"); */
-
-      mXPUSHs(sv);
-
-
-
-
-void DESTROY(self)
-   SV *self
+      char sessid[65];
    CODE:
-      /* /printf("Now in Ourfa::DESTROY\n"); */
-      ourfa_free(INT2PTR(void *, SvIV(SvRV(self))));
+      if (ourfa_connection_session_id(connection, sessid, sizeof(sessid))) {
+         ST(0) = sv_newmortal();
+         sv_setpvn(ST(0), sessid, strlen(sessid));
+      }else {
+	 ST(0) = &PL_sv_undef;
+      }
+
+void
+ourfa_connection_session_ip(connection)
+   ourfa_connection_t *connection
+   PREINIT:
+      const in_addr_t *ip0;
+   CODE:
+      ip0 = ourfa_connection_session_ip(connection);
+      if (ip0) {
+	 struct in_addr ip;
+	 ip.s_addr = *ip0;
+         ST(0) = sv_newmortal();
+         sv_setpvn(ST(0), (char *)&ip, sizeof(ip));
+      }else {
+	 ST(0) = &PL_sv_undef;
+      }
+
+BIO *
+ourfa_connection_bio(connection)
+   ourfa_connection_t *connection
+
+#ourfa_connection_err_f
+#ourfa_connection_err_ctx
+#ourfa_connection_debug_stream
+
+
+void
+ourfa_connection_DESTROY(connection)
+      ourfa_connection_t *connection
+   CODE:
+      PR("Now in Ourfa::Connection::DESTROY\n");
+      ourfa_connection_free(connection);
+
 
 
 
