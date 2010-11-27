@@ -8,14 +8,16 @@ constant(sv)
 #endif
 	STRLEN		len;
         int		type;
-	/* IV		iv;	Uncomment this if you need to return IVs */
+	IV		iv;
 	/* NV		nv;	Uncomment this if you need to return NVs */
 	/* const char	*pv;	Uncomment this if you need to return PVs */
     INPUT:
 	SV *		sv;
         const char *	s = SvPV(sv, len);
     PPCODE:
-	type = constant(aTHX_ s, len);
+        /* Change this to constant(aTHX_ s, len, &iv, &nv);
+           if you need to return both NVs and IVs */
+	type = constant(aTHX_ s, len, &iv);
       /* Return 1 or 2 items. First is error message, or undef if no error.
            Second, if present, is found value */
         switch (type) {
@@ -30,12 +32,11 @@ constant(sv)
 				   s));
           PUSHs(sv);
           break;
-	/* Uncomment this if you need to return IVs
         case PERL_constant_ISIV:
           EXTEND(SP, 1);
           PUSHs(&PL_sv_undef);
           PUSHi(iv);
-          break; */
+          break;
 	/* Uncomment this if you need to return NOs
         case PERL_constant_ISNO:
           EXTEND(SP, 1);

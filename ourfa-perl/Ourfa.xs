@@ -28,11 +28,13 @@
 #include "perl.h"
 #include "XSUB.h"
 #include "ppport.h"
-#include "const-c.inc"
 
 #include <assert.h>
 #include <openssl/ssl.h>
+
 #include "ourfa.h"
+
+#include "const-c.inc"
 
 #define NEED_newRV_noinc
 #define NEED_newSVpvn_flags
@@ -272,8 +274,22 @@ ourfa_connection_is_connected(connection)
    ourfa_connection_t *connection
 
 unsigned
-ourfa_connection_proto(connection)
+ourfa_connection_proto(connection, val)
    ourfa_connection_t *connection
+   unsigned val=NO_INIT
+   PREINIT:
+      int res;
+   CODE:
+      if (items > 1) {
+	 res = ourfa_connection_set_proto(connection, val);
+	 if (res != OURFA_OK)
+	    croak("%s: %s", "Ourfa::Connection::proto", ourfa_error_strerror(res));
+	 RETVAL=val;
+      }else {
+	 RETVAL = ourfa_connection_proto(connection);
+      }
+   OUTPUT:
+      RETVAL
 
 # XXX: check ref count
 ourfa_ssl_ctx_t *
@@ -282,65 +298,286 @@ ourfa_connection_ssl_ctx(connection)
 
 # XXX
 unsigned
-ourfa_connection_login_type(connection)
+ourfa_connection_login_type(connection, val)
    ourfa_connection_t *connection
+   unsigned val=NO_INIT
+   PREINIT:
+      int res;
+   CODE:
+      if (items > 1) {
+	 res = ourfa_connection_set_login_type(connection, val);
+	 if (res != OURFA_OK)
+	    croak("%s: %s", "Ourfa::Connection::login_type", ourfa_error_strerror(res));
+	 RETVAL=val;
+      }else {
+	 RETVAL = ourfa_connection_login_type(connection);
+      }
+   OUTPUT:
+      RETVAL
 
 unsigned
-ourfa_connection_timeout(connection)
+ourfa_connection_timeout(connection, val)
    ourfa_connection_t *connection
+   unsigned val=NO_INIT
+   PREINIT:
+      int res;
+   CODE:
+      if (items > 1) {
+	 res = ourfa_connection_set_timeout(connection, val);
+	 if (res != OURFA_OK)
+	    croak("%s: %s", "Ourfa::Connection::timeout", ourfa_error_strerror(res));
+	 RETVAL=val;
+      }else {
+	 RETVAL = ourfa_connection_timeout(connection);
+      }
+   OUTPUT:
+      RETVAL
+
 
 bool
-ourfa_connection_auto_reconnect(connection)
+ourfa_connection_auto_reconnect(connection, val)
    ourfa_connection_t *connection
+   bool val=NO_INIT
+   PREINIT:
+      int res;
+   CODE:
+      if (items > 1) {
+	 res = ourfa_connection_set_auto_reconnect(connection, val);
+	 if (res != OURFA_OK)
+	    croak("%s: %s", "Ourfa::Connection::auto_reconnect", ourfa_error_strerror(res));
+	 RETVAL=val;
+      }else {
+	 RETVAL = ourfa_connection_auto_reconnect(connection);
+      }
+   OUTPUT:
+      RETVAL
+
 
 const char *
-ourfa_connection_login(connection)
+ourfa_connection_login(connection, val)
    ourfa_connection_t *connection
+   char *val=NO_INIT
+   PREINIT:
+      int res;
+   CODE:
+      if (items > 1) {
+	 res = ourfa_connection_set_login(connection, val);
+	 if (res != OURFA_OK)
+	    croak("%s: %s", "Ourfa::Connection::login", ourfa_error_strerror(res));
+	 RETVAL=val;
+      }else {
+	 RETVAL = ourfa_connection_login(connection);
+      }
+   OUTPUT:
+      RETVAL
+
 
 const char *
-ourfa_connection_password(connection)
+ourfa_connection_password(connection, val)
    ourfa_connection_t *connection
+   const char *val=NO_INIT
+   PREINIT:
+      int res;
+   CODE:
+      if (items > 1) {
+	 res = ourfa_connection_set_password(connection, val);
+	 if (res != OURFA_OK)
+	    croak("%s: %s", "Ourfa::Connection::password", ourfa_error_strerror(res));
+	 RETVAL=val;
+      }else
+	 RETVAL = ourfa_connection_password(connection);
+   OUTPUT:
+      RETVAL
+
 
 const char *
-ourfa_connection_hostname(connection)
+ourfa_connection_hostname(connection, val)
    ourfa_connection_t *connection
+   const char *val=NO_INIT
+   PREINIT:
+      int res;
+   CODE:
+      if (items > 1) {
+	 res = ourfa_connection_set_hostname(connection, val);
+	 if (res != OURFA_OK)
+	    croak("%s: %s", "Ourfa::Connection::hostname", ourfa_error_strerror(res));
+	 RETVAL=val;
+      }else
+	 RETVAL = ourfa_connection_hostname(connection);
+   OUTPUT:
+      RETVAL
+
 
 void
-ourfa_connection_session_id(connection)
+ourfa_connection_session_id(connection, val)
    ourfa_connection_t *connection
+   const char *val=NO_INIT
    PREINIT:
       char sessid[65];
    CODE:
+      if (items > 1) {
+	 int res;
+	 res = ourfa_connection_set_session_id(connection, val);
+	 if (res  != OURFA_OK)
+	    croak("%s: %s", "Ourfa::Connection::session_id", ourfa_error_strerror(res));
+      }
       if (ourfa_connection_session_id(connection, sessid, sizeof(sessid))) {
          ST(0) = sv_newmortal();
          sv_setpvn(ST(0), sessid, strlen(sessid));
-      }else {
+      }else
 	 ST(0) = &PL_sv_undef;
-      }
 
 void
-ourfa_connection_session_ip(connection)
+ourfa_connection_session_ip(connection, val)
    ourfa_connection_t *connection
+   SV *val=NO_INIT
    PREINIT:
       const in_addr_t *ip0;
    CODE:
+      if (items > 1) {
+	 STRLEN addrlen;
+	 struct in_addr addr;
+	 char * ip_address;
+	 if (DO_UTF8(val) && !sv_utf8_downgrade(val, 1))
+	    croak("Wide character in %s","Ourfa::Connection::session_ip");
+	 ip_address = SvPVbyte(val, addrlen);
+	 if (addrlen == sizeof(addr) || addrlen == 4)
+	    addr.s_addr =
+	       (ip_address[0] & 0xFF) << 24 |
+	       (ip_address[1] & 0xFF) << 16 |
+	       (ip_address[2] & 0xFF) <<  8 |
+	       (ip_address[3] & 0xFF);
+	 else
+	    croak("Bad arg length for %s, length is %d, should be %d",
+		  "Ourfa::Connection::session_ip",
+		  addrlen, sizeof(addr));
+      }
       ip0 = ourfa_connection_session_ip(connection);
       if (ip0) {
 	 struct in_addr ip;
 	 ip.s_addr = *ip0;
-         ST(0) = sv_newmortal();
-         sv_setpvn(ST(0), (char *)&ip, sizeof(ip));
-      }else {
+	 ST(0) = sv_newmortal();
+	 sv_setpvn(ST(0), (char *)&ip, sizeof(ip));
+      }else
 	 ST(0) = &PL_sv_undef;
-      }
 
 BIO *
 ourfa_connection_bio(connection)
    ourfa_connection_t *connection
 
 #ourfa_connection_err_f
+#ourfa_connection_set_debug_stream
+#ourfa_connection_set_err_f
 #ourfa_connection_err_ctx
 #ourfa_connection_debug_stream
+
+void
+ourfa_connection_open(connection)
+   ourfa_connection_t *connection
+   PREINIT:
+      int res;
+   CODE:
+      res = ourfa_connection_open(connection);
+      if (res != OURFA_OK)
+	  croak("%s: %s", "Ourfa::Connection::open", ourfa_error_strerror(res));
+
+void
+ourfa_connection_close(connection)
+   ourfa_connection_t *connection
+   PREINIT:
+      int res;
+   CODE:
+      res = ourfa_connection_close(connection);
+      if (res != OURFA_OK)
+	  croak("%s: %s", "Ourfa::Connection::close", ourfa_error_strerror(res));
+
+int
+ourfa_connection_send_packet(connection, pkt, descr=NULL)
+   ourfa_connection_t *connection
+   ourfa_pkt_t *pkt
+   const char *descr
+
+#XXX
+int
+ourfa_connection_recv_packet(connection, pkt, descr=NULL)
+   ourfa_connection_t *connection
+   ourfa_pkt_t * &pkt
+   const char *descr
+
+#XXX
+int
+ourfa_connection_read_attr(connection, attr)
+   ourfa_connection_t *connection
+   const ourfa_attr_hdr_t * &attr
+
+int
+ourfa_connection_read_int(connection, type=OURFA_ATTR_DATA)
+   ourfa_connection_t *connection
+   unsigned type
+   PREINIT:
+      int res;
+   CODE:
+      res = ourfa_connection_read_int(connection, type, &RETVAL);
+      if (res != OURFA_OK)
+	 croak("%s: %s", "Ourfa::Connection::read_int", ourfa_error_strerror(res));
+   OUTPUT:
+      RETVAL
+
+long long
+ourfa_connection_read_long(connection, type=OURFA_ATTR_DATA)
+   ourfa_connection_t *connection
+   unsigned type
+   PREINIT:
+      int res;
+   CODE:
+      res = ourfa_connection_read_long(connection, type, &RETVAL);
+      if (res != OURFA_OK)
+	 croak("%s: %s", "Ourfa::Connection::read_long", ourfa_error_strerror(res));
+   OUTPUT:
+      RETVAL
+
+double
+ourfa_connection_read_double(connection, type=OURFA_ATTR_DATA)
+   ourfa_connection_t *connection
+   unsigned type
+   PREINIT:
+      int res;
+   CODE:
+      res = ourfa_connection_read_double(connection, type, &RETVAL);
+      if (res != OURFA_OK)
+	 croak("%s: %s", "Ourfa::Connection::read_double", ourfa_error_strerror(res));
+   OUTPUT:
+      RETVAL
+
+char *
+ourfa_connection_read_string(connection, type=OURFA_ATTR_DATA)
+   ourfa_connection_t *connection
+   unsigned type
+   PREINIT:
+      int res;
+   CODE:
+      res = ourfa_connection_read_string(connection, type, &RETVAL);
+      if (res != OURFA_OK)
+	 croak("%s: %s", "Ourfa::Connection::read_string", ourfa_error_strerror(res));
+   OUTPUT:
+      RETVAL
+   CLEANUP:
+      free(RETVAL);
+
+void
+ourfa_connection_read_ip(connection, type=OURFA_ATTR_DATA)
+   ourfa_connection_t *connection
+   unsigned type
+   PREINIT:
+      int res;
+      struct in_addr ip;
+   CODE:
+      res = ourfa_connection_read_ip(connection, type, &ip.s_addr);
+      if (res != OURFA_OK)
+	 croak("%s: %s", "Ourfa::Connection::read_ip", ourfa_error_strerror(res));
+      ST(0) = sv_newmortal();
+      sv_setpvn(ST(0), (char *)&ip, sizeof(ip));
+
 
 
 void
