@@ -779,4 +779,58 @@ ourfa_connection_DESTROY(connection)
 
 
 
+MODULE = Ourfa::Xmlapi PACKAGE = Ourfa::Xmlapi PREFIX = ourfa_xmlapi_
+
+ourfa_xmlapi_t *
+ourfa_xmlapi_new()
+   POSTCALL:
+      if (RETVAL)
+	 ourfa_xmlapi_set_err_f(RETVAL, ourfa_err_f_warn, NULL);
+
+NO_OUTPUT int
+ourfa_xmlapi_load_apixml(xmlapi, fname=NULL)
+   ourfa_xmlapi_t *xmlapi
+   const char *fname
+   POSTCALL:
+      if (RETVAL != OURFA_OK)
+	    croak("%s: %s", "Ourfa::Xmlapi::load_apixml", ourfa_error_strerror(RETVAL));
+
+NO_OUTPUT int
+ourfa_xmlapi_load_script(xmlapi, file_name, function_name)
+   ourfa_xmlapi_t *xmlapi
+   const char *file_name
+   const char *function_name
+   POSTCALL:
+      if (RETVAL != OURFA_OK)
+	    croak("%s: %s", "Ourfa::Xmlapi::load_script", ourfa_error_strerror(RETVAL));
+
+const char *
+ourfa_xmlapi_node_name_by_type(type)
+   int type
+
+int
+ourfa_xmlapi_node_type_by_name(name)
+   const char *name
+
+ourfa_xmlapi_func_t *
+ourfa_xmlapi_func(xmlapi, name)
+   ourfa_xmlapi_t *xmlapi
+   const char *name
+
+void
+ourfa_xmlapi_dump_func_definitions(f, stream)
+   ourfa_xmlapi_func_t *f
+   FILE *stream
+
+
+
+void
+ourfa_xmlapi_DESTROY(xmlapi)
+      ourfa_xmlapi_t *xmlapi
+   CODE:
+      PR("Now in Ourfa::Xmlapi::DESTROY\n");
+      ourfa_xmlapi_free(xmlapi);
+
+
+
 
