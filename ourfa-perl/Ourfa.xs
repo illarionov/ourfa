@@ -290,7 +290,7 @@ int ourfa_err_f_warn(int err_code, void *user_ctx, const char *fmt, ...)
       sv_setpv(saved_error, strerror(errno));
    }else
       sv_setpv(saved_error, ourfa_error_strerror(err_code));
-   
+
    warn(SvPVbyte_nolen(saved_error));
 
    return err_code;
@@ -304,6 +304,76 @@ PROTOTYPES: ENABLE
 BOOT:
    SSL_load_error_strings();
    SSL_library_init();
+
+
+MODULE = Ourfa::SSLCtx PACKAGE = Ourfa::SSLCtx PREFIX = ourfa_ssl_ctx_
+
+ourfa_ssl_ctx_t *
+ourfa_ssl_ctx_new()
+   POSTCALL:
+	 if (RETVAL)
+	    ourfa_ssl_ctx_set_err_f(RETVAL, ourfa_err_f_warn, NULL);
+
+#XXX: Constant
+unsigned
+ourfa_ssl_ctx_type(ssl_ctx, val)
+   ourfa_ssl_ctx_t *ssl_ctx
+   unsigned val=NO_INIT
+   PREINIT:
+      int res;
+   CODE:
+      if (items > 1) {
+	 res = ourfa_ssl_ctx_set_type(ssl_ctx, val);
+	 if (res != OURFA_OK)
+	    croak("%s: %s", "Ourfa::SSLCtx::type", ourfa_error_strerror(res));
+	 RETVAL=val;
+      }else
+	 RETVAL = ourfa_ssl_ctx_type(ssl_ctx);
+   OUTPUT:
+      RETVAL
+
+
+const char *
+ourfa_ssl_ctx_cert(ssl_ctx)
+   ourfa_ssl_ctx_t *ssl_ctx
+
+NO_OUTPUT int
+ourfa_ssl_ctx_load_cert(ssl_ctx, cert=NULL)
+   ourfa_ssl_ctx_t *ssl_ctx
+   const char *cert
+   POSTCALL:
+      if (RETVAL != OURFA_OK)
+	    croak("%s: %s", "Ourfa::SSLCtx::load_cert", ourfa_error_strerror(RETVAL));
+
+const char *
+ourfa_ssl_ctx_key(ssl_ctx)
+   ourfa_ssl_ctx_t *ssl_ctx
+
+const char *
+ourfa_ssl_ctx_cert_pass(ssl_ctx)
+   ourfa_ssl_ctx_t *ssl_ctx
+
+NO_OUTPUT int
+ourfa_ssl_ctx_load_private_key(ssl_ctx, cert, pass=NULL)
+   ourfa_ssl_ctx_t *ssl_ctx
+   const char *cert
+   const char *pass
+   POSTCALL:
+      if (RETVAL != OURFA_OK)
+	    croak("%s: %s", "Ourfa::SSLCtx::load_private_key", ourfa_error_strerror(RETVAL));
+
+SSL_CTX *
+ourfa_ssl_get_ctx(ssl_ctx)
+   ourfa_ssl_ctx_t *ssl_ctx
+
+
+void
+ourfa_ssl_ctx_DESTROY(ssl_ctx)
+      ourfa_ssl_ctx_t *ssl_ctx
+   CODE:
+      PR("Now in Ourfa::SSLCtx::DESTROY\n");
+      ourfa_ssl_ctx_free(ssl_ctx);
+
 
 
 MODULE = Ourfa::Connection PACKAGE = Ourfa::Connection PREFIX = ourfa_connection_
@@ -342,7 +412,7 @@ ourfa_ssl_ctx_t *
 ourfa_connection_ssl_ctx(connection)
    ourfa_connection_t *connection
 
-# XXX
+# XXX:Constant
 unsigned
 ourfa_connection_login_type(connection, val)
    ourfa_connection_t *connection
