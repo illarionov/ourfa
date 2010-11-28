@@ -299,16 +299,20 @@ int ourfa_err_f_warn(int err_code, void *user_ctx, const char *fmt, ...)
 MODULE = Ourfa PACKAGE = Ourfa::SSLCtx PREFIX = ourfa_ssl_ctx_
 
 ourfa_ssl_ctx_t *
-ourfa_ssl_ctx_new()
-   POSTCALL:
-	 if (RETVAL)
+ourfa_ssl_ctx_new(CLASS)
+   const char * CLASS
+   CODE:
+      RETVAL = ourfa_ssl_ctx_new();
+      if (RETVAL)
 	    ourfa_ssl_ctx_set_err_f(RETVAL, ourfa_err_f_warn, NULL);
+   OUTPUT:
+      RETVAL
 
 #XXX: Constant
 unsigned
-ourfa_ssl_ctx_ssl_type(ssl_ctx, val)
+ourfa_ssl_ctx_ssl_type(ssl_ctx, val=NO_INIT)
    ourfa_ssl_ctx_t *ssl_ctx
-   unsigned val=NO_INIT
+   unsigned val
    PREINIT:
       int res;
    CODE:
@@ -353,8 +357,12 @@ ourfa_ssl_ctx_load_private_key(ssl_ctx, cert, pass=NULL)
 	    croak("%s: %s", "Ourfa::SSLCtx::load_private_key", ourfa_error_strerror(RETVAL));
 
 SSL_CTX *
-ourfa_ssl_get_ctx(ssl_ctx)
+ourfa_ssl_ctx_get_ctx(ssl_ctx)
    ourfa_ssl_ctx_t *ssl_ctx
+   CODE:
+      RETVAL = ourfa_ssl_get_ctx(ssl_ctx);
+   OUTPUT:
+      RETVAL
 
 
 void
@@ -369,20 +377,26 @@ ourfa_ssl_ctx_DESTROY(ssl_ctx)
 MODULE = Ourfa PACKAGE = Ourfa::Connection PREFIX = ourfa_connection_
 
 ourfa_connection_t *
-ourfa_connection_new(ssl_ctx=NULL)
+ourfa_connection_new(CLASS, ssl_ctx=NULL)
+   const char * CLASS
    ourfa_ssl_ctx_t *ssl_ctx
-   POSTCALL:
+   CODE:
+      RETVAL = ourfa_connection_new(ssl_ctx);
       if (RETVAL)
 	 ourfa_connection_set_err_f(RETVAL, ourfa_err_f_warn, NULL);
+      else
+	 croak(NULL);
+   OUTPUT:
+      RETVAL
 
 bool
 ourfa_connection_is_connected(connection)
    ourfa_connection_t *connection
 
 unsigned
-ourfa_connection_proto(connection, val)
+ourfa_connection_proto(connection, val=NO_INIT)
    ourfa_connection_t *connection
-   unsigned val=NO_INIT
+   unsigned val
    PREINIT:
       int res;
    CODE:
@@ -404,9 +418,9 @@ ourfa_connection_ssl_ctx(connection)
 
 # XXX:Constant
 unsigned
-ourfa_connection_login_type(connection, val)
+ourfa_connection_login_type(connection, val=NO_INIT)
    ourfa_connection_t *connection
-   unsigned val=NO_INIT
+   unsigned val
    PREINIT:
       int res;
    CODE:
@@ -422,9 +436,9 @@ ourfa_connection_login_type(connection, val)
       RETVAL
 
 unsigned
-ourfa_connection_timeout(connection, val)
+ourfa_connection_timeout(connection, val=NO_INIT)
    ourfa_connection_t *connection
-   unsigned val=NO_INIT
+   unsigned val
    PREINIT:
       int res;
    CODE:
@@ -441,9 +455,9 @@ ourfa_connection_timeout(connection, val)
 
 
 bool
-ourfa_connection_auto_reconnect(connection, val)
+ourfa_connection_auto_reconnect(connection, val=NO_INIT)
    ourfa_connection_t *connection
-   bool val=NO_INIT
+   bool val
    PREINIT:
       int res;
    CODE:
@@ -460,9 +474,9 @@ ourfa_connection_auto_reconnect(connection, val)
 
 
 const char *
-ourfa_connection_login(connection, val)
+ourfa_connection_login(connection, val=NO_INIT)
    ourfa_connection_t *connection
-   char *val=NO_INIT
+   char *val
    PREINIT:
       int res;
    CODE:
@@ -479,9 +493,9 @@ ourfa_connection_login(connection, val)
 
 
 const char *
-ourfa_connection_password(connection, val)
+ourfa_connection_password(connection, val=NO_INIT)
    ourfa_connection_t *connection
-   const char *val=NO_INIT
+   const char *val
    PREINIT:
       int res;
    CODE:
@@ -497,9 +511,9 @@ ourfa_connection_password(connection, val)
 
 
 const char *
-ourfa_connection_hostname(connection, val)
+ourfa_connection_hostname(connection, val=NO_INIT)
    ourfa_connection_t *connection
-   const char *val=NO_INIT
+   const char *val
    PREINIT:
       int res;
    CODE:
@@ -515,9 +529,9 @@ ourfa_connection_hostname(connection, val)
 
 
 void
-ourfa_connection_session_id(connection, val)
+ourfa_connection_session_id(connection, val=NO_INIT)
    ourfa_connection_t *connection
-   const char *val=NO_INIT
+   const char *val
    PREINIT:
       char sessid[65];
    CODE:
@@ -534,9 +548,9 @@ ourfa_connection_session_id(connection, val)
 	 ST(0) = &PL_sv_undef;
 
 void
-ourfa_connection_session_ip(connection, val)
+ourfa_connection_session_ip(connection, val=NO_INIT)
    ourfa_connection_t *connection
-   SV *val=NO_INIT
+   SV *val
    PREINIT:
       const in_addr_t *ip0;
       int res;
@@ -567,9 +581,9 @@ ourfa_connection_bio(connection)
    ourfa_connection_t *connection
 
 FILE *
-ourfa_connection_debug_stream(connection, val)
+ourfa_connection_debug_stream(connection, val=NO_INIT)
    ourfa_connection_t *connection
-   FILE *val=NO_INIT
+   FILE *val
    PREINIT:
       int res;
    CODE:
@@ -772,10 +786,16 @@ ourfa_connection_DESTROY(connection)
 MODULE = Ourfa PACKAGE = Ourfa::Xmlapi PREFIX = ourfa_xmlapi_
 
 ourfa_xmlapi_t *
-ourfa_xmlapi_new()
-   POSTCALL:
+ourfa_xmlapi_new(CLASS)
+   const char * CLASS
+   CODE:
+      RETVAL = ourfa_xmlapi_new();
       if (RETVAL)
 	 ourfa_xmlapi_set_err_f(RETVAL, ourfa_err_f_warn, NULL);
+      else
+	 croak(NULL);
+   OUTPUT:
+      RETVAL
 
 NO_OUTPUT int
 ourfa_xmlapi_load_apixml(xmlapi, fname=NULL)
@@ -823,18 +843,24 @@ ourfa_xmlapi_func_xmlapi(f)
    ourfa_xmlapi_func_t *f
    CODE:
       RETVAL=f->xmlapi;
+   OUTPUT:
+      RETVAL
 
 int
 ourfa_xmlapi_func_id(f)
    ourfa_xmlapi_func_t *f
    CODE:
       RETVAL=f->id;
+   OUTPUT:
+      RETVAL
 
 const char *
 ourfa_xmlapi_func_name(f, val)
    ourfa_xmlapi_func_t *f
    CODE:
       RETVAL=f->name;
+   OUTPUT:
+      RETVAL
 
 
 ourfa_xmlapi_func_node_t *
@@ -842,18 +868,24 @@ ourfa_xmlapi_func_in(f)
    ourfa_xmlapi_func_t *f
    CODE:
       RETVAL=f->in;
+   OUTPUT:
+      RETVAL
 
 ourfa_xmlapi_func_node_t *
 ourfa_xmlapi_func_out(f)
    ourfa_xmlapi_func_t *f
    CODE:
       RETVAL=f->out;
+   OUTPUT:
+      RETVAL
 
 ourfa_xmlapi_func_node_t *
 ourfa_xmlapi_func_script(f)
    ourfa_xmlapi_func_t *f
    CODE:
       RETVAL=f->script;
+   OUTPUT:
+      RETVAL
 
 
 void
@@ -871,24 +903,32 @@ ourfa_xmlapi_func_node_parent(fn)
    ourfa_xmlapi_func_node_t *fn
    CODE:
       RETVAL = fn->parent;
+   OUTPUT:
+      RETVAL
 
 ourfa_xmlapi_func_node_t *
 ourfa_xmlapi_func_node_children(fn)
    ourfa_xmlapi_func_node_t *fn
    CODE:
       RETVAL = fn->children;
+   OUTPUT:
+      RETVAL
 
 ourfa_xmlapi_func_node_t *
 ourfa_xmlapi_func_node_next(fn)
    ourfa_xmlapi_func_node_t *fn
    CODE:
       RETVAL = fn->next;
+   OUTPUT:
+      RETVAL
 
 unsigned
 ourfa_xmlapi_func_node_type(fn)
    ourfa_xmlapi_func_node_t *fn
    CODE:
       RETVAL = fn->type;
+   OUTPUT:
+      RETVAL
 
 #XXX: union n
 
@@ -896,7 +936,8 @@ ourfa_xmlapi_func_node_type(fn)
 MODULE = Ourfa PACKAGE = Ourfa::FuncCall PREFIX = ourfa_func_call_
 
 ourfa_func_call_ctx_t *
-ourfa_func_call_new(f, h)
+ourfa_func_call_new(CLASS, f, h)
+   const char * CLASS
    ourfa_xmlapi_func_t *f
    ourfa_hash_t *h
    CODE:
@@ -905,6 +946,8 @@ ourfa_func_call_new(f, h)
 	    croak(NULL);
       else
 	 RETVAL->printf_err = ourfa_err_f_warn;
+   OUTPUT:
+      RETVAL
 
 int
 ourfa_func_call_start(fctx, is_req=1)
@@ -946,24 +989,32 @@ ourfa_func_call_state(fctx)
    ourfa_func_call_ctx_t *fctx
    CODE:
       RETVAL=fctx->state;
+   OUTPUT:
+      RETVAL
 
 ourfa_xmlapi_func_t *
 ourfa_func_call_func(fctx)
    ourfa_func_call_ctx_t *fctx
    CODE:
       RETVAL=fctx->f;
+   OUTPUT:
+      RETVAL
 
 ourfa_hash_t *
 ourfa_func_call_hash(fctx)
    ourfa_func_call_ctx_t *fctx
    CODE:
       RETVAL=fctx->h;
+   OUTPUT:
+      RETVAL
 
 ourfa_xmlapi_func_node_t *
 ourfa_func_call_cur_node(fctx)
    ourfa_func_call_ctx_t *fctx
    CODE:
       RETVAL=fctx->cur;
+   OUTPUT:
+      RETVAL
 
 
 void
@@ -977,7 +1028,8 @@ ourfa_func_call_DESTROY(fctx)
 MODULE = Ourfa PACKAGE = Ourfa::ScriptCall PREFIX = ourfa_script_call_
 
 ourfa_script_call_ctx_t *
-ourfa_script_call_new(f, h)
+ourfa_script_call_new(CLASS, f, h)
+   const char * CLASS
    ourfa_xmlapi_func_t *f
    ourfa_hash_t *h
    CODE:
@@ -986,6 +1038,8 @@ ourfa_script_call_new(f, h)
 	    croak(NULL);
       else
 	 RETVAL->script.printf_err =  RETVAL->func.printf_err = ourfa_err_f_warn;
+   OUTPUT:
+      RETVAL
 
 int
 ourfa_script_call_start(sctx)

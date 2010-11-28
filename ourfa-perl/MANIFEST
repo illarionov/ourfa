@@ -4,7 +4,8 @@ MANIFEST
 Ourfa.xs
 ppport.h
 README
-t/Ourfa.t
+t/00_Ourfa.t
+t/01_OurfaSSLCtx.t
 lib/Ourfa.pm
 lib/Ourfa/Connection.pm
 lib/Ourfa/FuncCall.pm

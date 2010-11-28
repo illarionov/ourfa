@@ -82,7 +82,7 @@ ourfa_ssl_ctx_t *ourfa_ssl_ctx_new()
    res->key = NULL;
    res->cert_pass = NULL;
    res->ssl_type = OURFA_SSL_TYPE_NONE;
-   res->ref_cnt=0;
+   res->ref_cnt=1;
    res->printf_err=ourfa_err_f_stderr;
    res->err_ctx=NULL;
 

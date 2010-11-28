@@ -8,6 +8,14 @@ use Carp;
 require Exporter;
 use AutoLoader;
 
+use Ourfa::SSLCtx;
+use Ourfa::Connection;
+use Ourfa::Xmlapi;
+use Ourfa::Xmlapi::Func;
+use Ourfa::Xmlapi::Func::Node;
+use Ourfa::FuncCall;
+use Ourfa::ScriptCall;
+
 our @ISA = qw(Exporter);
 
 # Items to export into callers namespace by default. Note: do not export

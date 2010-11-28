@@ -118,9 +118,10 @@ ourfa_connection_t *ourfa_connection_new(ourfa_ssl_ctx_t *ssl_ctx)
 	 free(res);
 	 return NULL;
       }
-   }
+   }else
+      ourfa_ssl_ctx_ref(ssl_ctx);
 
-   res->ssl_ctx = ourfa_ssl_ctx_ref(ssl_ctx);
+   res->ssl_ctx = ssl_ctx;
 
    res->proto = OURFA_PROTO_VERSION;
    res->login = NULL;

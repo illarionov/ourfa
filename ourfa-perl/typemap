@@ -1,15 +1,59 @@
 TYPEMAP
-ourfa_pkt_t *			T_PTROBJ
-ourfa_hash_t *			T_PTROBJ
-ourfa_ssl_ctx_t *		T_PTROBJ
-ourfa_connection_t *		T_PTROBJ
-ourfa_xmlapi_t *		T_PTROBJ
-ourfa_xmlapi_func_t *		T_PTROBJ
-ourfa_xmlapi_func_node_t *	T_PTROBJ
-ourfa_func_call_ctx_t *		T_PTROBJ
-ourfa_script_call_ctx_t *	T_PTROBJ
+ourfa_pkt_t *			T_PTROBJ_OURFA
+ourfa_hash_t *			T_PTROBJ_OURFA
+ourfa_ssl_ctx_t *		T_PTROBJ_SSLCTX
+ourfa_connection_t *		T_PTROBJ_OURFA
+ourfa_xmlapi_t *		T_PTROBJ_OURFA
+ourfa_xmlapi_func_t *		T_PTROBJ_OURFA
+ourfa_xmlapi_func_node_t *	T_PTROBJ_OURFA
+ourfa_func_call_ctx_t *		T_PTROBJ_FUNC_CALL
+ourfa_script_call_ctx_t *	T_PTROBJ_SCRIPT_CALL
 ourfa_attr_hdr_t *		T_PTRREF
 const ourfa_attr_hdr_t *        T_PTRREF
 SSL_CTX *			T_PTRREF
 long long		        T_NV
 BIO *				T_PTRREF
+
+INPUT
+T_PTROBJ_OURFA
+   if (sv_derived_from($arg, \"${(my $ntt = $ntype)=~s/ourfa_(.+)_tPtr/Ourfa::\u$1/g; $ntt =~ s/_(.)/::\u$1/g; \$ntt}\")) {
+         IV tmp = SvIV((SV*)SvRV($arg));
+         $var = INT2PTR($type, tmp);
+   }else
+      croak(\"$var is not of type ${(my $ntt = $ntype)=~s/ourfa_(.+)_tPtr/Ourfa::\u$1/g; $ntt =~ s/_(.)/::\u$1/g; \$ntt}\")
+
+T_PTROBJ_SSLCTX
+   if (sv_derived_from($arg, \"Ourfa::SSLCtx\")) {
+         IV tmp = SvIV((SV*)SvRV($arg));
+         $var = INT2PTR($type, tmp);
+   }else
+      croak(\"$var is not of type Ourfa::SSLCtx\")
+
+T_PTROBJ_FUNC_CALL
+   if (sv_derived_from($arg, \"Ourfa::FuncCall\")) {
+         IV tmp = SvIV((SV*)SvRV($arg));
+         $var = INT2PTR($type, tmp);
+   }else
+      croak(\"$var is not of type Ourfa::FuncCall\")
+
+T_PTROBJ_SCRIPT_CALL
+   if (sv_derived_from($arg, \"Ourfa::ScriptCall\")) {
+         IV tmp = SvIV((SV*)SvRV($arg));
+         $var = INT2PTR($type, tmp);
+   }else
+      croak(\"$var is not of type Ourfa::ScriptCall\")
+
+OUTPUT
+T_PTROBJ_OURFA
+   sv_setref_pv($arg, \"${(my $ntt = $ntype)=~s/ourfa_(.+)_tPtr/Ourfa::\u$1/g; $ntt =~ s/_(.)/::\u$1/g; \$ntt}\", (void*)$var);
+
+T_PTROBJ_SSLCTX
+   sv_setref_pv($arg, \"Ourfa::SSLCtx\", (void*)$var);
+
+T_PTROBJ_FUNC_CALL
+   sv_setref_pv($arg, \"Ourfa::FuncCall\", (void*)$var);
+
+T_PTROBJ_SCRIPT_CALL
+   sv_setref_pv($arg, \"Ourfa::ScriptCall\", (void*)$var);
+
+
