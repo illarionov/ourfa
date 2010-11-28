@@ -411,10 +411,14 @@ ourfa_connection_proto(connection, val=NO_INIT)
    OUTPUT:
       RETVAL
 
-# XXX: check ref count
 ourfa_ssl_ctx_t *
 ourfa_connection_ssl_ctx(connection)
    ourfa_connection_t *connection
+   CODE:
+      RETVAL=ourfa_connection_ssl_ctx(connection);
+      ourfa_ssl_ctx_ref(RETVAL);
+   OUTPUT:
+      RETVAL
 
 # XXX:Constant
 unsigned
@@ -476,18 +480,21 @@ ourfa_connection_auto_reconnect(connection, val=NO_INIT)
 const char *
 ourfa_connection_login(connection, val=NO_INIT)
    ourfa_connection_t *connection
-   char *val
+   SV *val
    PREINIT:
       int res;
+      const char *val_str;
    CODE:
       if (items > 1) {
-	 res = ourfa_connection_set_login(connection, val);
+	 if (!SvOK(val))
+	    val_str = NULL;
+	 else
+	    val_str = (const char *)SvPV_nolen(val);
+	 res = ourfa_connection_set_login(connection, val_str);
 	 if (res != OURFA_OK)
 	    croak("%s: %s", "Ourfa::Connection::login", ourfa_error_strerror(res));
-	 RETVAL=val;
-      }else {
-	 RETVAL = ourfa_connection_login(connection);
       }
+      RETVAL = ourfa_connection_login(connection);
    OUTPUT:
       RETVAL
 
@@ -495,17 +502,21 @@ ourfa_connection_login(connection, val=NO_INIT)
 const char *
 ourfa_connection_password(connection, val=NO_INIT)
    ourfa_connection_t *connection
-   const char *val
+   SV *val
    PREINIT:
       int res;
+      const char *val_str;
    CODE:
       if (items > 1) {
-	 res = ourfa_connection_set_password(connection, val);
+	 if (!SvOK(val))
+	    val_str = NULL;
+	 else
+	    val_str = (const char *)SvPV_nolen(val);
+	 res = ourfa_connection_set_password(connection, val_str);
 	 if (res != OURFA_OK)
 	    croak("%s: %s", "Ourfa::Connection::password", ourfa_error_strerror(res));
-	 RETVAL=val;
-      }else
-	 RETVAL = ourfa_connection_password(connection);
+      }
+      RETVAL = ourfa_connection_password(connection);
    OUTPUT:
       RETVAL
 
@@ -513,17 +524,21 @@ ourfa_connection_password(connection, val=NO_INIT)
 const char *
 ourfa_connection_hostname(connection, val=NO_INIT)
    ourfa_connection_t *connection
-   const char *val
+   SV *val
    PREINIT:
       int res;
+      const char *val_str;
    CODE:
       if (items > 1) {
-	 res = ourfa_connection_set_hostname(connection, val);
+	 if (!SvOK(val))
+	    val_str = NULL;
+	 else
+	    val_str = (const char *)SvPV_nolen(val);
+	 res = ourfa_connection_set_hostname(connection, val_str);
 	 if (res != OURFA_OK)
 	    croak("%s: %s", "Ourfa::Connection::hostname", ourfa_error_strerror(res));
-	 RETVAL=val;
-      }else
-	 RETVAL = ourfa_connection_hostname(connection);
+      }
+      RETVAL = ourfa_connection_hostname(connection);
    OUTPUT:
       RETVAL
 
@@ -531,13 +546,18 @@ ourfa_connection_hostname(connection, val=NO_INIT)
 void
 ourfa_connection_session_id(connection, val=NO_INIT)
    ourfa_connection_t *connection
-   const char *val
+   SV *val
    PREINIT:
       char sessid[65];
    CODE:
       if (items > 1) {
 	 int res;
-	 res = ourfa_connection_set_session_id(connection, val);
+	 const char *val_str;
+	 if (!SvOK(val))
+	    val_str = NULL;
+	 else
+	    val_str = (const char *)SvPV_nolen(val);
+	 res = ourfa_connection_set_session_id(connection, val_str);
 	 if (res  != OURFA_OK)
 	    croak("%s: %s", "Ourfa::Connection::session_id", ourfa_error_strerror(res));
       }
@@ -548,7 +568,7 @@ ourfa_connection_session_id(connection, val=NO_INIT)
 	 ST(0) = &PL_sv_undef;
 
 void
-ourfa_connection_session_ip(connection, val=NO_INIT)
+ourfa_connection_session_ip(connection, val)
    ourfa_connection_t *connection
    SV *val
    PREINIT:

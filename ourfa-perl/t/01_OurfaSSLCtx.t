@@ -26,7 +26,6 @@ is($sslctx->ssl_type(), OURFA_SSL_TYPE_SSL3, "set OURFA_SSL_TYPE_RSA");
 my $cert =  $sslctx->cert;
 ok(defined $cert);
 ok($cert ne '');
-diag("cert: $cert");
 
 #TODO: load_cert
 
@@ -34,12 +33,10 @@ diag("cert: $cert");
 my $key = $sslctx->key;
 ok(defined $key);
 ok($key ne '');
-diag("key: $key");
 
 #cert_pass
 my $cert_pass = $sslctx->cert_pass;
 ok(defined $cert_pass);
-diag("cert_pass: ", $cert_pass);
 
 #TODO: load_private_key
 
