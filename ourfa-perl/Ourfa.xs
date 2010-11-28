@@ -296,17 +296,7 @@ int ourfa_err_f_warn(int err_code, void *user_ctx, const char *fmt, ...)
    return err_code;
 }
 
-MODULE = Ourfa		PACKAGE = Ourfa
-
-INCLUDE: const-xs.inc
-PROTOTYPES: ENABLE
-
-BOOT:
-   SSL_load_error_strings();
-   SSL_library_init();
-
-
-MODULE = Ourfa::SSLCtx PACKAGE = Ourfa::SSLCtx PREFIX = ourfa_ssl_ctx_
+MODULE = Ourfa PACKAGE = Ourfa::SSLCtx PREFIX = ourfa_ssl_ctx_
 
 ourfa_ssl_ctx_t *
 ourfa_ssl_ctx_new()
@@ -316,19 +306,19 @@ ourfa_ssl_ctx_new()
 
 #XXX: Constant
 unsigned
-ourfa_ssl_ctx_type(ssl_ctx, val)
+ourfa_ssl_ctx_ssl_type(ssl_ctx, val)
    ourfa_ssl_ctx_t *ssl_ctx
    unsigned val=NO_INIT
    PREINIT:
       int res;
    CODE:
       if (items > 1) {
-	 res = ourfa_ssl_ctx_set_type(ssl_ctx, val);
+	 res = ourfa_ssl_ctx_set_ssl_type(ssl_ctx, val);
 	 if (res != OURFA_OK)
 	    croak("%s: %s", "Ourfa::SSLCtx::type", ourfa_error_strerror(res));
 	 RETVAL=val;
       }else
-	 RETVAL = ourfa_ssl_ctx_type(ssl_ctx);
+	 RETVAL = ourfa_ssl_ctx_ssl_type(ssl_ctx);
    OUTPUT:
       RETVAL
 
@@ -376,7 +366,7 @@ ourfa_ssl_ctx_DESTROY(ssl_ctx)
 
 
 
-MODULE = Ourfa::Connection PACKAGE = Ourfa::Connection PREFIX = ourfa_connection_
+MODULE = Ourfa PACKAGE = Ourfa::Connection PREFIX = ourfa_connection_
 
 ourfa_connection_t *
 ourfa_connection_new(ssl_ctx=NULL)
@@ -779,7 +769,7 @@ ourfa_connection_DESTROY(connection)
 
 
 
-MODULE = Ourfa::Xmlapi PACKAGE = Ourfa::Xmlapi PREFIX = ourfa_xmlapi_
+MODULE = Ourfa PACKAGE = Ourfa::Xmlapi PREFIX = ourfa_xmlapi_
 
 ourfa_xmlapi_t *
 ourfa_xmlapi_new()
@@ -826,7 +816,7 @@ ourfa_xmlapi_DESTROY(xmlapi)
 
 
 
-MODULE = Ourfa::Xmlapi::Func PACKAGE = Ourfa::Xmlapi::Func PREFIX = ourfa_xmlapi_func
+MODULE = Ourfa PACKAGE = Ourfa::Xmlapi::Func PREFIX = ourfa_xmlapi_func
 
 ourfa_xmlapi_t *
 ourfa_xmlapi_func_xmlapi(f)
@@ -874,7 +864,7 @@ ourfa_xmlapi_func_dump(f, stream)
       ourfa_xmlapi_dump_func_definitions(f, stream);
 
 
-MODULE = Ourfa::Xmlapi::Func::Node PACKAGE = Ourfa::Xmlapi::Func::Node PREFIX = ourfa_xmlapi_func_node_
+MODULE = Ourfa PACKAGE = Ourfa::Xmlapi::Func::Node PREFIX = ourfa_xmlapi_func_node_
 
 ourfa_xmlapi_func_node_t *
 ourfa_xmlapi_func_node_parent(fn)
@@ -903,7 +893,7 @@ ourfa_xmlapi_func_node_type(fn)
 #XXX: union n
 
 
-MODULE = Ourfa::Func::Call PACKAGE = Ourfa::Func::Call PREFIX = ourfa_func_call_
+MODULE = Ourfa PACKAGE = Ourfa::FuncCall PREFIX = ourfa_func_call_
 
 ourfa_func_call_ctx_t *
 ourfa_func_call_new(f, h)
@@ -984,7 +974,7 @@ ourfa_func_call_DESTROY(fctx)
       ourfa_func_call_ctx_free(fctx);
 
 
-MODULE = Ourfa::Script::Call PACKAGE = Ourfa::Script::Call PREFIX = ourfa_script_call_
+MODULE = Ourfa PACKAGE = Ourfa::ScriptCall PREFIX = ourfa_script_call_
 
 ourfa_script_call_ctx_t *
 ourfa_script_call_new(f, h)
@@ -1013,6 +1003,17 @@ ourfa_script_call_DESTROY(fctx)
    CODE:
       PR("Now in Ourfa::Script::Call::DESTROY\n");
       ourfa_script_call_ctx_free(fctx);
+
+
+MODULE = Ourfa		PACKAGE = Ourfa
+
+INCLUDE: const-xs.inc
+PROTOTYPES: ENABLE
+
+BOOT:
+   SSL_load_error_strings();
+   SSL_library_init();
+
 
 
 

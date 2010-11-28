@@ -273,7 +273,7 @@ FILE *ourfa_connection_debug_stream(ourfa_connection_t *connection);
 int ourfa_connection_set_proto(ourfa_connection_t *connection, unsigned proto);
 int ourfa_connection_set_login_type(ourfa_connection_t *connection, unsigned login_type);
 int ourfa_connection_set_timeout(ourfa_connection_t *connection, unsigned timeout);
-int ourda_connection_set_auto_reconnect(ourfa_connection_t *connection, unsigned val);
+int ourfa_connection_set_auto_reconnect(ourfa_connection_t *connection, unsigned val);
 int ourfa_connection_set_login(ourfa_connection_t *connection, const char *login);
 int ourfa_connection_set_password(ourfa_connection_t *connection, const char *password);
 int ourfa_connection_set_hostname(ourfa_connection_t *connection, const char *hostname);

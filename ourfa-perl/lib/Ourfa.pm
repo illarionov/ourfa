@@ -173,6 +173,7 @@ XSLoader::load('Ourfa', $VERSION);
 
 1;
 __END__
+
 # Below is stub documentation for your module. You'd better edit it!
 
 =head1 NAME
@@ -188,8 +189,6 @@ Ourfa - Open source implementation of URFA (UTM Remote Function Access) protocol
 Stub documentation for Ourfa, created by h2xs. It looks like the
 author of the extension was negligent enough to leave the stub
 unedited.
-
-Blah blah blah.
 
 =head2 EXPORT
 

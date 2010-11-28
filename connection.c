@@ -313,7 +313,7 @@ int ourfa_connection_set_timeout(ourfa_connection_t *connection, unsigned timeou
    return OURFA_OK;
 }
 
-int ourda_connection_set_auto_reconnect(ourfa_connection_t *connection, unsigned val)
+int ourfa_connection_set_auto_reconnect(ourfa_connection_t *connection, unsigned val)
 {
    assert(connection);
    connection->auto_reconnect = val;

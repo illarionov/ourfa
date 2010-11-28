@@ -6,4 +6,10 @@ ppport.h
 README
 t/Ourfa.t
 lib/Ourfa.pm
-
+lib/Ourfa/Connection.pm
+lib/Ourfa/FuncCall.pm
+lib/Ourfa/SSLCtx.pm
+lib/Ourfa/ScriptCall.pm
+lib/Ourfa/Xmlapi.pm
+lib/Ourfa/Xmlapi/Func.pm
+lib/Ourfa/Xmlapi/Func/Node.pm
