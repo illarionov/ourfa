@@ -81,7 +81,7 @@ void ourfa_func_call_ctx_free(ourfa_func_call_ctx_t *fctx)
    free(fctx);
 }
 
-int ourfa_parse_builtin_func(ourfa_hash_t *globals, const char *func, int *res)
+static int ourfa_parse_builtin_func(ourfa_hash_t *globals, const char *func, int *res)
 {
    if (func == NULL || func[0]=='\0')
       return -1;
@@ -125,7 +125,7 @@ int ourfa_parse_builtin_func(ourfa_hash_t *globals, const char *func, int *res)
    return 0;
 }
 
-int ourfa_func_call_get_long_prop_val(ourfa_func_call_ctx_t *fctx,
+static int ourfa_func_call_get_long_prop_val(ourfa_func_call_ctx_t *fctx,
       const char *prop, long long *res)
 {
    char *p_end;

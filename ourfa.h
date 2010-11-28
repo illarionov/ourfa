@@ -521,10 +521,6 @@ int ourfa_func_call_resp_step(ourfa_func_call_ctx_t *fctx,ourfa_connection_t *co
 int ourfa_func_call_resp(ourfa_func_call_ctx_t *fctx,ourfa_connection_t *conn);
 int ourfa_func_call_req(ourfa_func_call_ctx_t *fctx, ourfa_connection_t *conn);
 
-int ourfa_parse_builtin_func(ourfa_hash_t *globals, const char *func, int *res);
-int ourfa_func_call_get_long_prop_val(ourfa_func_call_ctx_t *fctx,
-      const char *prop, long long *res);
-
 ourfa_script_call_ctx_t *ourfa_script_call_ctx_new(
       ourfa_xmlapi_func_t *f,
       ourfa_hash_t *h);

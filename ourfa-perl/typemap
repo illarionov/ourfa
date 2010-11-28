@@ -10,7 +10,6 @@ ourfa_func_call_ctx_t *		T_PTROBJ
 ourfa_script_call_ctx_t *	T_PTROBJ
 ourfa_attr_hdr_t *		T_PTRREF
 const ourfa_attr_hdr_t *        T_PTRREF
-ourfa_xmlapi_func_t *	        T_PTRREF
 SSL_CTX *			T_PTRREF
 long long		        T_NV
 BIO *				T_PTRREF

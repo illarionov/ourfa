@@ -818,19 +818,201 @@ ourfa_xmlapi_func(xmlapi, name)
    const char *name
 
 void
-ourfa_xmlapi_dump_func_definitions(f, stream)
-   ourfa_xmlapi_func_t *f
-   FILE *stream
-
-
-
-void
 ourfa_xmlapi_DESTROY(xmlapi)
       ourfa_xmlapi_t *xmlapi
    CODE:
       PR("Now in Ourfa::Xmlapi::DESTROY\n");
       ourfa_xmlapi_free(xmlapi);
 
+
+
+MODULE = Ourfa::Xmlapi::Func PACKAGE = Ourfa::Xmlapi::Func PREFIX = ourfa_xmlapi_func
+
+ourfa_xmlapi_t *
+ourfa_xmlapi_func_xmlapi(f)
+   ourfa_xmlapi_func_t *f
+   CODE:
+      RETVAL=f->xmlapi;
+
+int
+ourfa_xmlapi_func_id(f)
+   ourfa_xmlapi_func_t *f
+   CODE:
+      RETVAL=f->id;
+
+const char *
+ourfa_xmlapi_func_name(f, val)
+   ourfa_xmlapi_func_t *f
+   CODE:
+      RETVAL=f->name;
+
+
+ourfa_xmlapi_func_node_t *
+ourfa_xmlapi_func_in(f)
+   ourfa_xmlapi_func_t *f
+   CODE:
+      RETVAL=f->in;
+
+ourfa_xmlapi_func_node_t *
+ourfa_xmlapi_func_out(f)
+   ourfa_xmlapi_func_t *f
+   CODE:
+      RETVAL=f->out;
+
+ourfa_xmlapi_func_node_t *
+ourfa_xmlapi_func_script(f)
+   ourfa_xmlapi_func_t *f
+   CODE:
+      RETVAL=f->script;
+
+
+void
+ourfa_xmlapi_func_dump(f, stream)
+   ourfa_xmlapi_func_t *f
+   FILE *stream
+   CODE:
+      ourfa_xmlapi_dump_func_definitions(f, stream);
+
+
+MODULE = Ourfa::Xmlapi::Func::Node PACKAGE = Ourfa::Xmlapi::Func::Node PREFIX = ourfa_xmlapi_func_node_
+
+ourfa_xmlapi_func_node_t *
+ourfa_xmlapi_func_node_parent(fn)
+   ourfa_xmlapi_func_node_t *fn
+   CODE:
+      RETVAL = fn->parent;
+
+ourfa_xmlapi_func_node_t *
+ourfa_xmlapi_func_node_children(fn)
+   ourfa_xmlapi_func_node_t *fn
+   CODE:
+      RETVAL = fn->children;
+
+ourfa_xmlapi_func_node_t *
+ourfa_xmlapi_func_node_next(fn)
+   ourfa_xmlapi_func_node_t *fn
+   CODE:
+      RETVAL = fn->next;
+
+unsigned
+ourfa_xmlapi_func_node_type(fn)
+   ourfa_xmlapi_func_node_t *fn
+   CODE:
+      RETVAL = fn->type;
+
+#XXX: union n
+
+
+MODULE = Ourfa::Func::Call PACKAGE = Ourfa::Func::Call PREFIX = ourfa_func_call_
+
+ourfa_func_call_ctx_t *
+ourfa_func_call_new(f, h)
+   ourfa_xmlapi_func_t *f
+   ourfa_hash_t *h
+   CODE:
+      RETVAL=ourfa_func_call_ctx_new(f, h);
+      if (RETVAL == NULL)
+	    croak(NULL);
+      else
+	 RETVAL->printf_err = ourfa_err_f_warn;
+
+int
+ourfa_func_call_start(fctx, is_req=1)
+   ourfa_func_call_ctx_t *fctx
+   unsigned is_req
+
+int
+ourfa_func_call_step(fctx)
+   ourfa_func_call_ctx_t *fctx
+
+int
+ourfa_func_call_req_step(fctx, connection)
+   ourfa_func_call_ctx_t *fctx
+   ourfa_connection_t *connection
+
+int
+ourfa_func_call_resp_step(fctx, connection)
+   ourfa_func_call_ctx_t *fctx
+   ourfa_connection_t *connection
+
+NO_OUTPUT int
+ourfa_func_call_req(fctx, connection)
+   ourfa_func_call_ctx_t *fctx
+   ourfa_connection_t *connection
+   POSTCALL:
+      if (RETVAL != OURFA_OK)
+	    croak("%s: %s", "Ourfa::Func::Call::req", ourfa_error_strerror(RETVAL));
+
+NO_OUTPUT int
+ourfa_func_call_resp(fctx, connection)
+   ourfa_func_call_ctx_t *fctx
+   ourfa_connection_t *connection
+   POSTCALL:
+      if (RETVAL != OURFA_OK)
+	    croak("%s: %s", "Ourfa::Func::Call::resp", ourfa_error_strerror(RETVAL));
+
+int
+ourfa_func_call_state(fctx)
+   ourfa_func_call_ctx_t *fctx
+   CODE:
+      RETVAL=fctx->state;
+
+ourfa_xmlapi_func_t *
+ourfa_func_call_func(fctx)
+   ourfa_func_call_ctx_t *fctx
+   CODE:
+      RETVAL=fctx->f;
+
+ourfa_hash_t *
+ourfa_func_call_hash(fctx)
+   ourfa_func_call_ctx_t *fctx
+   CODE:
+      RETVAL=fctx->h;
+
+ourfa_xmlapi_func_node_t *
+ourfa_func_call_cur_node(fctx)
+   ourfa_func_call_ctx_t *fctx
+   CODE:
+      RETVAL=fctx->cur;
+
+
+void
+ourfa_func_call_DESTROY(fctx)
+      ourfa_func_call_ctx_t *fctx
+   CODE:
+      PR("Now in Ourfa::Func::Call::DESTROY\n");
+      ourfa_func_call_ctx_free(fctx);
+
+
+MODULE = Ourfa::Script::Call PACKAGE = Ourfa::Script::Call PREFIX = ourfa_script_call_
+
+ourfa_script_call_ctx_t *
+ourfa_script_call_new(f, h)
+   ourfa_xmlapi_func_t *f
+   ourfa_hash_t *h
+   CODE:
+      RETVAL=ourfa_script_call_ctx_new(f, h);
+      if (RETVAL == NULL)
+	    croak(NULL);
+      else
+	 RETVAL->script.printf_err =  RETVAL->func.printf_err = ourfa_err_f_warn;
+
+int
+ourfa_script_call_start(sctx)
+   ourfa_script_call_ctx_t *sctx
+
+int
+ourfa_script_call_step(sctx, connection)
+   ourfa_script_call_ctx_t *sctx
+   ourfa_connection_t *connection
+
+
+void
+ourfa_script_call_DESTROY(fctx)
+      ourfa_script_call_ctx_t *fctx
+   CODE:
+      PR("Now in Ourfa::Script::Call::DESTROY\n");
+      ourfa_script_call_ctx_free(fctx);
 
 
 
