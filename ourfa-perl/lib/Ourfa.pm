@@ -138,7 +138,7 @@ our @EXPORT_OK = qw(
 	OURFA_XMLAPI_NODE_UNKNOWN
 );
 
-our @EXPORT = qw();
+our @EXPORT = (@EXPORT_OK);
 
 our $VERSION = '0.4';
 
