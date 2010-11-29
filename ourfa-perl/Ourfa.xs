@@ -862,7 +862,7 @@ ourfa_xmlapi_DESTROY(xmlapi)
 
 
 
-MODULE = Ourfa PACKAGE = Ourfa::Xmlapi::Func PREFIX = ourfa_xmlapi_func
+MODULE = Ourfa PACKAGE = Ourfa::Xmlapi::Func PREFIX = ourfa_xmlapi_func_
 
 ourfa_xmlapi_t *
 ourfa_xmlapi_func_xmlapi(f)

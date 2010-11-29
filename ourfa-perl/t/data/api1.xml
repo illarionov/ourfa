@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<urfa>
+   <function name="rpcf_test1" id="0x01">
+      <input/>
+      <output/>
+   </function>
+
+   <function name="rpcf_test2" id="0x02">
+      <input>
+	 <string name="test" />
+      </input>
+      <output/>
+   </function>
+
+   <function name="rpcf_test3" id="-0xaaaa">
+      <input>
+	 <string name="test" />
+      </input>
+      <output>
+	 <integer name="test_out" />
+      </output>
+   </function>
+</urfa>
+
