@@ -335,6 +335,7 @@ ourfa_xmlapi_t *ourfa_xmlapi_new();
 int             ourfa_xmlapi_load_apixml(ourfa_xmlapi_t *xmlapi,  const char *file);
 int             ourfa_xmlapi_load_script(ourfa_xmlapi_t *xmlapi,  const char *file, const char *function_name);
 
+ourfa_xmlapi_t *ourfa_xmlapi_ref(ourfa_xmlapi_t *xmlapi);
 void            ourfa_xmlapi_free(ourfa_xmlapi_t *api);
 
 int             ourfa_xmlapi_set_err_f(ourfa_xmlapi_t *xmlapi, ourfa_err_f_t *f, void *user_ctx);
@@ -351,6 +352,8 @@ void            ourfa_xmlapi_dump_func_definitions(ourfa_xmlapi_func_t *f, FILE 
 struct ourfa_xmlapi_t {
    struct _xmlHashTable *func_by_name;
    char *file;
+
+   unsigned ref_cnt;
 
    ourfa_err_f_t *printf_err;
    void *err_ctx;

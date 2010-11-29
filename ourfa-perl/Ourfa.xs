@@ -868,7 +868,7 @@ ourfa_xmlapi_t *
 ourfa_xmlapi_func_xmlapi(f)
    ourfa_xmlapi_func_t *f
    CODE:
-      RETVAL=f->xmlapi;
+      RETVAL=ourfa_xmlapi_ref(f->xmlapi);
    OUTPUT:
       RETVAL
 

@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 18;
+use Test::More tests => 23;
 use Socket;
 use Data::Dumper;
 BEGIN { use_ok('Ourfa');
@@ -51,4 +51,11 @@ is($test1->id, 0x01, "test1 id");
 is($test2->id, 0x02, "test2 id");
 is($test3->id, -0xaaaa, "test2 id");
 is($script->id, 0, "script id");
+
+for(my $i=0; $i<5; $i++) {
+   my $xmlapi0 = $test1->xmlapi;
+   isa_ok($test2->xmlapi, "Ourfa::Xmlapi", "xmlapi ref cnt");
+}
+
+
 

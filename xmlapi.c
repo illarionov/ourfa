@@ -103,6 +103,7 @@ ourfa_xmlapi_t *ourfa_xmlapi_new()
    res->file = NULL;
    res->printf_err = ourfa_err_f_stderr;
    res->err_ctx = res;
+   res->ref_cnt = 1;
 
    xmlSetGenericErrorFunc(res, xml_generic_error_func);
    res->func_by_name = xmlHashCreate(FUNC_BY_NAME_HASH_SIZE);
@@ -136,14 +137,25 @@ int ourfa_xmlapi_set_err_f(ourfa_xmlapi_t *xmlapi, ourfa_err_f_t *f, void *user_
    return OURFA_OK;
 }
 
+ourfa_xmlapi_t *ourfa_xmlapi_ref(ourfa_xmlapi_t *xmlapi)
+{
+   assert(xmlapi);
+   xmlapi->ref_cnt++;
+   return xmlapi;
+}
+
 void ourfa_xmlapi_free(ourfa_xmlapi_t *api)
 {
    if (api == NULL)
       return;
-   if (api->func_by_name)
-      xmlHashFree(api->func_by_name, xmlapi_func_free);
-   free(api->file);
-   free(api);
+   assert(api->ref_cnt > 0);
+
+   if (--api->ref_cnt == 0) {
+      if (api->func_by_name)
+	 xmlHashFree(api->func_by_name, xmlapi_func_free);
+      free(api->file);
+      free(api);
+   }
 }
 
 int ourfa_xmlapi_load_apixml(ourfa_xmlapi_t *xmlapi,  const char *file)
