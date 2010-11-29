@@ -66,7 +66,7 @@ struct t_idx_list {
 };
 
 
-void init_idx_list_s(struct t_idx_list *t)
+static void init_idx_list_s(struct t_idx_list *t)
 {
    if (t->cnt == 0) {
       t->idx_list_s[0]='0';
@@ -91,7 +91,7 @@ void init_idx_list_s(struct t_idx_list *t)
    }
 }
 
-int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct t_idx_list *idx)
+static int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct t_idx_list *idx)
 {
    int err = 1;
 
@@ -230,7 +230,7 @@ int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct t_idx_l
    return err;
 }
 
-int hv2ourfah(HV *hv, ourfa_hash_t **h)
+static int hv2ourfah(HV *hv, ourfa_hash_t **h)
 {
    ourfa_hash_t *res;
    SV *val;
@@ -272,7 +272,7 @@ static in_addr_t sv2in_addr_t(SV *val, const char *proc)
       (ip_address[3] & 0xFF));
 }
 
-int ourfa_err_f_warn(int err_code, void *user_ctx, const char *fmt, ...)
+static int ourfa_err_f_warn(int err_code, void *user_ctx, const char *fmt, ...)
 {
 
    va_list ap;
@@ -294,6 +294,64 @@ int ourfa_err_f_warn(int err_code, void *user_ctx, const char *fmt, ...)
    warn(SvPVbyte_nolen(saved_error));
 
    return err_code;
+}
+
+static int ourfa_exec(ourfa_connection_t *conn,
+   ourfa_xmlapi_func_t *f, ourfa_hash_t *in, HV *ret_h)
+{
+   int state;
+   int res;
+   ourfa_script_call_ctx_t *sctx;
+
+   assert(conn);
+   assert(f);
+   assert(ret_h);
+
+   sctx = ourfa_script_call_ctx_new(f, in);
+   if (sctx == NULL)
+      return OURFA_ERROR_SYSTEM;
+   ourfa_script_call_start(sctx);
+   state = OURFA_SCRIPT_CALL_START;
+   res=OURFA_OK;
+   while(state != OURFA_SCRIPT_CALL_END) {
+      state = ourfa_script_call_step(sctx, conn);
+      switch (state) {
+	 case OURFA_SCRIPT_CALL_START_REQ:
+	 case OURFA_SCRIPT_CALL_REQ:
+	    break;
+	 case OURFA_SCRIPT_CALL_START_RESP:
+	 case OURFA_SCRIPT_CALL_RESP:
+	 case OURFA_SCRIPT_CALL_END_RESP:
+	    /* TODO  */
+	    switch (sctx->func.state) {
+	       case OURFA_FUNC_CALL_STATE_START:
+	       case OURFA_FUNC_CALL_STATE_NODE:
+	       case OURFA_FUNC_CALL_STATE_STARTFOR:
+	       case OURFA_FUNC_CALL_STATE_STARTFORSTEP:
+	       case OURFA_FUNC_CALL_STATE_ENDFORSTEP:
+	       case OURFA_FUNC_CALL_STATE_ENDFOR:
+	       case OURFA_FUNC_CALL_STATE_ERROR:
+	       case OURFA_FUNC_CALL_STATE_END:
+	       default:
+		  break;
+	    }
+	    break;
+	 case OURFA_SCRIPT_CALL_ERROR:
+	    res = OURFA_ERROR_OTHER;
+	    break;
+	 case OURFA_SCRIPT_CALL_NODE:
+	    /* XXX: parameter node  */
+	 default:
+	    break;
+      }
+
+      if (state == OURFA_SCRIPT_CALL_ERROR)
+	 break;
+   }
+
+   ourfa_script_call_ctx_free(sctx);
+
+   return res;
 }
 
 MODULE = Ourfa PACKAGE = Ourfa::SSLCtx PREFIX = ourfa_ssl_ctx_
@@ -1075,6 +1133,33 @@ int
 ourfa_script_call_step(sctx, connection)
    ourfa_script_call_ctx_t *sctx
    ourfa_connection_t *connection
+
+HV *
+ourfa_script_call_call(connection, xmlapi, func_name, h=NO_INIT)
+   ourfa_connection_t *connection
+   ourfa_xmlapi_t *xmlapi
+   const char *func_name
+   HV *h
+   PREINIT:
+      SV *    sv;
+      ourfa_hash_t *ourfa_in;
+      ourfa_xmlapi_func_t *f;
+      int ret;
+   CODE:
+      f = ourfa_xmlapi_func(xmlapi, func_name);
+      if (f == NULL)
+	    croak("%s: Function `%s` not found in API",
+		  "Ourfa::Script::Call::call",
+		  func_name);
+      if (hv2ourfah(h, &ourfa_in) <= 0)
+	    croak("Can not parse input parameters");
+      ret = ourfa_exec(connection, f, ourfa_in, RETVAL);
+      ourfa_hash_free(ourfa_in);
+      if (ret != OURFA_OK)
+	    croak("%s: %s", "Ourfa::Script::Call::call", ourfa_error_strerror(ret));
+      sv_2mortal((SV*)RETVAL);
+   OUTPUT:
+      RETVAL
 
 
 void
