@@ -42,8 +42,8 @@
 
 /*  Debugging output */
 #if 0
-#define PR(s) printf(s);
-#define PRN(s,n) printf("'%s' (%d)\n",s,n);
+#define PR(s) warn(s);
+#define PRN(s,n) warn("'%s' (%lx)\n",s,n);
 #else
 #define PR(s)
 #define PRN(s,n)
@@ -266,10 +266,10 @@ static in_addr_t sv2in_addr_t(SV *val, const char *proc)
 	    "Ourfa::Connection::session_ip",
 	    addrlen, sizeof(addr));
 
-   return (ip_address[0] & 0xFF) << 24 |
+   return htonl((ip_address[0] & 0xFF) << 24 |
       (ip_address[1] & 0xFF) << 16 |
       (ip_address[2] & 0xFF) <<  8 |
-      (ip_address[3] & 0xFF);
+      (ip_address[3] & 0xFF));
 }
 
 int ourfa_err_f_warn(int err_code, void *user_ctx, const char *fmt, ...)
@@ -568,7 +568,7 @@ ourfa_connection_session_id(connection, val=NO_INIT)
 	 ST(0) = &PL_sv_undef;
 
 void
-ourfa_connection_session_ip(connection, val)
+ourfa_connection_session_ip(connection, val=NO_INIT)
    ourfa_connection_t *connection
    SV *val
    PREINIT:
@@ -577,11 +577,12 @@ ourfa_connection_session_ip(connection, val)
    CODE:
       if (items > 1) {
 	 STRLEN addrlen;
-	 in_addr_t addr;
+	 struct in_addr ip;
 	 char * ip_address;
 	 if (SvOK(val)) {
-	    addr = sv2in_addr_t(val, "Ourfa::Connection::session_ip");
-	    res = ourfa_connection_set_session_ip(connection, &addr);
+	    ip.s_addr = sv2in_addr_t(val, "Ourfa::Connection::session_ip");
+	    PRN(inet_ntoa(ip), ip);
+	    res = ourfa_connection_set_session_ip(connection, &ip.s_addr);
 	 }else
 	    res = ourfa_connection_set_session_ip(connection, NULL);
 	 if (res != OURFA_OK)
@@ -591,6 +592,7 @@ ourfa_connection_session_ip(connection, val)
       if (ip0) {
 	 struct in_addr ip;
 	 ip.s_addr = *ip0;
+	 PRN(inet_ntoa(ip), ip.s_addr);
 	 ST(0) = sv_newmortal();
 	 sv_setpvn(ST(0), (char *)&ip, sizeof(ip));
       }else
@@ -603,17 +605,21 @@ ourfa_connection_bio(connection)
 FILE *
 ourfa_connection_debug_stream(connection, val=NO_INIT)
    ourfa_connection_t *connection
-   FILE *val
+   SV *val
    PREINIT:
       int res;
    CODE:
       if (items > 1) {
-	 res = ourfa_connection_set_debug_stream(connection, val);
+	 FILE *stream;
+	 if (SvOK(val))
+	    stream = PerlIO_findFILE(IoOFP(sv_2io(val)));
+	 else
+	    stream = NULL;
+	 res = ourfa_connection_set_debug_stream(connection, stream);
 	 if (res != OURFA_OK)
 	    croak("%s: %s", "Ourfa::Connection::debug_stream", ourfa_error_strerror(res));
-	 RETVAL=val;
-      }else
-	 RETVAL = ourfa_connection_debug_stream(connection);
+      }
+      RETVAL = ourfa_connection_debug_stream(connection);
    OUTPUT:
       RETVAL
 

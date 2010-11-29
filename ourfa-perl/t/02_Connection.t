@@ -1,4 +1,7 @@
-use Test::More tests => 57;
+use strict;
+use warnings;
+use Test::More tests => 76;
+use Socket;
 use Data::Dumper;
 BEGIN { use_ok('Ourfa');
 };
@@ -113,22 +116,73 @@ ok(!defined($conn->session_id(undef)), "reset session id");
 ok(!defined($conn->session_id), "session id after reset");
 
 #session_ip
+my $orig_ip = $conn->session_ip;
+ok(!defined $orig_ip);
+is(inet_ntoa($conn->session_ip(inet_aton("127.0.0.5"))), "127.0.0.5", "set session ip");
+is(inet_ntoa($conn->session_ip()), "127.0.0.5", "read session ip");
+is($conn->session_ip(undef), undef, "reset session ip");
+is($conn->session_ip(), undef, "read session ip after reset");
+
 #bio
+
 #debug_stream
-#open
+SKIP: {
+   skip "Argument \"*Ourfa::Connection::_GEN_1\" isn't numeric in null operation during global destruction.", 3;
+   my $debug_stream = $conn->debug_stream();
+   $conn->debug_stream(*STDERR); # "set debug stream stderr";
+   ok($conn->debug_stream(), "read debug stream stderr");
+   is($conn->debug_stream(undef), undef, "reset debug stream");
+   is($conn->debug_stream(), undef, "read after reset debug stream");
+}
+
+
 #close
+eval { $conn->close(); };
+ok(!$@, "close");
+
+#read_int
+eval { $conn->read_int() };
+ok($@, "read int on closed connection");
+
+#read_long
+eval { $conn->read_long() };
+ok($@, "read long on closed connection");
+
+#read_double
+eval { $conn->read_double() };
+ok($@, "read double on closed connection");
+
+#read_string
+eval { $conn->read_string() };
+ok($@, "read string on closed connection");
+
+#read_ip
+eval { $conn->read_ip() };
+ok($@, "read ip on closed connection");
+
+#write_int
+eval { $conn->write_int(0) };
+ok($@, "write int on closed connection");
+
+#write_long
+eval { $conn->write_long(0) };
+ok($@, "write long on closed connection");
+
+#write_double
+eval { $conn->write_double(0) };
+ok($@, "write double on closed connection");
+
+#write_string
+eval { $conn->write_string("") };
+ok($@, "write string on closed connection");
+
+#write_ip
+eval { $conn->write_ip(inet_aton("127.0.0.5")) };
+ok($@, "write ip on closed connection");
+
+#open
 #send_packet
 #recv_packet
-#read_int
-#read_long
-#read_double
-#read_string
-#read_ip
-#write_int
-#write_long
-#write_double
-#write_string
-#write_ip
 #flush_read
 #flush_write
 
