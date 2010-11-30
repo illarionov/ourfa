@@ -16,7 +16,8 @@ WriteMakefile(
     LIBS              => ["-lssl -lcrypto $xml2_libs -lourfa"], # e.g., '-lm'
     DEFINE            => $xml2_includes, # e.g., '-DHAVE_SOMETHING'
     INC               => '-I.', # e.g., '-I. -I/usr/include/other'
-    OPTIMIZE	      => '-O0 -g'
+    OPTIMIZE	      => '-O0 -g',
+    PERL_MALLOC_OK    => 1
 );
 if  (eval {require ExtUtils::Constant; 1}) {
   # If you edit these definitions to change the constants used by this module,

@@ -304,7 +304,7 @@ static int ourfa_exec(ourfa_connection_t *conn,
    unsigned s_top;
    const char *node_type, *node_name, *arr_index;
    ourfa_script_call_ctx_t *sctx;
-   HV *s[50];
+   SV *s[50];
 
    assert(conn);
    assert(f);
@@ -316,7 +316,7 @@ static int ourfa_exec(ourfa_connection_t *conn,
    ourfa_script_call_start(sctx);
    state = OURFA_SCRIPT_CALL_START;
    res=OURFA_OK;
-   s[0]=ret_h;
+   s[0]=(SV *)ret_h;
    s_top=0;
    while(state != OURFA_SCRIPT_CALL_END) {
       state = ourfa_script_call_step(sctx, conn);
@@ -343,7 +343,7 @@ static int ourfa_exec(ourfa_connection_t *conn,
 			    if (ourfa_hash_get_int(sctx->func.h,
 				     node_name, arr_index, &val) == 0 ) {
 			       tmp = newSViv(val);
-			       if (hv_store(s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
+			       if (hv_store((HV *)s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
 				  SvREFCNT_dec(tmp);
 				  res = OURFA_ERROR_HASH;
 				  state == OURFA_SCRIPT_CALL_ERROR;
@@ -358,7 +358,7 @@ static int ourfa_exec(ourfa_connection_t *conn,
 			    if (ourfa_hash_get_long(sctx->func.h,
 				     node_name, arr_index, &val) == 0 ) {
 			       tmp = newSVnv(val);
-			       if (hv_store(s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
+			       if (hv_store((HV *)s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
 				  SvREFCNT_dec(tmp);
 				  res = OURFA_ERROR_HASH;
 				  state == OURFA_SCRIPT_CALL_ERROR;
@@ -373,7 +373,7 @@ static int ourfa_exec(ourfa_connection_t *conn,
 			    if (ourfa_hash_get_double(sctx->func.h,
 				     node_name, arr_index, &val) == 0 ) {
 			       tmp = newSVnv(val);
-			       if (hv_store(s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
+			       if (hv_store((HV *)s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
 				  SvREFCNT_dec(tmp);
 				  res = OURFA_ERROR_HASH;
 				  state == OURFA_SCRIPT_CALL_ERROR;
@@ -389,7 +389,7 @@ static int ourfa_exec(ourfa_connection_t *conn,
 				     node_name, arr_index, &val) == 0 ) {
 			       tmp = newSVpvn(val, strlen(val));
 			       SvUTF8_on(tmp);
-			       if (hv_store(s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
+			       if (hv_store((HV *)s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
 				  SvREFCNT_dec(tmp);
 				  res = OURFA_ERROR_HASH;
 				  state == OURFA_SCRIPT_CALL_ERROR;
@@ -405,7 +405,7 @@ static int ourfa_exec(ourfa_connection_t *conn,
 			    if (ourfa_hash_get_ip(sctx->func.h,
 				     node_name, arr_index, &val.s_addr) == 0 ) {
 			       tmp = newSVpvn((const char *)&val, sizeof(val));
-			       if (hv_store(s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
+			       if (hv_store((HV *)s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
 				  SvREFCNT_dec(tmp);
 				  res = OURFA_ERROR_HASH;
 				  state == OURFA_SCRIPT_CALL_ERROR;
@@ -440,7 +440,7 @@ static int ourfa_exec(ourfa_connection_t *conn,
 			state == OURFA_SCRIPT_CALL_ERROR;
 			break;
 		     }
-		     if ((resav = hv_store(s[s_top],
+		     if ((resav = hv_store((HV *)s[s_top],
 				 sctx->func.cur->n.n_for.array_name,
 				 strlen(sctx->func.cur->n.n_for.array_name),
 				 rvav, 0))==NULL) {
@@ -449,19 +449,65 @@ static int ourfa_exec(ourfa_connection_t *conn,
 			state == OURFA_SCRIPT_CALL_ERROR;
 			break;
 		     }
-		     s[++s_top]=*(HV **)resav;
+		     s[++s_top]=*resav;
 		  }
 		  break;
 	       case OURFA_FUNC_CALL_STATE_STARTFORSTEP:
+		  {
+		     HV *h0;
+		     SV *sv, *rvhv;
+
+		     if (s_top+1 >= sizeof(s)/sizeof(s[0])) {
+			res = OURFA_ERROR_HASH;
+			state == OURFA_SCRIPT_CALL_ERROR;
+			break;
+		     }
+
+		     sv = s[s_top];
+		     assert(SvROK(sv));
+		     assert(SvTYPE(SvRV(sv)) == SVt_PVAV);
+
+		     h0 = newHV();
+		     rvhv = newRV_noinc((SV *)h0);
+
+		     av_push((AV *)SvRV(sv), (SV *)rvhv);
+		     s[++s_top]=(SV *)h0;
+		  }
+		  break;
 	       case OURFA_FUNC_CALL_STATE_ENDFORSTEP:
+		  {
+		     SV *sv;
+
+		     assert(s_top != 0);
+
+		     sv = s[s_top--];
+		     assert(SvTYPE(sv) == SVt_PVHV);
+
+		     sv = s[s_top];
+		     assert(SvROK(sv) && (SvTYPE(SvRV(sv)) == SVt_PVAV));
+		  }
+		  break;
 	       case OURFA_FUNC_CALL_STATE_ENDFOR:
+		  {
+		     SV *sv;
+		     assert(s_top != 0);
+
+		     sv = s[s_top--];
+		     assert(SvROK(sv) && (SvTYPE(SvRV(sv)) == SVt_PVAV));
+		  }
+		  break;
 	       case OURFA_FUNC_CALL_STATE_ERROR:
+		  /* XXX  */
+		  state == OURFA_SCRIPT_CALL_ERROR;
+		  res = OURFA_ERROR_OTHER;
+		  break;
 	       case OURFA_FUNC_CALL_STATE_END:
 	       default:
 		  break;
 	    }
 	    break;
 	 case OURFA_SCRIPT_CALL_ERROR:
+	    /* XXX  */
 	    res = OURFA_ERROR_OTHER;
 	    break;
 	 case OURFA_SCRIPT_CALL_NODE:

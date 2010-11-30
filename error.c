@@ -59,6 +59,7 @@ const char *ourfa_error_strerror(int err_code)
       case OURFA_ERROR_NO_DATA: res = "No data received"; break;
       case OURFA_ERROR_ATTR_TOO_LONG: res = "Attribute size excess maximum value"; break;
       case OURFA_ERROR_PKT_TERM: res = "Termination packet received"; break;
+      case OURFA_ERROR_SOCKET: res = "Socket error"; break;
       case OURFA_ERROR_HASH: res = "Hash error"; break;
       default: res = "Unknown error code"; break;
    }

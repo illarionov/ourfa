@@ -462,6 +462,7 @@ int ourfa_connection_open(ourfa_connection_t *connection)
    struct addrinfo *res, *res0;
    struct timeval tv;
    int sockfd;
+   int err_code;
    char host_name[255];
    char service_name[30];
 
@@ -538,23 +539,19 @@ int ourfa_connection_open(ourfa_connection_t *connection)
    freeaddrinfo(res0);
 
    if (sockfd < 0)
-      /* XXX */
-      return OURFA_ERROR_OTHER;
+      return OURFA_ERROR_SOCKET;
 
    connection->bio = BIO_new_socket(sockfd, BIO_CLOSE);
 
    /* login  */
-   if (login(connection)) {
-      if (connection->bio) {
-	 BIO_ssl_shutdown(connection->bio);
-	 BIO_free_all(connection->bio);
-	 connection->bio = NULL;
-      }
-      /* XXX  */
-      return OURFA_ERROR_OTHER;
+   err_code = login(connection);
+   if ((err_code != OURFA_OK) && connection->bio) {
+      BIO_ssl_shutdown(connection->bio);
+      BIO_free_all(connection->bio);
+      connection->bio = NULL;
    }
 
-   return OURFA_OK;
+   return err_code;
 }
 
 int ourfa_connection_close(ourfa_connection_t *connection)
@@ -592,14 +589,16 @@ static int login(ourfa_connection_t *connection)
    assert(connection);
    read_pkt = NULL;
    write_pkt = NULL;
-   res = -1;
+   res = OURFA_ERROR_OTHER;
 
    /* Read initial packet */
-   if (ourfa_connection_recv_packet(connection, &read_pkt, "RECVD HANDSHAKE PKT...\n") <= 0)
+   if (ourfa_connection_recv_packet(connection, &read_pkt, "RECVD HANDSHAKE PKT...\n") <= 0) {
+      res = OURFA_ERROR_NO_DATA;
       goto login_exit;
+   }
 
    if (ourfa_pkt_code(read_pkt) != OURFA_PKT_SESSION_INIT) {
-      connection->printf_err(OURFA_ERROR_WRONG_INITIAL_PACKET,
+      res = connection->printf_err(OURFA_ERROR_WRONG_INITIAL_PACKET,
 	    connection->err_ctx,
 	    "Wrong initial packet code: 0x%x", ourfa_pkt_code(read_pkt));
       goto login_exit;
@@ -648,13 +647,15 @@ static int login(ourfa_connection_t *connection)
    }
 
    if (write_pkt == NULL) {
-      connection->printf_err(OURFA_ERROR_SYSTEM, connection->err_ctx, NULL);
+      res = connection->printf_err(OURFA_ERROR_HASH, connection->err_ctx, NULL);
       goto login_exit;
    }
 
    /* Send packet */
-   if (ourfa_connection_send_packet(connection, write_pkt, "SENDING LOGIN PACKET ...\n") <= 0)
+   if (ourfa_connection_send_packet(connection, write_pkt, "SENDING LOGIN PACKET ...\n") <= 0) {
+      res = OURFA_ERROR_SOCKET;
       goto login_exit;
+   }
 
    /* INIT session_id  */
    if ((connection->session_id == NULL)
@@ -668,17 +669,19 @@ static int login(ourfa_connection_t *connection)
    read_pkt = NULL;
 
    /* Read response */
-   if (ourfa_connection_recv_packet(connection, &read_pkt, "RECVD LOGIN RESPONSE PKT ...\n") <= 0)
+   if (ourfa_connection_recv_packet(connection, &read_pkt, "RECVD LOGIN RESPONSE PKT ...\n") <= 0) {
+      res = OURFA_ERROR_NO_DATA;
       goto login_exit;
+   }
 
    switch (ourfa_pkt_code(read_pkt)) {
       case OURFA_PKT_ACCESS_ACCEPT:
 	 break;
       case OURFA_PKT_ACCESS_REJECT:
-	 connection->printf_err(OURFA_ERROR_AUTH_REJECTED, connection->err_ctx, NULL);
+	 res = connection->printf_err(OURFA_ERROR_AUTH_REJECTED, connection->err_ctx, NULL);
 	 goto login_exit;
       default:
-	 connection->printf_err(OURFA_ERROR_WRONG_INITIAL_PACKET,
+	 res = connection->printf_err(OURFA_ERROR_WRONG_INITIAL_PACKET,
 	       connection->err_ctx, "Unknown packet code: 0x%x",
 	       (unsigned)ourfa_pkt_code(read_pkt));
 	 goto login_exit;
@@ -694,7 +697,7 @@ static int login(ourfa_connection_t *connection)
       res0 = ourfa_pkt_get_int(attr_ssl_type, &tmp);
 
       if ((unsigned)tmp != ourfa_ssl_ctx_ssl_type(connection->ssl_ctx)) {
-	 connection->printf_err(OURFA_ERROR_WRONG_SSL_TYPE,
+	 res = connection->printf_err(OURFA_ERROR_WRONG_SSL_TYPE,
 	       connection->err_ctx,
 		  "Can not negotiate SSL type. "
 		  " Client requested 0x%x, peer requested 0x%x\n",
@@ -708,7 +711,7 @@ static int login(ourfa_connection_t *connection)
 
 	 b = BIO_new_ssl(ourfa_ssl_get_ctx(connection->ssl_ctx), 1);
 	 if (b == NULL) {
-	    connection->printf_err(OURFA_ERROR_WRONG_SSL_TYPE,
+	    res = connection->printf_err(OURFA_ERROR_WRONG_SSL_TYPE,
 		  connection->err_ctx, "BIO_new_ssl_connect() failed");
 	    goto login_exit;
 	 }
@@ -724,10 +727,13 @@ static int login(ourfa_connection_t *connection)
       }
    }
 
-   res=0;
+   res=OURFA_OK;
 login_exit:
    ourfa_pkt_free(read_pkt);
    ourfa_pkt_free(write_pkt);
+   if (res != OURFA_OK) {
+      connection->session_id = NULL;
+   }
    return res;
 }
 
