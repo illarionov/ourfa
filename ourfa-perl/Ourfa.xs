@@ -301,7 +301,10 @@ static int ourfa_exec(ourfa_connection_t *conn,
 {
    int state;
    int res;
+   unsigned s_top;
+   const char *node_type, *node_name, *arr_index;
    ourfa_script_call_ctx_t *sctx;
+   HV *s[50];
 
    assert(conn);
    assert(f);
@@ -313,6 +316,8 @@ static int ourfa_exec(ourfa_connection_t *conn,
    ourfa_script_call_start(sctx);
    state = OURFA_SCRIPT_CALL_START;
    res=OURFA_OK;
+   s[0]=ret_h;
+   s_top=0;
    while(state != OURFA_SCRIPT_CALL_END) {
       state = ourfa_script_call_step(sctx, conn);
       switch (state) {
@@ -325,8 +330,128 @@ static int ourfa_exec(ourfa_connection_t *conn,
 	    /* TODO  */
 	    switch (sctx->func.state) {
 	       case OURFA_FUNC_CALL_STATE_START:
+		  break;
 	       case OURFA_FUNC_CALL_STATE_NODE:
+		   assert(SvTYPE(s[s_top]) == SVt_PVHV);
+		   node_name = sctx->func.cur->n.n_val.name;
+		   arr_index = sctx->func.cur->n.n_val.array_index ? sctx->func.cur->n.n_val.array_index : "0";
+		   switch(sctx->func.cur->type) {
+		      case OURFA_XMLAPI_NODE_INTEGER:
+			 {
+			    int val;
+			    SV *tmp;
+			    if (ourfa_hash_get_int(sctx->func.h,
+				     node_name, arr_index, &val) == 0 ) {
+			       tmp = newSViv(val);
+			       if (hv_store(s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
+				  SvREFCNT_dec(tmp);
+				  res = OURFA_ERROR_HASH;
+				  state == OURFA_SCRIPT_CALL_ERROR;
+			       }
+			    }
+			 }
+			 break;
+		      case OURFA_XMLAPI_NODE_LONG:
+			 {
+			    long long val;
+			    SV *tmp;
+			    if (ourfa_hash_get_long(sctx->func.h,
+				     node_name, arr_index, &val) == 0 ) {
+			       tmp = newSVnv(val);
+			       if (hv_store(s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
+				  SvREFCNT_dec(tmp);
+				  res = OURFA_ERROR_HASH;
+				  state == OURFA_SCRIPT_CALL_ERROR;
+			       }
+			    }
+			 }
+			 break;
+		      case OURFA_XMLAPI_NODE_DOUBLE:
+			 {
+			    double val;
+			    SV *tmp;
+			    if (ourfa_hash_get_double(sctx->func.h,
+				     node_name, arr_index, &val) == 0 ) {
+			       tmp = newSVnv(val);
+			       if (hv_store(s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
+				  SvREFCNT_dec(tmp);
+				  res = OURFA_ERROR_HASH;
+				  state == OURFA_SCRIPT_CALL_ERROR;
+			       }
+			    }
+			 }
+			 break;
+		      case OURFA_XMLAPI_NODE_STRING:
+			 {
+			    char *val;
+			    SV *tmp;
+			    if (ourfa_hash_get_string(sctx->func.h,
+				     node_name, arr_index, &val) == 0 ) {
+			       tmp = newSVpvn(val, strlen(val));
+			       SvUTF8_on(tmp);
+			       if (hv_store(s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
+				  SvREFCNT_dec(tmp);
+				  res = OURFA_ERROR_HASH;
+				  state == OURFA_SCRIPT_CALL_ERROR;
+			       }
+			       free(val);
+			    }
+			 }
+			 break;
+		      case OURFA_XMLAPI_NODE_IP:
+			 {
+			    struct in_addr val;
+			    SV *tmp;
+			    if (ourfa_hash_get_ip(sctx->func.h,
+				     node_name, arr_index, &val.s_addr) == 0 ) {
+			       tmp = newSVpvn((const char *)&val, sizeof(val));
+			       if (hv_store(s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
+				  SvREFCNT_dec(tmp);
+				  res = OURFA_ERROR_HASH;
+				  state == OURFA_SCRIPT_CALL_ERROR;
+			       }
+			    }
+			 }
+			 break;
+		      default:
+			 break;
+		   }
+		  break;
 	       case OURFA_FUNC_CALL_STATE_STARTFOR:
+		  {
+		     AV *arr;
+		     SV *rvav;
+		     SV **resav;
+		     if (s_top >= sizeof(s)/sizeof(s[0])) {
+			res = OURFA_ERROR_HASH;
+			state == OURFA_SCRIPT_CALL_ERROR;
+			break;
+		     }
+		     arr = newAV();
+		     if (!arr) {
+			res = OURFA_ERROR_HASH;
+			state == OURFA_SCRIPT_CALL_ERROR;
+			break;
+		     }
+		     rvav = newRV_noinc((SV *)arr);
+		     if (!rvav) {
+			SvREFCNT_dec(rvav);
+			res = OURFA_ERROR_HASH;
+			state == OURFA_SCRIPT_CALL_ERROR;
+			break;
+		     }
+		     if ((resav = hv_store(s[s_top],
+				 sctx->func.cur->n.n_for.array_name,
+				 strlen(sctx->func.cur->n.n_for.array_name),
+				 rvav, 0))==NULL) {
+			SvREFCNT_dec(rvav);
+			res = OURFA_ERROR_HASH;
+			state == OURFA_SCRIPT_CALL_ERROR;
+			break;
+		     }
+		     s[++s_top]=*(HV **)resav;
+		  }
+		  break;
 	       case OURFA_FUNC_CALL_STATE_STARTFORSTEP:
 	       case OURFA_FUNC_CALL_STATE_ENDFORSTEP:
 	       case OURFA_FUNC_CALL_STATE_ENDFOR:
