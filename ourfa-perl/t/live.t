@@ -7,7 +7,7 @@ BEGIN {
    }
 };
 
-use Test::More tests => 7;
+use Test::More tests => 9;
 use Ourfa;
 use Socket;
 use Data::Dumper;
@@ -42,4 +42,11 @@ ok(!$@, "Connect to test server");
 ok($conn->is_connected);
 diag("session_id: ", $conn->session_id);
 ok(defined $conn->session_id, "session id");
+
+my $f = $xmlapi->func("rpcf_core_version");
+
+my $h = Ourfa::ScriptCall->call($conn, $xmlapi, "rpcf_core_version");
+isa_ok($h, "HASH", "returns hash");
+ok(defined $h->{core_version});
+diag("core_version:" . $h->{core_version});
 

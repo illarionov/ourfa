@@ -242,6 +242,11 @@ static int hv2ourfah(HV *hv, ourfa_hash_t **h)
    if (!res)
       return -1;
 
+   if (hv == NULL) {
+      *h = res;
+      return 1;
+   }
+
    idx_list.cnt=0;
    hv_iterinit(hv);
    while ((val = hv_iternextsv(hv, &key, &retlen)) != NULL) {
@@ -297,7 +302,7 @@ static int ourfa_err_f_warn(int err_code, void *user_ctx, const char *fmt, ...)
 }
 
 static int ourfa_exec(ourfa_connection_t *conn,
-   ourfa_xmlapi_func_t *f, ourfa_hash_t *in, HV *ret_h)
+   ourfa_xmlapi_func_t *f, ourfa_hash_t *in, HV **ret_h)
 {
    int state;
    int res;
@@ -316,7 +321,8 @@ static int ourfa_exec(ourfa_connection_t *conn,
    ourfa_script_call_start(sctx);
    state = OURFA_SCRIPT_CALL_START;
    res=OURFA_OK;
-   s[0]=(SV *)ret_h;
+   s[0] = (SV *)newHV();
+   *ret_h = s[0];
    s_top=0;
    while(state != OURFA_SCRIPT_CALL_END) {
       state = ourfa_script_call_step(sctx, conn);
@@ -1306,7 +1312,8 @@ ourfa_script_call_step(sctx, connection)
    ourfa_connection_t *connection
 
 HV *
-ourfa_script_call_call(connection, xmlapi, func_name, h=NO_INIT)
+ourfa_script_call_call(CLASS, connection, xmlapi, func_name, h=NO_INIT)
+   const char *CLASS
    ourfa_connection_t *connection
    ourfa_xmlapi_t *xmlapi
    const char *func_name
@@ -1322,9 +1329,11 @@ ourfa_script_call_call(connection, xmlapi, func_name, h=NO_INIT)
 	    croak("%s: Function `%s` not found in API",
 		  "Ourfa::Script::Call::call",
 		  func_name);
+      if (items <= 4)
+	 h = NULL;
       if (hv2ourfah(h, &ourfa_in) <= 0)
 	    croak("Can not parse input parameters");
-      ret = ourfa_exec(connection, f, ourfa_in, RETVAL);
+      ret = ourfa_exec(connection, f, ourfa_in, &RETVAL);
       ourfa_hash_free(ourfa_in);
       if (ret != OURFA_OK)
 	    croak("%s: %s", "Ourfa::Script::Call::call", ourfa_error_strerror(ret));
