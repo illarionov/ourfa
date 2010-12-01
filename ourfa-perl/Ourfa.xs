@@ -322,7 +322,7 @@ static int ourfa_exec(ourfa_connection_t *conn,
    state = OURFA_SCRIPT_CALL_START;
    res=OURFA_OK;
    s[0] = (SV *)newHV();
-   *ret_h = s[0];
+   *ret_h = (HV *)s[0];
    s_top=0;
    while(state != OURFA_SCRIPT_CALL_END) {
       state = ourfa_script_call_step(sctx, conn);
