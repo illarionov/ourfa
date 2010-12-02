@@ -458,6 +458,21 @@ ourfa_xmlapi_func_t *ourfa_xmlapi_func(ourfa_xmlapi_t *api, const char *name)
    return xmlHashLookup(api->func_by_name, (const xmlChar *)name);
 }
 
+ourfa_xmlapi_func_t *ourfa_xmlapi_func_ref(ourfa_xmlapi_func_t  *func)
+{
+   if (func == NULL)
+      return NULL;
+   assert(func->xmlapi);
+   ourfa_xmlapi_ref(func->xmlapi);
+   return func;
+}
+
+void ourfa_xmlapi_func_deref(ourfa_xmlapi_func_t  *func)
+{
+   if (func == NULL)
+      return;
+   ourfa_xmlapi_free(func->xmlapi);
+}
 
 int ourfa_xmlapi_f_have_input(ourfa_xmlapi_func_t *f)
 {
@@ -537,6 +552,7 @@ static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t
    root->next = NULL;
    root->children = NULL;
    root->type = OURFA_XMLAPI_NODE_ROOT;
+   root->func = f;
    cur_node = NULL;
 
    if ((xml_root == NULL) || (xml_root->children == NULL))
@@ -556,6 +572,7 @@ static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t
 	 ret_code = xmlapi->printf_err(OURFA_ERROR_SYSTEM, xmlapi->err_ctx, NULL);
 	 break;
       }
+      node->func = f;
       node->children = node->next = NULL;
 
       node->type = ourfa_xmlapi_node_type_by_name((const char *)xml_node->name);
@@ -1117,6 +1134,8 @@ static void free_func_def(ourfa_xmlapi_func_node_t *def)
 	 assert(def->children != def);
 	 free_func_def(def->children);
       }
+
+      assert(def->func);
 
       switch (def->type) {
 	 case OURFA_XMLAPI_NODE_INTEGER:

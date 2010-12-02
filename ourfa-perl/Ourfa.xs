@@ -1087,6 +1087,11 @@ ourfa_xmlapi_func_t *
 ourfa_xmlapi_func(xmlapi, name)
    ourfa_xmlapi_t *xmlapi
    const char *name
+   CODE:
+      RETVAL = ourfa_xmlapi_func(xmlapi, name);
+      ourfa_xmlapi_func_ref(RETVAL);
+   OUTPUT:
+      RETVAL
 
 void
 ourfa_xmlapi_DESTROY(xmlapi)
@@ -1129,6 +1134,7 @@ ourfa_xmlapi_func_in(f)
    ourfa_xmlapi_func_t *f
    CODE:
       RETVAL=f->in;
+      if (RETVAL) ourfa_xmlapi_func_ref(f);
    OUTPUT:
       RETVAL
 
@@ -1137,6 +1143,7 @@ ourfa_xmlapi_func_out(f)
    ourfa_xmlapi_func_t *f
    CODE:
       RETVAL=f->out;
+      if (RETVAL) ourfa_xmlapi_func_ref(f);
    OUTPUT:
       RETVAL
 
@@ -1145,6 +1152,7 @@ ourfa_xmlapi_func_script(f)
    ourfa_xmlapi_func_t *f
    CODE:
       RETVAL=f->script;
+      if (RETVAL) ourfa_xmlapi_func_ref(f);
    OUTPUT:
       RETVAL
 
@@ -1156,6 +1164,14 @@ ourfa_xmlapi_func_dump(f, stream)
    CODE:
       ourfa_xmlapi_dump_func_definitions(f, stream);
 
+void
+ourfa_xmlapi_func_DESTROY(f)
+      ourfa_xmlapi_func_t *f
+   CODE:
+      PR("Now in Ourfa::Xmlapi::Func::DESTROY\n");
+      ourfa_xmlapi_func_deref(f);
+
+
 
 MODULE = Ourfa PACKAGE = Ourfa::Xmlapi::Func::Node PREFIX = ourfa_xmlapi_func_node_
 
@@ -1164,6 +1180,7 @@ ourfa_xmlapi_func_node_parent(fn)
    ourfa_xmlapi_func_node_t *fn
    CODE:
       RETVAL = fn->parent;
+      if (RETVAL) ourfa_xmlapi_func_ref(fn->func);
    OUTPUT:
       RETVAL
 
@@ -1172,6 +1189,7 @@ ourfa_xmlapi_func_node_children(fn)
    ourfa_xmlapi_func_node_t *fn
    CODE:
       RETVAL = fn->children;
+      if (RETVAL) ourfa_xmlapi_func_ref(fn->func);
    OUTPUT:
       RETVAL
 
@@ -1180,6 +1198,7 @@ ourfa_xmlapi_func_node_next(fn)
    ourfa_xmlapi_func_node_t *fn
    CODE:
       RETVAL = fn->next;
+      if (RETVAL) ourfa_xmlapi_func_ref(fn->func);
    OUTPUT:
       RETVAL
 
@@ -1192,6 +1211,14 @@ ourfa_xmlapi_func_node_type(fn)
       RETVAL
 
 #XXX: union n
+
+void
+ourfa_xmlapi_func_node_DESTROY(f)
+      ourfa_xmlapi_func_t *f
+   CODE:
+      PR("Now in Ourfa::Xmlapi::Func::Node::DESTROY\n");
+      ourfa_xmlapi_func_deref(f);
+
 
 
 MODULE = Ourfa PACKAGE = Ourfa::FuncCall PREFIX = ourfa_func_call_
@@ -1257,7 +1284,7 @@ ourfa_xmlapi_func_t *
 ourfa_func_call_func(fctx)
    ourfa_func_call_ctx_t *fctx
    CODE:
-      RETVAL=fctx->f;
+      RETVAL=ourfa_xmlapi_func_ref(fctx->f);
    OUTPUT:
       RETVAL
 
@@ -1274,6 +1301,7 @@ ourfa_func_call_cur_node(fctx)
    ourfa_func_call_ctx_t *fctx
    CODE:
       RETVAL=fctx->cur;
+      if (RETVAL) ourfa_xmlapi_func_ref(RETVAL->func);
    OUTPUT:
       RETVAL
 

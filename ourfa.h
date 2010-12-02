@@ -346,6 +346,8 @@ void           *ourfa_xmlapi_err_ctx(ourfa_xmlapi_t *xmlapi);
 const char     *ourfa_xmlapi_node_name_by_type(int node_type);
 int             ourfa_xmlapi_node_type_by_name(const char *node_name);
 ourfa_xmlapi_func_t  *ourfa_xmlapi_func(ourfa_xmlapi_t *api, const char *name);
+ourfa_xmlapi_func_t *ourfa_xmlapi_func_ref(ourfa_xmlapi_func_t  *func);
+void            ourfa_xmlapi_func_deref(ourfa_xmlapi_func_t  *func);
 void            ourfa_xmlapi_dump_func_definitions(ourfa_xmlapi_func_t *f, FILE *stream);
 
 /* Private  */
@@ -387,6 +389,7 @@ enum ourfa_xmlapi_func_node_type_t {
 };
 
 struct ourfa_xmlapi_func_node_t {
+   ourfa_xmlapi_func_t *func;
    ourfa_xmlapi_func_node_t *parent;
    ourfa_xmlapi_func_node_t *next;
    ourfa_xmlapi_func_node_t *children;

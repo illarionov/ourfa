@@ -65,7 +65,7 @@ ourfa_func_call_ctx_t *ourfa_func_call_ctx_new(
 static int init_func_call_ctx(ourfa_func_call_ctx_t *fctx,
       ourfa_xmlapi_func_t *f, ourfa_hash_t *h)
 {
-   fctx->f = f;
+   fctx->f = ourfa_xmlapi_func_ref(f);
    fctx->h = h;
    fctx->cur = NULL;
    fctx->state = OURFA_FUNC_CALL_STATE_END;
@@ -78,6 +78,8 @@ static int init_func_call_ctx(ourfa_func_call_ctx_t *fctx,
 
 void ourfa_func_call_ctx_free(ourfa_func_call_ctx_t *fctx)
 {
+   if (fctx)
+      ourfa_xmlapi_func_deref(fctx->f);
    free(fctx);
 }
 
@@ -1035,7 +1037,11 @@ ourfa_script_call_ctx_t *ourfa_script_call_ctx_new(
 
 void ourfa_script_call_ctx_free(ourfa_script_call_ctx_t *sctx)
 {
-   free(sctx);
+   if (sctx) {
+      ourfa_xmlapi_func_deref(sctx->script.f);
+      ourfa_xmlapi_func_deref(sctx->func.f);
+      free(sctx);
+   }
 }
 
 int ourfa_script_call_start(ourfa_script_call_ctx_t *sctx)
@@ -1158,6 +1164,8 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 	 break;
       case OURFA_SCRIPT_CALL_END:
       case OURFA_SCRIPT_CALL_ERROR:
+	 ourfa_xmlapi_func_deref(sctx->func.f);
+	 init_func_call_ctx(&sctx->func, NULL, NULL);
 	 break;
       default:
 	 assert(0);

@@ -47,6 +47,8 @@ isa_ok($script, "Ourfa::Xmlapi::Func", "script");
 is($test4, undef, "test4");
 is($test4, undef, "test5");
 
+$xmlapi = undef;
+
 is($test1->id, 0x01, "test1 id");
 is($test2->id, 0x02, "test2 id");
 is($test3->id, -0xaaaa, "test2 id");
