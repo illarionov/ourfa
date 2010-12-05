@@ -43,6 +43,7 @@
 
 static int init_func_call_ctx(ourfa_func_call_ctx_t *fctx,
       ourfa_xmlapi_func_t *f, ourfa_hash_t *h);
+static void setf_err(ourfa_func_call_ctx_t *fctx, int err_code, const char *fmt, ...);
 
 ourfa_func_call_ctx_t *ourfa_func_call_ctx_new(
       ourfa_xmlapi_func_t *f,
@@ -69,6 +70,10 @@ static int init_func_call_ctx(ourfa_func_call_ctx_t *fctx,
    fctx->h = h;
    fctx->cur = NULL;
    fctx->state = OURFA_FUNC_CALL_STATE_END;
+   fctx->err = OURFA_OK;
+   fctx->func_ret_code = 0;
+   fctx->last_err_str[0]='\0';
+
    fctx->printf_err = ourfa_err_f_stderr;
    fctx->err_ctx = NULL;
 
@@ -146,7 +151,7 @@ static int ourfa_func_call_get_long_prop_val(ourfa_func_call_ctx_t *fctx,
       else {
 	 /* Global variable?  */
 	 if (ourfa_hash_get_long(fctx->h, prop, NULL, &val) != 0)
-	    return OURFA_ERROR_OTHER;
+	    return OURFA_ERROR_HASH;
       }
    }
 
@@ -171,18 +176,20 @@ int ourfa_func_call_start(ourfa_func_call_ctx_t *fctx, unsigned is_req)
       fctx->cur = fctx->f->out;
    }
    fctx->state = OURFA_FUNC_CALL_STATE_START;
+   fctx->err = OURFA_OK;
+   fctx->func_ret_code = 1;
+   fctx->last_err_str[0]='\0';
 
-   return 1;
+   return fctx->state;
 }
 
 int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 {
-   int ret_code;
-
    /* Move to next node  */
    switch (fctx->state) {
       case OURFA_FUNC_CALL_STATE_START:
 	 assert(fctx->cur->type == OURFA_XMLAPI_NODE_ROOT);
+	 assert(fctx->err == OURFA_OK);
 	 if (fctx->cur->children)
 	    fctx->cur = fctx->cur->children;
 	 else {
@@ -192,25 +199,26 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 	 break;
       case OURFA_FUNC_CALL_STATE_STARTFOR:
 	 {
-	    assert(fctx->cur->type == OURFA_XMLAPI_NODE_FOR);
 	    long long from, count;
 
-	    if (ourfa_func_call_get_long_prop_val(fctx, fctx->cur->n.n_for.from, &from) != OURFA_OK){
-	       fctx->printf_err(OURFA_ERROR_OTHER, fctx->err_ctx, "Can not parse 'from' value of 'for' node");
-	       fctx->state = OURFA_FUNC_CALL_STATE_ERROR;
-	       return fctx->state;
+	    assert(fctx->cur->type == OURFA_XMLAPI_NODE_FOR);
+	    assert(fctx->err == OURFA_OK);
+
+	    fctx->err = ourfa_func_call_get_long_prop_val(fctx, fctx->cur->n.n_for.from, &from);
+	    if (fctx->err != OURFA_OK) {
+	      setf_err(fctx, fctx->err, "Can not parse 'from' value of 'for' node");
+	      return (fctx->state = OURFA_FUNC_CALL_STATE_ENDFOR);
 	    }
 
-	    if (ourfa_func_call_get_long_prop_val(fctx, fctx->cur->n.n_for.count, &count) != OURFA_OK) {
-	       fctx->printf_err(OURFA_ERROR_OTHER, fctx->err_ctx, "Can not parse 'count' value of 'from' node");
-	       fctx->state = OURFA_FUNC_CALL_STATE_ERROR;
-	       return fctx->state;
+	    fctx->err = ourfa_func_call_get_long_prop_val(fctx, fctx->cur->n.n_for.count, &count);
+	    if (fctx->err != OURFA_OK) {
+	      setf_err(fctx, fctx->err, "Can not parse 'count' value of 'from' node");
+	      return (fctx->state = OURFA_FUNC_CALL_STATE_ENDFOR);
 	    }
 
-	    if (ourfa_hash_set_long(fctx->h, fctx->cur->n.n_for.name, NULL, from)){
-	       ret_code = fctx->printf_err(OURFA_ERROR_OTHER, fctx->err_ctx, "Can not set 'for' counter value");
-	       fctx->state = OURFA_FUNC_CALL_STATE_ERROR;
-	       return fctx->state;
+	    if (ourfa_hash_set_long(fctx->h, fctx->cur->n.n_for.name, NULL, from)) {
+	       setf_err(fctx, OURFA_ERROR_HASH, "Can not set 'for' counter value");
+	       return (fctx->state = OURFA_FUNC_CALL_STATE_ENDFOR);
 	    }
 
 	    if ((count != 0) && (fctx->cur->children != NULL))
@@ -222,15 +230,16 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 	 break;
       case OURFA_FUNC_CALL_STATE_STARTFORSTEP:
       case OURFA_FUNC_CALL_STATE_STARTIF:
-      case OURFA_FUNC_CALL_STATE_STARTCALL:
+      case OURFA_FUNC_CALL_STATE_STARTCALLPARAMS:
 	 assert(fctx->cur->children);
+	 assert(fctx->err == OURFA_OK);
 	 fctx->cur = fctx->cur->children;
 	 break;
       case OURFA_FUNC_CALL_STATE_NODE:
       case OURFA_FUNC_CALL_STATE_ENDIF:
       case OURFA_FUNC_CALL_STATE_ENDFOR:
-      case OURFA_FUNC_CALL_STATE_ENDCALL:
-	 if (fctx->cur->next != NULL)
+      case OURFA_FUNC_CALL_STATE_ENDCALLPARAMS:
+	 if ((fctx->err == OURFA_OK) && fctx->cur->next != NULL)
 	    fctx->cur = fctx->cur->next;
 	 else {
 	    /* Move up a tree  */
@@ -247,7 +256,7 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 		  fctx->state = OURFA_FUNC_CALL_STATE_END;
 		  break;
 	       case OURFA_XMLAPI_NODE_CALL:
-		  fctx->state = OURFA_FUNC_CALL_STATE_ENDCALL;
+		  fctx->state = OURFA_FUNC_CALL_STATE_ENDCALLPARAMS;
 		  break;
 	       default:
 		  assert(0);
@@ -260,7 +269,10 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 	 {
 	    long long from, count, i;
 	    int r0;
+
 	    assert(fctx->cur->type == OURFA_XMLAPI_NODE_FOR);
+	    if (fctx->err != OURFA_OK)
+	       return (fctx->state = OURFA_FUNC_CALL_STATE_ENDFOR);
 
 	    r0 = ourfa_func_call_get_long_prop_val(fctx, fctx->cur->n.n_for.from, &from);
 	    assert(r0 == OURFA_OK);
@@ -271,9 +283,8 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 
 	    i++;
 	    if (ourfa_hash_set_long(fctx->h, fctx->cur->n.n_for.name, NULL, i)){
-	       ret_code = fctx->printf_err(OURFA_ERROR_OTHER, fctx->err_ctx, "Cannot set 'for' counter value");
-	       fctx->state = OURFA_FUNC_CALL_STATE_ERROR;
-	       return fctx->state;
+	       setf_err(fctx, OURFA_ERROR_HASH, "Cannot set 'for' counter value");
+	       return (fctx->state = OURFA_FUNC_CALL_STATE_ENDFOR);
 	    }
 
 	    /* Next iteration  */
@@ -298,6 +309,9 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 	       case OURFA_XMLAPI_NODE_FOR:
 		  return OURFA_FUNC_CALL_STATE_ENDFORSTEP;
 		  break;
+	       case OURFA_XMLAPI_NODE_CALL:
+		  return OURFA_FUNC_CALL_STATE_ENDCALLPARAMS;
+		  break;
 	       default:
 		  assert(0);
 		  break;
@@ -306,11 +320,12 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 	 assert(0);
 	 break;
       case OURFA_FUNC_CALL_STATE_END:
-      case OURFA_FUNC_CALL_STATE_ERROR:
       default:
 	 assert(0);
 	 break;
    }
+
+   assert(fctx->err == OURFA_OK);
 
    /* handle node  */
    switch (fctx->cur->type) {
@@ -376,31 +391,25 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 			fctx->h,
 			fctx->cur->n.n_set.dst,
 			fctx->cur->n.n_set.dst_index,
-			fctx->cur->n.n_set.value) != 0) {
-		  fctx->printf_err(OURFA_ERROR_OTHER, fctx->err_ctx, "Cannot set hash value ('%s(%s)'='%s') in function %s",
+			fctx->cur->n.n_set.value) != 0)
+		  setf_err(fctx, OURFA_ERROR_HASH, "Can not set hash value %s(%s) to %s",
 			fctx->cur->n.n_set.dst,
 			fctx->cur->n.n_set.dst_index ? fctx->cur->n.n_set.dst_index : "0",
-			fctx->cur->n.n_set.value,
-			fctx->f->name);
-		  fctx->state = OURFA_FUNC_CALL_STATE_ERROR;
-	       }else
-		  fctx->state = OURFA_FUNC_CALL_STATE_NODE;
+			fctx->cur->n.n_set.value);
 	    }else {
 	       if (ourfa_hash_copy_val(
 			fctx->h,
 			fctx->cur->n.n_set.dst, fctx->cur->n.n_set.dst_index,
-			fctx->cur->n.n_set.src, fctx->cur->n.n_set.src_index) != 0){
-		  fctx->printf_err(OURFA_ERROR_OTHER, fctx->err_ctx,
-			"Cannot copy hash value ('%s(%s)'='%s(%s)') in function %s",
+			fctx->cur->n.n_set.src, fctx->cur->n.n_set.src_index) != 0)
+		  setf_err(fctx, OURFA_ERROR_HASH,
+			"Cannot copy hash value %s(%s) to %s(%s))",
 			fctx->cur->n.n_set.dst,
 			fctx->cur->n.n_set.dst_index ? fctx->cur->n.n_set.dst_index : "0",
 			fctx->cur->n.n_set.src,
-			fctx->cur->n.n_set.src_index ? fctx->cur->n.n_set.src_index : "0",
-			fctx->f->name);
-		  fctx->state = OURFA_FUNC_CALL_STATE_ERROR;
-	       }else
-		  fctx->state = OURFA_FUNC_CALL_STATE_NODE;
+			fctx->cur->n.n_set.src_index ? fctx->cur->n.n_set.src_index : "0"
+			);
 	    }
+	    fctx->state = OURFA_FUNC_CALL_STATE_NODE;
 	    break;
 	 case OURFA_XMLAPI_NODE_FOR:
 	    fctx->state = OURFA_FUNC_CALL_STATE_STARTFOR;
@@ -418,19 +427,20 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 		     s1 = NULL;
 	       }
 
-	       fctx->printf_err(OURFA_ERROR_OTHER, fctx->err_ctx, "%s%s%s",
-		     fctx->cur->n.n_error.comment ? fctx->cur->n.n_error.comment : "Function error",
+	       setf_err(fctx, OURFA_ERROR_OTHER, "%s%s%s",
+		     fctx->cur->n.n_error.comment ? fctx->cur->n.n_error.comment : "",
 		     fctx->cur->n.n_error.variable ? " " : "",
 		     s1 ? s1 : "");
 	       free(s1);
-	       fctx->state = OURFA_FUNC_CALL_STATE_ERROR;
+	       fctx->func_ret_code = fctx->cur->n.n_error.code;
+	       fctx->state = OURFA_FUNC_CALL_STATE_NODE;
 	    }
 	    break;
 	 case OURFA_XMLAPI_NODE_CALL:
 	    if (fctx->cur->children)
-	       fctx->state = OURFA_FUNC_CALL_STATE_STARTCALL;
+	       fctx->state = OURFA_FUNC_CALL_STATE_STARTCALLPARAMS;
 	    else
-	       fctx->state = OURFA_FUNC_CALL_STATE_ENDCALL;
+	       fctx->state = OURFA_FUNC_CALL_STATE_ENDCALLPARAMS;
 	    break;
 	 case OURFA_XMLAPI_NODE_PARAMETER:
 	    fctx->state = OURFA_FUNC_CALL_STATE_NODE;
@@ -447,12 +457,11 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 			fctx->cur->n.n_parameter.name,
 			NULL,
 			fctx->cur->n.n_parameter.value) != 0) {
-		  fctx->printf_err(OURFA_ERROR_OTHER, fctx->err_ctx, "Cannot set hash value ('%s(%s)'='%s') in function %s",
+		  setf_err(fctx, OURFA_ERROR_HASH, "Cannot set hash value %s(%s) to %s",
 			fctx->cur->n.n_parameter.name,
 			"0",
-			fctx->cur->n.n_parameter.value,
-			fctx->f->name);
-		  fctx->state = OURFA_FUNC_CALL_STATE_ERROR;
+			fctx->cur->n.n_parameter.value
+			);
 	       }
 	    }
 	    break;
@@ -465,22 +474,14 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 	       if (ourfa_hash_get_double(fctx->h,
 			fctx->cur->n.n_math.arg1,
 			NULL, &arg1) != 0) {
-		  fctx->printf_err(OURFA_ERROR_OTHER,
-			fctx->err_ctx,
-			"Can not get '%s' value of '%s' node in function %s",
-			"arg1", ourfa_xmlapi_node_name_by_type(fctx->cur->type),
-			fctx->f->name);
-		  fctx->state = OURFA_FUNC_CALL_STATE_ERROR;
+		  setf_err(fctx, OURFA_ERROR_HASH,
+			"Can not get '%s' value", "arg1");
 		  break;
 	       }
 	       if (ourfa_hash_get_double(fctx->h,
 			fctx->cur->n.n_math.arg2, NULL, &arg1) != 0) {
-		  fctx->printf_err(OURFA_ERROR_OTHER,
-			fctx->err_ctx,
-			"Can not get '%s' value of '%s' node in function %s",
-			"arg2", ourfa_xmlapi_node_name_by_type(fctx->cur->type),
-			fctx->f->name);
-		  fctx->state = OURFA_FUNC_CALL_STATE_ERROR;
+		  setf_err(fctx, OURFA_ERROR_HASH,
+			"Can not get '%s' value", "arg2");
 		  break;
 	       }
 	       switch (fctx->cur->type) {
@@ -492,12 +493,8 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 		     break;
 		  case OURFA_XMLAPI_NODE_DIV:
 		     if (arg2 == 0) {
-			fctx->printf_err(OURFA_ERROR_OTHER,
-			      fctx->err_ctx,
-			      "Division by zero in function %s",
-			      fctx->f->name
-			      );
-			fctx->state = OURFA_FUNC_CALL_STATE_ERROR;
+			setf_err(fctx, OURFA_ERROR_OTHER,
+			      "Division by zero");
 		     }else
 			dst = arg1 / arg2;
 		     break;
@@ -508,18 +505,14 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 		     assert(0);
 		     break;
 	       }
-	       if (fctx->state == OURFA_FUNC_CALL_STATE_ERROR)
-		  break;
-	       if (ourfa_hash_set_double(fctx->h, fctx->cur->n.n_math.dst,
-			NULL, dst) != 0) {
-		  fctx->printf_err(OURFA_ERROR_OTHER, fctx->err_ctx, "Cannot set hash value ('%s(%s)'=%.2f) in function %s",
+	       if ((fctx->err == OURFA_OK)
+		     && ourfa_hash_set_double(fctx->h, fctx->cur->n.n_math.dst,
+			NULL, dst) != 0)
+		   setf_err(fctx, OURFA_ERROR_HASH,
+		     "Cannot set hash value ('%s(%s)'=%.2f)",
 			fctx->cur->n.n_math.dst,
 			"0",
-			dst,
-			fctx->f->name);
-		  fctx->state = OURFA_FUNC_CALL_STATE_ERROR;
-		  break;
-	       }
+			dst);
 	       fctx->state = OURFA_FUNC_CALL_STATE_NODE;
 	    }
 	    break;
@@ -539,28 +532,35 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
       ourfa_connection_t *conn)
 {
    int state;
-   int res = OURFA_OK;
+   int old_err;
+   int socket_error = 0;
    const char *node_type, *node_name, *arr_index;
    ourfa_xmlapi_func_node_t *n;
 
    assert(fctx->cur);
 
+   old_err = fctx->err;
    state = ourfa_func_call_step(fctx);
 
-   if (state == OURFA_FUNC_CALL_STATE_ERROR)
-      goto ourfa_func_call_req_step_err;
-   else if (state == OURFA_FUNC_CALL_STATE_END) {
+   if (fctx->err != OURFA_OK) {
+      assert(fctx->f && fctx->f->in);
+      if (old_err == OURFA_OK && (fctx->f->in->children != NULL))
+	 /* Schema error. Send termination attribute. On error do nothing  */
+	 ourfa_connection_write_int(conn, OURFA_ATTR_TERMINATION, 3);
+      return state;
+   }
+
+   assert(fctx->err == OURFA_OK);
+
+   if (state == OURFA_FUNC_CALL_STATE_END) {
       assert (fctx->cur->type == OURFA_XMLAPI_NODE_ROOT);
       if (fctx->cur->children != NULL) {
 	 /* Send termination attribute
 	  * Do not send termination attribute if no input parameters found
 	 */
-	    res = ourfa_connection_write_int(conn, OURFA_ATTR_TERMINATION, 4);
-	 if (res != OURFA_OK) {
-	    res = fctx->printf_err(OURFA_ERROR_NO_DATA, fctx->err_ctx,
-		  "Can not send termination attribute");
-	    state = OURFA_FUNC_CALL_STATE_ERROR;
-	 }
+	 fctx->err = ourfa_connection_write_int(conn, OURFA_ATTR_TERMINATION, 4);
+	 if (fctx->err != OURFA_OK) 
+	    setf_err(fctx, fctx->err, "Can not send termination attribute");
       }
       return state;
    }
@@ -588,9 +588,8 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
 	       if (ourfa_hash_get_string(fctx->h, node_name, arr_index, &s) == 0) {
 		  /* Builtin function */
 		  if (ourfa_parse_builtin_func(fctx->h, s, &val) != 0) {
-		     res = fctx->printf_err(OURFA_ERROR_HASH, fctx->err_ctx,
-			   "Wrong input parameter '%s' of function '%s'",
-			   node_name, fctx->f->name);
+		     setf_err(fctx, OURFA_ERROR_HASH,
+			   "Wrong input parameter '%s'", node_name);
 		     free(s);
 		     break; /* switch  */
 		  }
@@ -598,25 +597,27 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
 	       }else {
 		  /* Default value */
 		  long long defval;
-		  if (ourfa_func_call_get_long_prop_val(fctx,
-			   n->n.n_val.defval, &defval) == OURFA_OK) {
+		  fctx->err = ourfa_func_call_get_long_prop_val(fctx,
+			   n->n.n_val.defval, &defval); 
+		  if (fctx->err == OURFA_OK)
 		     val = (int)defval;
-		  }else {
-		     res = fctx->printf_err(OURFA_ATTR_DATA, fctx->err_ctx,
-			   "Wrong input parameter '%s' of function '%s'",
-			   node_name, fctx->f->name);
+		  else {
+		     setf_err(fctx, fctx->err,
+			   "Wrong input parameter '%s'", node_name);
 		     break; /* switch  */
 		  }
 	       }
 	       if (ourfa_hash_set_int(fctx->h, node_name, arr_index, val) != 0) {
-		  res = fctx->printf_err(OURFA_ERROR_HASH, fctx->err_ctx,
+		  setf_err(fctx, OURFA_ERROR_HASH,
 			"Can not set hash value: `%s(%s)` => `%i`",
 			node_name, arr_index, val);
 		  break; /* switch  */
 	       }
 	    } /* if (ourfa_hash_get_int)  */ 
 
-	    res=ourfa_connection_write_int(conn, OURFA_ATTR_DATA, val);
+	    fctx->err=ourfa_connection_write_int(conn, OURFA_ATTR_DATA, val);
+	    if (fctx->err != OURFA_OK)
+	       socket_error = 1;
 	 }
 	 break;
       case OURFA_XMLAPI_NODE_LONG:
@@ -630,9 +631,8 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
 	       if (ourfa_hash_get_string(fctx->h, node_name, arr_index, &s) == 0) {
 		  /* Builtin function */
 		  if (ourfa_parse_builtin_func(fctx->h, s, &buildin_val) != 0) {
-		     res = fctx->printf_err(OURFA_ATTR_DATA, fctx->err_ctx,
-			   "Wrong input parameter '%s' of function '%s'",
-			   node_name, fctx->f->name);
+		     setf_err(fctx, OURFA_ERROR_HASH,
+			   "Wrong input parameter '%s'", node_name);
 		     free(s);
 		     break; /* switch  */
 		  }
@@ -640,22 +640,23 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
 		  free(s);
 	       }else {
 		  /* Default value */
-		  if (ourfa_func_call_get_long_prop_val(fctx,
-			   n->n.n_val.defval, &val) != OURFA_OK) {
-		     res = fctx->printf_err(OURFA_ATTR_DATA, fctx->err_ctx,
-			   "Wrong input parameter '%s' of function '%s'",
-			   node_name, fctx->f->name);
+		  fctx->err = ourfa_func_call_get_long_prop_val(fctx,
+			n->n.n_val.defval, &val);
+		  if (fctx->err != OURFA_OK) {
+		     setf_err(fctx, fctx->err, "Wrong input parameter '%s'", node_name);
 		     break; /* switch  */
 		  }
 	       }
 	       if (ourfa_hash_set_long(fctx->h, node_name, arr_index, val) != 0) {
-		  res=fctx->printf_err(OURFA_ERROR_HASH, fctx->err_ctx,
+		  setf_err(fctx, OURFA_ERROR_HASH,
 			"Can not set hash value: `%s(%s)` => `%lli`",
 			node_name, arr_index, val);
 		  break; /* switch  */
 	       }
 	    }
-	    res=ourfa_connection_write_long(conn, OURFA_ATTR_DATA, val);
+	    fctx->err=ourfa_connection_write_long(conn, OURFA_ATTR_DATA, val);
+	    if (fctx->err != OURFA_OK)
+	       socket_error = 1;
 	 }
 	 break;
       case OURFA_XMLAPI_NODE_DOUBLE:
@@ -668,11 +669,8 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
 
 	       /*  Get default value */
 	       if (n->n.n_val.defval == NULL) {
-		  res = fctx->printf_err(
-			OURFA_ATTR_DATA, fctx->err_ctx,
-			"Function '%s': cannot get default value for node `%s`",
-			fctx->f->name,
-			(const char *)node_name);
+		  setf_err(fctx, OURFA_ERROR_HASH,
+			"Can not get default value for node `%s`", node_name);
 		  break; /* switch  */
 	       }
 
@@ -681,25 +679,20 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
 	       if (((*p_end != '\0') || errno == ERANGE)
 		     && (ourfa_hash_get_double(fctx->h, n->n.n_val.defval,
 			   NULL, &val) != 0)) {
-		  res = fctx->printf_err(
-			OURFA_ATTR_DATA, fctx->err_ctx,
-			"Wrong input parameter '%s' of function '%s' ('%s')",
-			node_name,
-			fctx->f->name,
-			n->n.n_val.defval);
+		  setf_err(fctx, OURFA_ERROR_HASH,
+			"Wrong input parameter '%s' ('%s')", node_name, n->n.n_val.defval);
 		  break; /* switch  */
 	       }
 	       if (ourfa_hash_set_double(fctx->h, node_name, arr_index, val) != 0) {
-		  res = fctx->printf_err(
-			OURFA_ERROR_HASH, fctx->err_ctx,
-			"Function %s: Can not set hash value: `%s(%s)` => `%.3f`",
-			fctx->f->name,
-			node_name, arr_index,
-			val);
+		  setf_err(fctx, OURFA_ERROR_HASH,
+			"Can not set hash value: `%s(%s)` => `%.3f`",
+			node_name, arr_index, val);
 		  break; /* switch  */
 	       }
 	    }
-	    res=ourfa_connection_write_double(conn, OURFA_ATTR_DATA, val);
+	    fctx->err=ourfa_connection_write_double(conn, OURFA_ATTR_DATA, val);
+	    if (fctx->err != OURFA_OK)
+	       socket_error = 1;
 	 }
 	 break;
       case OURFA_XMLAPI_NODE_STRING:
@@ -712,25 +705,23 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
 	    if (ourfa_hash_get_string(fctx->h, node_name, arr_index, &val) != 0) {
 	       /*  Get default value */
 	       if (n->n.n_val.defval == NULL) {
-		  res = fctx->printf_err(
-			OURFA_ATTR_DATA, fctx->err_ctx,
-			"Function '%s': cannot get default value for node `%s`",
-			fctx->f->name,
-			(const char *)node_name);
+		  setf_err(fctx, OURFA_ERROR_HASH,
+			"Can not get default value for node `%s`",
+			node_name);
 		  break; /* switch  */
 	       }
 	       if (ourfa_hash_set_string(fctx->h, node_name, arr_index, n->n.n_val.defval) != 0) {
-		  res = fctx->printf_err(
-			OURFA_ERROR_HASH, fctx->err_ctx,
-			"Function %s: Can not set hash value: `%s(%s)` => `%s`",
-			fctx->f->name,
+		  setf_err(fctx, OURFA_ERROR_HASH,
+			"Can not set hash value: `%s(%s)` => `%s`",
 			node_name, arr_index,
 			n->n.n_val.defval);
 		  break; /* switch  */
 	       }
 	    }
-	    res = ourfa_connection_write_string(conn, OURFA_ATTR_DATA,
+	    fctx->err = ourfa_connection_write_string(conn, OURFA_ATTR_DATA,
 		  val ? val : n->n.n_val.defval);
+	    if (fctx->err != OURFA_OK)
+	       socket_error = 1;
 	    free(val);
 	 }
 	 break;
@@ -744,37 +735,32 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
 
 	       /*  Get default value */
 	       if (n->n.n_val.defval == NULL) {
-		  res = fctx->printf_err(
-			OURFA_ATTR_DATA, fctx->err_ctx,
-			"Function '%s': cannot get default value for node `%s`",
-			fctx->f->name,
-			(const char *)node_name);
+		  setf_err(fctx, OURFA_ERROR_HASH,
+			"Can not get default value for node `%s`", node_name);
 		  break; /* switch  */
 	       }
 
 	       if ((ourfa_hash_parse_ip(n->n.n_val.defval, &addr) != 0)
 		     && (ourfa_hash_get_ip(fctx->h, n->n.n_val.defval,
 			   NULL, &val) != 0)) {
-		  res = fctx->printf_err(
-			OURFA_ATTR_DATA, fctx->err_ctx,
-			"Wrong input parameter '%s' of function '%s' ('%s')",
+		  setf_err(fctx, OURFA_ERROR_HASH,
+			"Wrong input parameter '%s' ('%s')",
 			node_name,
-			fctx->f->name,
 			n->n.n_val.defval);
 		  break; /* switch  */
 	       }
 	       val = addr.s_addr;
 	       if (ourfa_hash_set_ip(fctx->h, node_name, arr_index, val) != 0) {
-		  res = fctx->printf_err(
-			OURFA_ERROR_HASH, fctx->err_ctx,
-			"Function %s: Can not set hash value: `%s(%s)` => `%s`",
-			fctx->f->name,
+		  setf_err(fctx, OURFA_ERROR_HASH,
+			"Can not set hash value: %s(%s) = %s",
 			node_name, arr_index,
 			n->n.n_val.defval);
 		  break; /* switch  */
 	       }
 	    }
-	    res = ourfa_connection_write_ip(conn, OURFA_ATTR_DATA, val);
+	    fctx->err = ourfa_connection_write_ip(conn, OURFA_ATTR_DATA, val);
+	    if (fctx->err != OURFA_OK)
+	       socket_error = 1;
 	 }
 	 break;
       case OURFA_XMLAPI_NODE_SET:
@@ -784,71 +770,46 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
 	 break;
    } /* switch  */
 
-ourfa_func_call_req_step_err:
-   if (state == OURFA_FUNC_CALL_STATE_ERROR || (res != OURFA_OK)) {
-      /* XXX: error  */
+   if (fctx->err != OURFA_OK && !socket_error) {
       ourfa_connection_flush_write(conn);
-      return OURFA_FUNC_CALL_STATE_ERROR;
+      /* Schema error. Send termination attribute. On error do nothing  */
+      ourfa_connection_write_int(conn, OURFA_ATTR_TERMINATION, 3);
    }
 
    return state;
 }
 
-int ourfa_func_call_req(ourfa_func_call_ctx_t *fctx,
-       ourfa_connection_t *conn)
-{
-   int res = OURFA_OK;
-   int state = OURFA_FUNC_CALL_STATE_START;
-
-   assert(fctx);
-   assert(conn);
-
-   if (!ourfa_connection_is_connected(conn))
-      return OURFA_ERROR_NOT_CONNECTED;
-
-   ourfa_func_call_start(fctx, 1);
-
-   state = OURFA_FUNC_CALL_STATE_START;
-   assert(fctx->cur);
-
-   for (state=OURFA_FUNC_CALL_STATE_START;
-	 state != OURFA_FUNC_CALL_STATE_END;
-	 state = ourfa_func_call_req_step(fctx, conn)){
-      if (state == OURFA_FUNC_CALL_STATE_ERROR) {
-	 res = OURFA_ERROR_OTHER;
-	 break;
-      }
-   }
-
-   /* XXX  */
-   return res;
-}
-
-
 int ourfa_func_call_resp_step(ourfa_func_call_ctx_t *fctx,
       ourfa_connection_t *conn)
 {
    int state;
-   int res = OURFA_OK;
+   int old_err;
    int func_ret_code;
    const char *node_type, *node_name, *arr_index;
    ourfa_xmlapi_func_node_t *n;
 
    assert(fctx->cur);
 
+   old_err = fctx->err;
    state = ourfa_func_call_step(fctx);
 
-   if (state == OURFA_FUNC_CALL_STATE_ERROR)
-      goto ourfa_func_call_resp_step_err;
-   else if (state == OURFA_FUNC_CALL_STATE_END) {
-      /* Read termination attribute with error code  */
-      res = ourfa_connection_read_int(conn, OURFA_ATTR_TERMINATION, &func_ret_code);
-      if (res != OURFA_OK) {
-	 fctx->printf_err(res, fctx->err_ctx,
-	       "Can not receive termination attribute");
-	 goto ourfa_func_call_resp_step_err;
-      }
+   if (fctx->err != OURFA_OK) {
+      if (old_err == OURFA_OK)
+	 /* Schema error. Read data to termination attribute  */
+	 ourfa_connection_flush_read(conn);
       return state;
+   }
+
+   assert(fctx->err == OURFA_OK);
+
+   if (state == OURFA_FUNC_CALL_STATE_END) {
+      assert (fctx->cur->type == OURFA_XMLAPI_NODE_ROOT);
+      /* Read termination attribute with error code  */
+      fctx->err  = ourfa_connection_read_int(conn, OURFA_ATTR_TERMINATION, &func_ret_code);
+      if (fctx->err != OURFA_OK)
+	 setf_err(fctx, fctx->err,
+	       "Can not receive termination attribute");
+      goto ourfa_func_call_resp_step_err;
    }
    else if (state != OURFA_FUNC_CALL_STATE_NODE)
       return state;
@@ -868,16 +829,16 @@ int ourfa_func_call_resp_step(ourfa_func_call_ctx_t *fctx,
 	 {
 	    int val;
 
-	    res = ourfa_connection_read_int(conn, OURFA_ATTR_DATA, &val);
-	    if (res != OURFA_OK) {
-	       fctx->printf_err(res, fctx->err_ctx,
+	    fctx->err = ourfa_connection_read_int(conn, OURFA_ATTR_DATA, &val);
+	    if (fctx->err != OURFA_OK) {
+	       setf_err(fctx, fctx->err,
 		     "Can not get %s value for node '%s(%s)'",
 		     node_type, node_name, arr_index);
 	    }else {
 	       if (ourfa_hash_set_int(fctx->h, node_name,
 			arr_index, val) != 0) {
-		  res=fctx->printf_err(OURFA_ERROR_HASH, fctx->err_ctx,
-			"Can not set hash value: `%s(%s)` => `%i`",
+		  setf_err(fctx, OURFA_ERROR_HASH,
+			"Can not set hash value: %s(%s) to %i",
 			node_name, arr_index, val);
 	       }
 	    }
@@ -887,17 +848,16 @@ int ourfa_func_call_resp_step(ourfa_func_call_ctx_t *fctx,
 	 {
 	    long long val;
 
-	    res = ourfa_connection_read_long(conn, OURFA_ATTR_DATA, &val);
-	    if (res != OURFA_OK) {
-	       fctx->printf_err(res, fctx->err_ctx,
-		     "Can not get %s value for node '%s(%s)'",
+	    fctx->err = ourfa_connection_read_long(conn, OURFA_ATTR_DATA, &val);
+	    if (fctx->err != OURFA_OK) {
+	       setf_err(fctx, fctx->err,
+		     "Can not get %s value for node %s(%s)",
 		     node_type, node_name, arr_index);
 	    }else {
 	       if (ourfa_hash_set_long(fctx->h, node_name,
 			arr_index, val) != 0) {
-		  res=fctx->printf_err(
-			OURFA_ERROR_HASH, fctx->err_ctx,
-			"Can not set hash value: `%s(%s)` => `%lld`",
+		  setf_err(fctx, OURFA_ERROR_HASH,
+			"Can not set hash value: %s(%s) to %lld",
 			node_name, arr_index, val);
 	       }
 	    }
@@ -907,17 +867,16 @@ int ourfa_func_call_resp_step(ourfa_func_call_ctx_t *fctx,
 	 {
 	    double val;
 
-	    res = ourfa_connection_read_double(conn, OURFA_ATTR_DATA, &val);
-	    if (res != OURFA_OK) {
-	       fctx->printf_err(res, fctx->err_ctx,
-		     "Cannot get %s value for node '%s(%s)'",
+	    fctx->err = ourfa_connection_read_double(conn, OURFA_ATTR_DATA, &val);
+	    if (fctx->err != OURFA_OK) {
+	       setf_err(fctx, fctx->err,
+		     "Cannot get %s value for node %s(%s)",
 		     node_type, node_name, arr_index);
 	    }else {
 	       if (ourfa_hash_set_double(fctx->h, node_name,
 			arr_index, val) != 0) {
-		  res=fctx->printf_err(
-			OURFA_ERROR_HASH, fctx->err_ctx,
-			"Cannot set hash value to: `%s(%s)` => `%f` ",
+		  setf_err(fctx, OURFA_ERROR_HASH,
+			"Cannot set hash value: %s(%s) to %.3f ",
 			node_name, arr_index, val);
 	       }
 	    }
@@ -928,18 +887,17 @@ int ourfa_func_call_resp_step(ourfa_func_call_ctx_t *fctx,
 	    char *val;
 	    val = NULL;
 
-	    res = ourfa_connection_read_string(conn, OURFA_ATTR_DATA, &val);
-	    if (res != OURFA_OK) {
-	       fctx->printf_err(res, fctx->err_ctx,
-		     "Cannot get %s value for node '%s(%s)'",
+	    fctx->err = ourfa_connection_read_string(conn, OURFA_ATTR_DATA, &val);
+	    if (fctx->err != OURFA_OK) {
+	       setf_err(fctx, fctx->err,
+		     "Cannot get %s value for node %s(%s)",
 		     node_type, node_name, arr_index);
 	    }else {
 	       if (ourfa_hash_set_string(fctx->h, node_name,
 			arr_index, val) != 0) {
-		  res=fctx->printf_err(
-			OURFA_ERROR_HASH, fctx->err_ctx,
+		  setf_err(fctx, OURFA_ERROR_HASH,
 			"Cannot set hash value to '%s' "
-			"for node '%s(%s)'",
+			"for node %s(%s)",
 			val, node_name, arr_index);
 	       }
 	    }
@@ -950,20 +908,19 @@ int ourfa_func_call_resp_step(ourfa_func_call_ctx_t *fctx,
 	 {
 	    in_addr_t val;
 
-	    res = ourfa_connection_read_ip(conn, OURFA_ATTR_DATA, &val);
-	    if (res != OURFA_OK) {
-	       fctx->printf_err(res, fctx->err_ctx,
-		     "Cannot get %s value for node '%s(%s)'",
+	    fctx->err = ourfa_connection_read_ip(conn, OURFA_ATTR_DATA, &val);
+	    if (fctx->err != OURFA_OK) {
+	       setf_err(fctx, fctx->err,
+		     "Cannot get %s value for node %s(%s)",
 		     node_type, node_name, arr_index);
 	    }else {
 	       if (ourfa_hash_set_ip(fctx->h, node_name,
 			arr_index, val) != 0) {
 		  struct in_addr tmp;
 		  tmp.s_addr=val;
-		  res=fctx->printf_err(
-			OURFA_ERROR_NO_DATA, fctx->err_ctx,
-			"Cannot set hash value to '%s' "
-			"for node '%s(%s)'",
+		  setf_err(fctx, OURFA_ERROR_HASH,
+			"Cannot set hash value to %s "
+			"for node %s(%s)",
 			inet_ntoa(tmp), node_name, arr_index);
 	       }
 	    }
@@ -974,45 +931,49 @@ int ourfa_func_call_resp_step(ourfa_func_call_ctx_t *fctx,
 	 break;
    } /* switch  */
 
-   if (res == OURFA_OK)
-      return state;
-
 ourfa_func_call_resp_step_err:
-   if (res != OURFA_ERROR_NO_DATA)
+   if ((fctx->err != OURFA_OK) && fctx->err != OURFA_ERROR_NO_DATA)
       ourfa_connection_flush_read(conn);
 
-   return OURFA_FUNC_CALL_STATE_ERROR;
+   return state;
+}
+
+static int ourfa_func_call_reqresp(ourfa_func_call_ctx_t *fctx,
+      ourfa_connection_t *conn, int is_req)
+{
+   int state;
+   int (*f)(ourfa_func_call_ctx_t *fctx, ourfa_connection_t *conn);
+
+   assert(fctx);
+   assert(conn);
+
+   if (!ourfa_connection_is_connected(conn)) {
+      setf_err(fctx, OURFA_ERROR_NOT_CONNECTED, "Not connected");
+      return OURFA_ERROR_NOT_CONNECTED;
+   }
+
+   f = is_req ? ourfa_func_call_req_step : ourfa_func_call_resp_step;
+
+   for (state=ourfa_func_call_start(fctx, is_req);
+	 state != OURFA_FUNC_CALL_STATE_END;
+	 state = f(fctx, conn));
+
+   return fctx->err;
+
 }
 
 int ourfa_func_call_resp(ourfa_func_call_ctx_t *fctx,
       ourfa_connection_t *conn)
 {
-   int state = OURFA_FUNC_CALL_STATE_START;
-   int res = OURFA_OK;
-
-   assert(fctx);
-   assert(conn);
-
-   if (!ourfa_connection_is_connected(conn))
-      return OURFA_ERROR_NOT_CONNECTED;
-
-   ourfa_func_call_start(fctx, 0);
-
-   state = OURFA_FUNC_CALL_STATE_START;
-   assert(fctx->cur);
-
-   for (state=OURFA_FUNC_CALL_STATE_START;
-	 state != OURFA_FUNC_CALL_STATE_END;
-	 state = ourfa_func_call_resp_step(fctx, conn)){
-      if (state == OURFA_FUNC_CALL_STATE_ERROR) {
-	 res = OURFA_ERROR_OTHER;
-	 break;
-      }
-   }
-
-   /* XXX */
-   return res;
+   return ourfa_func_call_reqresp(fctx, conn, 0);
 }
+
+int ourfa_func_call_req(ourfa_func_call_ctx_t *fctx,
+      ourfa_connection_t *conn)
+{
+   return ourfa_func_call_reqresp(fctx, conn, 1);
+}
+
 
 ourfa_script_call_ctx_t *ourfa_script_call_ctx_new(
       ourfa_xmlapi_func_t *f,
@@ -1052,6 +1013,7 @@ int ourfa_script_call_start(ourfa_script_call_ctx_t *sctx)
    sctx->script.cur = sctx->script.f->script;
    sctx->script.state = OURFA_FUNC_CALL_STATE_START;
    sctx->state = OURFA_SCRIPT_CALL_START;
+   init_func_call_ctx(&sctx->func, NULL, NULL);
 
    return 1;
 }
@@ -1066,54 +1028,55 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
    switch (sctx->state) {
       case OURFA_SCRIPT_CALL_START:
       case OURFA_SCRIPT_CALL_NODE:
+	 assert(sctx->func.f == NULL);
 	 if (sctx->script.cur)
 	    state = ourfa_func_call_step(&sctx->script);
 	 else
-	    state = OURFA_FUNC_CALL_STATE_ENDCALL;
+	    state = OURFA_FUNC_CALL_STATE_ENDCALLPARAMS;
 	 switch (state) {
-	    case OURFA_FUNC_CALL_STATE_ERROR:
-	       sctx->state = OURFA_SCRIPT_CALL_ERROR;
-	       break;
 	    case OURFA_FUNC_CALL_STATE_END:
 	       sctx->state = OURFA_SCRIPT_CALL_END;
 	       break;
-	    case OURFA_FUNC_CALL_STATE_ENDCALL:
+	    case OURFA_FUNC_CALL_STATE_ENDCALLPARAMS:
 	       {
-		  int last_err;
 		  ourfa_xmlapi_func_t *f;
 
-		  if (sctx->script.cur) {
+		  sctx->state = sctx->script.cur ? OURFA_SCRIPT_CALL_NODE : OURFA_SCRIPT_CALL_END;
+
+		  if (sctx->script.err != OURFA_OK)
+		     break;
+
+		  if (sctx->script.cur == NULL)
+		     /* sctx->script.f - XMLAPI function  */
+		     f = sctx->script.f;
+		  else {
 		     f = ourfa_xmlapi_func(sctx->script.f->xmlapi, sctx->script.cur->n.n_call.function);
 		     if (f == NULL) {
-			sctx->script.printf_err(OURFA_ERROR_OTHER,
-			      sctx->script.err_ctx,
-			      "Function '%s' not found", sctx->script.cur->n.n_call.function);
-			sctx->state = OURFA_SCRIPT_CALL_ERROR;
-			return sctx->state;
+			setf_err(&sctx->script, OURFA_ERROR_OTHER,
+			      "Function '%s' not found",  sctx->script.cur->n.n_call.function);
+			break; /* switch  */
 		     }
 		     if (f->script != NULL) {
-			sctx->script.printf_err(OURFA_ERROR_OTHER,
-			      sctx->script.err_ctx,
+			setf_err(&sctx->script, OURFA_ERROR_OTHER,
 			      "Script `%s` can not be called from script `%s`: not implemented",
 			      f->name,
 			      sctx->script.f->name
 			      );
-			sctx->state = OURFA_SCRIPT_CALL_ERROR;
-			return sctx->state;
+			break; /* switch  */
 		     }
-		  }else {
-		     /* sctx->script.f - XMLAPI function  */
-		     f = sctx->script.f;
 		  }
 
 		  /* Begins function call  */
 		  init_func_call_ctx(&sctx->func, f, sctx->script.h);
-		  last_err = ourfa_start_call(&sctx->func, conn);
-		  if (last_err != OURFA_OK) {
-		     sctx->state = OURFA_SCRIPT_CALL_ERROR;
-		     return sctx->state;
-		  }
 		  ourfa_func_call_start(&sctx->func, 1);
+		  /* send start function call packet  */
+		  sctx->func.err = ourfa_start_call(&sctx->func, conn);
+		  if (sctx->func.err != OURFA_OK) {
+		     setf_err(&sctx->script, sctx->script.err,
+			   "Can not start function call: %s", ourfa_error_strerror(sctx->script.err));
+		     break; /* switch  */
+		  }
+
 		  sctx->state = OURFA_SCRIPT_CALL_START_REQ;
 	       }
 	       break;
@@ -1122,6 +1085,8 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 	 }
 	 break;
       case OURFA_SCRIPT_CALL_START_REQ:
+	 assert(sctx->script.err == OURFA_OK);
+	 assert(sctx->func.err == OURFA_OK);
 	 sctx->state = OURFA_SCRIPT_CALL_REQ;
 	 break;
       case OURFA_SCRIPT_CALL_REQ:
@@ -1130,17 +1095,17 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 	    case OURFA_FUNC_CALL_STATE_END:
 	       sctx->state = OURFA_SCRIPT_CALL_END_REQ;
 	       break;
-	    case OURFA_FUNC_CALL_STATE_ERROR:
-	       sctx->state = OURFA_SCRIPT_CALL_ERROR;
-	       return sctx->state;
-	       break;
 	    default:
 	       break;
 	 }
+	 return sctx->state;
 	 break;
       case OURFA_SCRIPT_CALL_END_REQ:
-	 ourfa_func_call_start(&sctx->func, 0);
-	 sctx->state = OURFA_SCRIPT_CALL_START_RESP;
+	 if (sctx->func.err == OURFA_OK) {
+	    ourfa_func_call_start(&sctx->func, 0);
+	    sctx->state = OURFA_SCRIPT_CALL_START_RESP;
+	 }else
+	    sctx->state = sctx->script.cur ? OURFA_SCRIPT_CALL_NODE : OURFA_SCRIPT_CALL_END;
 	 break;
       case OURFA_SCRIPT_CALL_START_RESP:
       case OURFA_SCRIPT_CALL_RESP:
@@ -1149,32 +1114,60 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 	    case OURFA_FUNC_CALL_STATE_END:
 	       sctx->state = OURFA_SCRIPT_CALL_END_RESP;
 	       break;
-	    case OURFA_FUNC_CALL_STATE_ERROR:
-	       sctx->state = OURFA_SCRIPT_CALL_ERROR;
-	       break;
 	    default:
 	       break;
 	 }
+	 return sctx->state;
 	 break;
       case OURFA_SCRIPT_CALL_END_RESP:
-	 if (sctx->script.cur)
-	    sctx->state = OURFA_SCRIPT_CALL_NODE;
-	 else
-	    sctx->state = OURFA_SCRIPT_CALL_END;
+	 sctx->state = sctx->script.cur ? OURFA_SCRIPT_CALL_NODE : OURFA_SCRIPT_CALL_END;
+	 if (sctx->func.err == OURFA_OK) {
+	    ourfa_xmlapi_func_deref(sctx->func.f);
+	    init_func_call_ctx(&sctx->func, NULL, NULL);
+	 }
 	 break;
       case OURFA_SCRIPT_CALL_END:
-      case OURFA_SCRIPT_CALL_ERROR:
-	 ourfa_xmlapi_func_deref(sctx->func.f);
-	 init_func_call_ctx(&sctx->func, NULL, NULL);
-	 break;
       default:
 	 assert(0);
 	 break;
    }
 
+   if (sctx->func.err != OURFA_OK) {
+      sctx->script.err = sctx->func.err;
+      memcpy(sctx->script.last_err_str, sctx->func.last_err_str, sizeof(sctx->script.last_err_str));
+      sctx->script.func_ret_code = sctx->func.func_ret_code;
+      ourfa_xmlapi_func_deref(sctx->func.f);
+      init_func_call_ctx(&sctx->func, NULL, NULL);
+   }
+
    return sctx->state;
 }
 
+static void setf_err(ourfa_func_call_ctx_t *fctx, int err_code, const char *fmt, ...)
+{
+   va_list ap;
+   char err_str[1000];
+
+   assert(fmt);
+   assert(fctx->cur);
+
+   va_start(ap, fmt);
+   vsnprintf(err_str, sizeof(err_str), fmt, ap);
+   va_end(ap);
+
+   snprintf(fctx->last_err_str, sizeof(fctx->last_err_str), "Function `%s` node `%s`: %s",
+	 fctx->f->name,
+	 ourfa_xmlapi_node_name_by_type(fctx->cur->type),
+	 err_str
+	 );
+
+   fctx->printf_err(err_code, fctx->err_ctx, fctx->last_err_str);
+
+   fctx->err = err_code;
+   fctx->func_ret_code = 1;
+   /* fctx->state = OURFA_FUNC_CALL_STATE_ERROR; */
+
+}
 
 
 

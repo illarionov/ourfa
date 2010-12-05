@@ -890,11 +890,6 @@ int main(int argc, char **argv)
 		  }
 	       }
 	       break;
-	    case OURFA_SCRIPT_CALL_ERROR:
-	       res = 1;
-	       if (params.debug)
-		  ourfa_hash_dump(params.work_h, stderr, " ERROR HASH:\n");
-	       break;
 	    case OURFA_SCRIPT_CALL_NODE:
 	       if (sctx->script.cur->type == OURFA_XMLAPI_NODE_PARAMETER) {
 		  /* Set parameter from original hash  */
@@ -903,10 +898,13 @@ int main(int argc, char **argv)
 			   sctx->script.cur->n.n_parameter.name, NULL, &s1) == 0) {
 		     if (ourfa_hash_set_string(params.work_h,
 			       sctx->script.cur->n.n_parameter.name, NULL, s1) != 0) {
-			fprintf(stderr,  "Can not add '%s[%s]=%s' to hash\n",
+			sctx->script.err = OURFA_ERROR_HASH;
+			sctx->script.func_ret_code = 1;
+			snprintf(sctx->script.last_err_str,
+			      sizeof(sctx->script.last_err_str),
+			      "Can not add '%s[%s]=%s' to hash",
 			      sctx->script.cur->n.n_parameter.name, "0", s1);
 			free(s1);
-			state = sctx->state = OURFA_SCRIPT_CALL_ERROR;
 		     }
 		  }
 	       }
@@ -914,12 +912,13 @@ int main(int argc, char **argv)
 	    default:
 	       break;
 	 }
-
-	 if (state == OURFA_SCRIPT_CALL_ERROR)
-	    break;
       }
       if (params.debug)
 	 ourfa_hash_dump(params.work_h, stdout, "OUTPUT HASH:\n");
+      if (sctx->script.err != OURFA_OK) {
+	 res = sctx->script.func_ret_code;
+	 /* fprintf(stdout, "ERROR: %s\n", sctx->script.last_err_str); */
+      }
       dump_free(dump_ctx);
       ourfa_script_call_ctx_free(sctx);
    }

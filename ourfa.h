@@ -485,13 +485,17 @@ struct ourfa_func_call_ctx_t {
       OURFA_FUNC_CALL_STATE_BREAK,
       OURFA_FUNC_CALL_STATE_STARTIF,
       OURFA_FUNC_CALL_STATE_ENDIF,
-      OURFA_FUNC_CALL_STATE_STARTCALL,
-      OURFA_FUNC_CALL_STATE_ENDCALL,
+      OURFA_FUNC_CALL_STATE_STARTCALLPARAMS,
+      OURFA_FUNC_CALL_STATE_ENDCALLPARAMS,
       OURFA_FUNC_CALL_STATE_NODE,
-      OURFA_FUNC_CALL_STATE_END,
-      OURFA_FUNC_CALL_STATE_ERROR
+      OURFA_FUNC_CALL_STATE_END
    } state;
    ourfa_xmlapi_func_node_t *cur;
+
+   unsigned err;
+
+   int func_ret_code;
+   char last_err_str[200];
 
    ourfa_err_f_t *printf_err;
    void *err_ctx;
@@ -507,8 +511,7 @@ struct ourfa_script_call_ctx_t {
       OURFA_SCRIPT_CALL_START_RESP,
       OURFA_SCRIPT_CALL_RESP,
       OURFA_SCRIPT_CALL_END_RESP,
-      OURFA_SCRIPT_CALL_END,
-      OURFA_SCRIPT_CALL_ERROR,
+      OURFA_SCRIPT_CALL_END
    } state;
 
    struct ourfa_func_call_ctx_t script;
