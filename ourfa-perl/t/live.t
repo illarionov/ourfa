@@ -33,12 +33,9 @@ ok(!$conn->is_connected);
 ok(!defined $conn->session_id, "session id after wrong login");
 
 #Script call on not connected socket
-TODO: {
-   local $TODO = "Not implemented";
-   eval {my $h = Ourfa::ScriptCall->call($conn, $xmlapi, "rpcf_core_version")};
-   diag("script call on not connected socket: $@");
-   like($@, qr/Connected/i, "Test for errur: not connected on script call");
-};
+eval {my $h = Ourfa::ScriptCall->call($conn, $xmlapi, "rpcf_core_version")};
+diag("script call on not connected socket: $@");
+like($@, qr/Connected/i, "Test for error: not connected on script call");
 
 #Connect
 $conn->login($ENV{OURFA_LOGIN} || "test");
@@ -58,7 +55,7 @@ ok(defined $h->{core_version});
 diag("core_version: " . $h->{core_version});
 
 #rpcf_core_build
-my $h = Ourfa::ScriptCall->call($conn, $xmlapi, "rpcf_core_build");
+$h = Ourfa::ScriptCall->call($conn, $xmlapi, "rpcf_core_build");
 isa_ok($h, "HASH", "returns hash");
 ok(defined $h->{build});
 diag("core_build: ", $h->{build});
@@ -86,19 +83,17 @@ diag("rpcf_get_stats without defined type");
 eval {$h = Ourfa::ScriptCall->call($conn, $xmlapi, "rpcf_get_stats")};
 ok($@, "error on rpcf_get_stats with type not defined");
 
-#XXX: wrong error: No ATTR_CALL attribute
 diag("rpcf_get_stats with undefined type");
 eval {$h = Ourfa::ScriptCall->call($conn, $xmlapi, "rpcf_get_stats",
       {type=>undef})};
-ok($@, "error on rpcf_get_stats with type not defined");
+ok($@, "error on rpcf_get_stats with type undefined");
 
-#XXX: error code, disconnect on socket error
 diag("rpcf_get_stats with wrong type=-1");
 eval {$h = Ourfa::ScriptCall->call($conn, $xmlapi, "rpcf_get_stats", {type =>
 	 -1})};
 ok($@, "error on rpcf_get_stats with type=-1");
-warn($@);
 
+#normal get_stats
 $h = Ourfa::ScriptCall->call($conn, $xmlapi, "rpcf_get_stats", {type => 0});
 isa_ok($h, "HASH", "rpcf_get_stats returns hash");
 ok(defined $h->{status});

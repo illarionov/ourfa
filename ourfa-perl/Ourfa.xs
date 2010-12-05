@@ -302,7 +302,8 @@ static int ourfa_err_f_warn(int err_code, void *user_ctx, const char *fmt, ...)
 }
 
 static int ourfa_exec(ourfa_connection_t *conn,
-   ourfa_xmlapi_func_t *f, ourfa_hash_t *in, HV **ret_h)
+   ourfa_xmlapi_func_t *f, ourfa_hash_t *in, HV **ret_h,
+   char *err, size_t err_size)
 {
    int state;
    int res;
@@ -314,10 +315,14 @@ static int ourfa_exec(ourfa_connection_t *conn,
    assert(conn);
    assert(f);
    assert(ret_h);
+   assert(err);
+   err[0]='\0';
 
    sctx = ourfa_script_call_ctx_new(f, in);
-   if (sctx == NULL)
+   if (sctx == NULL) {
+      snprintf(err, err_size, strerror(errno));
       return OURFA_ERROR_SYSTEM;
+   }
    ourfa_script_call_start(sctx);
    state = OURFA_SCRIPT_CALL_START;
    res=OURFA_OK;
@@ -333,7 +338,6 @@ static int ourfa_exec(ourfa_connection_t *conn,
 	 case OURFA_SCRIPT_CALL_START_RESP:
 	 case OURFA_SCRIPT_CALL_RESP:
 	 case OURFA_SCRIPT_CALL_END_RESP:
-	    /* TODO  */
 	    switch (sctx->func.state) {
 	       case OURFA_FUNC_CALL_STATE_START:
 		  break;
@@ -351,8 +355,12 @@ static int ourfa_exec(ourfa_connection_t *conn,
 			       tmp = newSViv(val);
 			       if (hv_store((HV *)s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
 				  SvREFCNT_dec(tmp);
-				  res = OURFA_ERROR_HASH;
-				  state == OURFA_SCRIPT_CALL_ERROR;
+				  sctx->func.err = OURFA_ERROR_HASH;
+				  sctx->func.func_ret_code = 1;
+				  snprintf(sctx->script.last_err_str,
+					sizeof(sctx->script.last_err_str),
+					"Can not set hash: %s = %i",
+					node_name, val);
 			       }
 			    }
 			 }
@@ -366,8 +374,12 @@ static int ourfa_exec(ourfa_connection_t *conn,
 			       tmp = newSVnv(val);
 			       if (hv_store((HV *)s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
 				  SvREFCNT_dec(tmp);
-				  res = OURFA_ERROR_HASH;
-				  state == OURFA_SCRIPT_CALL_ERROR;
+				  sctx->func.err = OURFA_ERROR_HASH;
+				  sctx->func.func_ret_code = 1;
+				  snprintf(sctx->func.last_err_str,
+					sizeof(sctx->script.last_err_str),
+					"Can not set hash: %s = %ll",
+					node_name, val);
 			       }
 			    }
 			 }
@@ -381,8 +393,12 @@ static int ourfa_exec(ourfa_connection_t *conn,
 			       tmp = newSVnv(val);
 			       if (hv_store((HV *)s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
 				  SvREFCNT_dec(tmp);
-				  res = OURFA_ERROR_HASH;
-				  state == OURFA_SCRIPT_CALL_ERROR;
+				  sctx->func.err = OURFA_ERROR_HASH;
+				  sctx->func.func_ret_code = 1;
+				  snprintf(sctx->func.last_err_str,
+					sizeof(sctx->func.last_err_str),
+					"Can not set hash: %s = %.3f",
+					node_name, val);
 			       }
 			    }
 			 }
@@ -397,8 +413,12 @@ static int ourfa_exec(ourfa_connection_t *conn,
 			       SvUTF8_on(tmp);
 			       if (hv_store((HV *)s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
 				  SvREFCNT_dec(tmp);
-				  res = OURFA_ERROR_HASH;
-				  state == OURFA_SCRIPT_CALL_ERROR;
+				  sctx->func.err = OURFA_ERROR_HASH;
+				  sctx->func.func_ret_code = 1;
+				  snprintf(sctx->func.last_err_str,
+					sizeof(sctx->func.last_err_str),
+					"Can not set hash: %s = %s",
+					node_name, val);
 			       }
 			       free(val);
 			    }
@@ -413,8 +433,12 @@ static int ourfa_exec(ourfa_connection_t *conn,
 			       tmp = newSVpvn((const char *)&val, sizeof(val));
 			       if (hv_store((HV *)s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
 				  SvREFCNT_dec(tmp);
-				  res = OURFA_ERROR_HASH;
-				  state == OURFA_SCRIPT_CALL_ERROR;
+				  sctx->func.err = OURFA_ERROR_HASH;
+				  sctx->func.func_ret_code = 1;
+				  snprintf(sctx->func.last_err_str,
+					sizeof(sctx->func.last_err_str),
+					"Can not set hash: %s = %s",
+					node_name, inet_ntoa(val));
 			       }
 			    }
 			 }
@@ -429,21 +453,30 @@ static int ourfa_exec(ourfa_connection_t *conn,
 		     SV *rvav;
 		     SV **resav;
 		     if (s_top >= sizeof(s)/sizeof(s[0])) {
-			res = OURFA_ERROR_HASH;
-			state == OURFA_SCRIPT_CALL_ERROR;
+			sctx->func.err = OURFA_ERROR_HASH;
+			sctx->func.func_ret_code = 1;
+			snprintf(sctx->func.last_err_str,
+			      sizeof(sctx->func.last_err_str),
+			      "Can not add array: Netsting level too deep");
 			break;
 		     }
 		     arr = newAV();
 		     if (!arr) {
-			res = OURFA_ERROR_HASH;
-			state == OURFA_SCRIPT_CALL_ERROR;
+			sctx->func.err = OURFA_ERROR_HASH;
+			sctx->func.func_ret_code = 1;
+			snprintf(sctx->func.last_err_str,
+			      sizeof(sctx->func.last_err_str),
+			      "newAV() error");
 			break;
 		     }
 		     rvav = newRV_noinc((SV *)arr);
 		     if (!rvav) {
-			SvREFCNT_dec(rvav);
-			res = OURFA_ERROR_HASH;
-			state == OURFA_SCRIPT_CALL_ERROR;
+			SvREFCNT_dec(arr);
+			sctx->func.err = OURFA_ERROR_HASH;
+			sctx->func.func_ret_code = 1;
+			snprintf(sctx->func.last_err_str,
+			      sizeof(sctx->func.last_err_str),
+			      "newRV_noinc() error");
 			break;
 		     }
 		     if ((resav = hv_store((HV *)s[s_top],
@@ -451,8 +484,12 @@ static int ourfa_exec(ourfa_connection_t *conn,
 				 strlen(sctx->func.cur->n.n_for.array_name),
 				 rvav, 0))==NULL) {
 			SvREFCNT_dec(rvav);
-			res = OURFA_ERROR_HASH;
-			state == OURFA_SCRIPT_CALL_ERROR;
+			sctx->func.err = OURFA_ERROR_HASH;
+			sctx->func.func_ret_code = 1;
+			snprintf(sctx->func.last_err_str,
+			      sizeof(sctx->func.last_err_str),
+			      "Can not set hash: %s = %s",
+			      sctx->func.cur->n.n_for.array_name, "[]");
 			break;
 		     }
 		     s[++s_top]=*resav;
@@ -464,8 +501,11 @@ static int ourfa_exec(ourfa_connection_t *conn,
 		     SV *sv, *rvhv;
 
 		     if (s_top+1 >= sizeof(s)/sizeof(s[0])) {
-			res = OURFA_ERROR_HASH;
-			state == OURFA_SCRIPT_CALL_ERROR;
+			sctx->func.err = OURFA_ERROR_HASH;
+			sctx->func.func_ret_code = 1;
+			snprintf(sctx->func.last_err_str,
+			      sizeof(sctx->func.last_err_str),
+			      "Netsting level too deep");
 			break;
 		     }
 
@@ -502,28 +542,22 @@ static int ourfa_exec(ourfa_connection_t *conn,
 		     assert(SvROK(sv) && (SvTYPE(SvRV(sv)) == SVt_PVAV));
 		  }
 		  break;
-	       case OURFA_FUNC_CALL_STATE_ERROR:
-		  /* XXX  */
-		  state == OURFA_SCRIPT_CALL_ERROR;
-		  res = OURFA_ERROR_OTHER;
-		  break;
 	       case OURFA_FUNC_CALL_STATE_END:
 	       default:
 		  break;
 	    }
 	    break;
-	 case OURFA_SCRIPT_CALL_ERROR:
-	    /* XXX  */
-	    res = OURFA_ERROR_OTHER;
-	    break;
 	 case OURFA_SCRIPT_CALL_NODE:
 	    /* XXX: parameter node  */
 	 default:
 	    break;
-      }
+      } /* switch (state)  */
+   }  /*  while(state != OURFA_SCRIPT_CALL_END) */
 
-      if (state == OURFA_SCRIPT_CALL_ERROR)
-	 break;
+   res = sctx->script.err;
+   if (res) {
+      strncpy(err, sctx->script.last_err_str, err_size);
+      err[err_size-1]='\0';
    }
 
    ourfa_script_call_ctx_free(sctx);
@@ -1351,6 +1385,7 @@ ourfa_script_call_call(CLASS, connection, xmlapi, func_name, h=NO_INIT)
       ourfa_hash_t *ourfa_in;
       ourfa_xmlapi_func_t *f;
       int ret;
+      char err[500];
    CODE:
       f = ourfa_xmlapi_func(xmlapi, func_name);
       if (f == NULL)
@@ -1361,10 +1396,10 @@ ourfa_script_call_call(CLASS, connection, xmlapi, func_name, h=NO_INIT)
 	 h = NULL;
       if (hv2ourfah(h, &ourfa_in) <= 0)
 	    croak("Can not parse input parameters");
-      ret = ourfa_exec(connection, f, ourfa_in, &RETVAL);
+      ret = ourfa_exec(connection, f, ourfa_in, &RETVAL, err, sizeof(err));
       ourfa_hash_free(ourfa_in);
       if (ret != OURFA_OK)
-	    croak("%s: %s", "Ourfa::Script::Call::call", ourfa_error_strerror(ret));
+	    croak("%s: %s", "Ourfa::Script::Call::call", err);
       sv_2mortal((SV*)RETVAL);
    OUTPUT:
       RETVAL

@@ -546,7 +546,7 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
       assert(fctx->f && fctx->f->in);
       if (old_err == OURFA_OK && (fctx->f->in->children != NULL))
 	 /* Schema error. Send termination attribute. On error do nothing  */
-	 ourfa_connection_write_int(conn, OURFA_ATTR_TERMINATION, 3);
+	 goto ourfa_func_call_req_step_end;
       return state;
    }
 
@@ -559,7 +559,7 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
 	  * Do not send termination attribute if no input parameters found
 	 */
 	 fctx->err = ourfa_connection_write_int(conn, OURFA_ATTR_TERMINATION, 4);
-	 if (fctx->err != OURFA_OK) 
+	 if (fctx->err != OURFA_OK)
 	    setf_err(fctx, fctx->err, "Can not send termination attribute");
       }
       return state;
@@ -770,10 +770,13 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
 	 break;
    } /* switch  */
 
+ourfa_func_call_req_step_end:
    if (fctx->err != OURFA_OK && !socket_error) {
-      ourfa_connection_flush_write(conn);
-      /* Schema error. Send termination attribute. On error do nothing  */
-      ourfa_connection_write_int(conn, OURFA_ATTR_TERMINATION, 3);
+      /* Schema error. Send termination attribute.
+       * ans flush server response
+       */
+      if (ourfa_connection_write_int(conn, OURFA_ATTR_TERMINATION, 3) == OURFA_OK)
+	 ourfa_connection_flush_read(conn);
    }
 
    return state;
@@ -809,6 +812,8 @@ int ourfa_func_call_resp_step(ourfa_func_call_ctx_t *fctx,
       if (fctx->err != OURFA_OK)
 	 setf_err(fctx, fctx->err,
 	       "Can not receive termination attribute");
+      else
+	 ourfa_connection_flush_read(conn);
       goto ourfa_func_call_resp_step_err;
    }
    else if (state != OURFA_FUNC_CALL_STATE_NODE)
@@ -1058,7 +1063,7 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 		     }
 		     if (f->script != NULL) {
 			setf_err(&sctx->script, OURFA_ERROR_OTHER,
-			      "Script `%s` can not be called from script `%s`: not implemented",
+			      "Script `%s` can not be called from script `%s` - not implemented",
 			      f->name,
 			      sctx->script.f->name
 			      );
@@ -1072,8 +1077,8 @@ int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
 		  /* send start function call packet  */
 		  sctx->func.err = ourfa_start_call(&sctx->func, conn);
 		  if (sctx->func.err != OURFA_OK) {
-		     setf_err(&sctx->script, sctx->script.err,
-			   "Can not start function call: %s", ourfa_error_strerror(sctx->script.err));
+		     setf_err(&sctx->func, sctx->func.err,
+			   "%s", ourfa_error_strerror(sctx->func.err));
 		     break; /* switch  */
 		  }
 
@@ -1155,7 +1160,7 @@ static void setf_err(ourfa_func_call_ctx_t *fctx, int err_code, const char *fmt,
    vsnprintf(err_str, sizeof(err_str), fmt, ap);
    va_end(ap);
 
-   snprintf(fctx->last_err_str, sizeof(fctx->last_err_str), "Function `%s` node `%s`: %s",
+   snprintf(fctx->last_err_str, sizeof(fctx->last_err_str), "Function `%s` node `%s`. %s",
 	 fctx->f->name,
 	 ourfa_xmlapi_node_name_by_type(fctx->cur->type),
 	 err_str

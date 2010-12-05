@@ -1,9 +1,7 @@
-ATTR_TERMINATION err code
-tests, test server
+ATTR_TERMINATION error code
 load config from file
-errors
 -tclass_b 104 -size_b 400 -cost_b 0 -tclass_b 104 -size_b 0 -cost_b 1
-message,out nodes
+nodes: message, out
 data file
 
 

@@ -893,7 +893,7 @@ int ourfa_connection_start_func_call(ourfa_connection_t *connection, int func_id
    attr_list = ourfa_pkt_get_attrs_list(recv_pkt, OURFA_ATTR_CALL);
    if (attr_list == NULL) {
       res=connection->printf_err(OURFA_ERROR_INVALID_PACKET, connection->err_ctx,
-	    "No ATTR_CALL attribute received on function calling");
+	    "No ATTR_CALL attribute received on function call");
       goto ourfa_start_call_exit;
    }
    res = ourfa_pkt_get_int(attr_list, &tmp);
@@ -1121,8 +1121,7 @@ static int read_pkt_to_buf(ourfa_connection_t *conn)
 
    /* Check for termination attribute */
    attr_list = ourfa_pkt_get_attrs_list(pkt, OURFA_ATTR_TERMINATION);
-   if (attr_list != NULL)
-      conn->rbuf.term_attr_in_tail = 1;
+   conn->rbuf.term_attr_in_tail = (attr_list != NULL);
 
    return recvd_bytes;
 }

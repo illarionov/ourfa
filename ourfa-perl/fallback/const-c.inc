@@ -115,26 +115,31 @@ static int
 constant_18 (pTHX_ const char *name, IV *iv_return) {
   /* When generated this function returned values for the list of names given
      here.  However, subsequent manual editing may have added or removed some.
-     OURFA_ATTR_DATA_IP OURFA_ERROR_SYSTEM OURFA_LOGIN_SYSTEM
-     OURFA_SSL_TYPE_CRT OURFA_XMLAPI_IF_EQ OURFA_XMLAPI_IF_GT
-     OURFA_XMLAPI_IF_NE */
-  /* Offset 17 gives the best switch position.  */
-  switch (name[17]) {
-  case 'E':
-    if (memEQ(name, "OURFA_XMLAPI_IF_N", 17)) {
-    /*                                E      */
+     OURFA_ATTR_DATA_IP OURFA_ERROR_SOCKET OURFA_ERROR_SYSTEM
+     OURFA_LOGIN_SYSTEM OURFA_SSL_TYPE_CRT OURFA_XMLAPI_IF_EQ
+     OURFA_XMLAPI_IF_GT OURFA_XMLAPI_IF_NE */
+  /* Offset 7 gives the best switch position.  */
+  switch (name[7]) {
+  case 'M':
+    if (memEQ(name, "OURFA_XMLAPI_IF_EQ", 18)) {
+    /*                      ^                 */
+      *iv_return = OURFA_XMLAPI_IF_EQ;
+      return PERL_constant_ISIV;
+    }
+    if (memEQ(name, "OURFA_XMLAPI_IF_GT", 18)) {
+    /*                      ^                 */
+      *iv_return = OURFA_XMLAPI_IF_GT;
+      return PERL_constant_ISIV;
+    }
+    if (memEQ(name, "OURFA_XMLAPI_IF_NE", 18)) {
+    /*                      ^                 */
       *iv_return = OURFA_XMLAPI_IF_NE;
       return PERL_constant_ISIV;
     }
     break;
-  case 'M':
-    if (memEQ(name, "OURFA_ERROR_SYSTE", 17)) {
-    /*                                M      */
-      *iv_return = OURFA_ERROR_SYSTEM;
-      return PERL_constant_ISIV;
-    }
-    if (memEQ(name, "OURFA_LOGIN_SYSTE", 17)) {
-    /*                                M      */
+  case 'O':
+    if (memEQ(name, "OURFA_LOGIN_SYSTEM", 18)) {
+    /*                      ^                 */
 #ifdef OURFA_LOGIN_SYSTEM
       *iv_return = OURFA_LOGIN_SYSTEM;
       return PERL_constant_ISIV;
@@ -143,23 +148,21 @@ constant_18 (pTHX_ const char *name, IV *iv_return) {
 #endif
     }
     break;
-  case 'P':
-    if (memEQ(name, "OURFA_ATTR_DATA_I", 17)) {
-    /*                                P      */
-      *iv_return = OURFA_ATTR_DATA_IP;
+  case 'R':
+    if (memEQ(name, "OURFA_ERROR_SOCKET", 18)) {
+    /*                      ^                 */
+      *iv_return = OURFA_ERROR_SOCKET;
+      return PERL_constant_ISIV;
+    }
+    if (memEQ(name, "OURFA_ERROR_SYSTEM", 18)) {
+    /*                      ^                 */
+      *iv_return = OURFA_ERROR_SYSTEM;
       return PERL_constant_ISIV;
     }
     break;
-  case 'Q':
-    if (memEQ(name, "OURFA_XMLAPI_IF_E", 17)) {
-    /*                                Q      */
-      *iv_return = OURFA_XMLAPI_IF_EQ;
-      return PERL_constant_ISIV;
-    }
-    break;
-  case 'T':
-    if (memEQ(name, "OURFA_SSL_TYPE_CR", 17)) {
-    /*                                T      */
+  case 'S':
+    if (memEQ(name, "OURFA_SSL_TYPE_CRT", 18)) {
+    /*                      ^                 */
 #ifdef OURFA_SSL_TYPE_CRT
       *iv_return = OURFA_SSL_TYPE_CRT;
       return PERL_constant_ISIV;
@@ -167,9 +170,11 @@ constant_18 (pTHX_ const char *name, IV *iv_return) {
       return PERL_constant_NOTDEF;
 #endif
     }
-    if (memEQ(name, "OURFA_XMLAPI_IF_G", 17)) {
-    /*                                T      */
-      *iv_return = OURFA_XMLAPI_IF_GT;
+    break;
+  case 'T':
+    if (memEQ(name, "OURFA_ATTR_DATA_IP", 18)) {
+    /*                      ^                 */
+      *iv_return = OURFA_ATTR_DATA_IP;
       return PERL_constant_ISIV;
     }
     break;
@@ -527,9 +532,8 @@ static int
 constant_23 (pTHX_ const char *name, IV *iv_return) {
   /* When generated this function returned values for the list of names given
      here.  However, subsequent manual editing may have added or removed some.
-     OURFA_PKT_ACCESS_ACCEPT OURFA_PKT_ACCESS_REJECT OURFA_SCRIPT_CALL_ERROR
-     OURFA_SCRIPT_CALL_START OURFA_XMLAPI_NODE_BREAK OURFA_XMLAPI_NODE_ERROR
-     OURFA_XMLAPI_NODE_SHIFT */
+     OURFA_PKT_ACCESS_ACCEPT OURFA_PKT_ACCESS_REJECT OURFA_SCRIPT_CALL_START
+     OURFA_XMLAPI_NODE_BREAK OURFA_XMLAPI_NODE_ERROR OURFA_XMLAPI_NODE_SHIFT */
   /* Offset 21 gives the best switch position.  */
   switch (name[21]) {
   case 'A':
@@ -558,11 +562,6 @@ constant_23 (pTHX_ const char *name, IV *iv_return) {
     }
     break;
   case 'O':
-    if (memEQ(name, "OURFA_SCRIPT_CALL_ERROR", 23)) {
-    /*                                    ^        */
-      *iv_return = OURFA_SCRIPT_CALL_ERROR;
-      return PERL_constant_ISIV;
-    }
     if (memEQ(name, "OURFA_XMLAPI_NODE_ERROR", 23)) {
     /*                                    ^        */
       *iv_return = OURFA_XMLAPI_NODE_ERROR;
@@ -792,9 +791,8 @@ constant_27 (pTHX_ const char *name, IV *iv_return) {
      here.  However, subsequent manual editing may have added or removed some.
      OURFA_ERROR_NOT_IMPLEMENTED OURFA_ERROR_WRONG_ATTRIBUTE
      OURFA_FUNC_CALL_STATE_BREAK OURFA_FUNC_CALL_STATE_ENDIF
-     OURFA_FUNC_CALL_STATE_ERROR OURFA_FUNC_CALL_STATE_START
-     OURFA_PKT_SESSION_TERMINATE OURFA_SCRIPT_CALL_START_REQ
-     OURFA_XMLAPI_NODE_PARAMETER */
+     OURFA_FUNC_CALL_STATE_START OURFA_PKT_SESSION_TERMINATE
+     OURFA_SCRIPT_CALL_START_REQ OURFA_XMLAPI_NODE_PARAMETER */
   /* Offset 26 gives the best switch position.  */
   switch (name[26]) {
   case 'D':
@@ -842,11 +840,6 @@ constant_27 (pTHX_ const char *name, IV *iv_return) {
     }
     break;
   case 'R':
-    if (memEQ(name, "OURFA_FUNC_CALL_STATE_ERRO", 26)) {
-    /*                                         R      */
-      *iv_return = OURFA_FUNC_CALL_STATE_ERROR;
-      return PERL_constant_ISIV;
-    }
     if (memEQ(name, "OURFA_XMLAPI_NODE_PARAMETE", 26)) {
     /*                                         R      */
       *iv_return = OURFA_XMLAPI_NODE_PARAMETER;
@@ -917,7 +910,7 @@ constant (pTHX_ const char *name, STRLEN len, IV *iv_return) {
      Regenerate these constant functions by feeding this entire source file to
      perl -x
 
-#!/usr/local/bin/perl5.10.1 -w
+#!/usr/local/bin/perl -w
 use ExtUtils::Constant qw (constant_types C_constant XS_constant);
 
 my $types = {map {($_, 1)} qw(IV)};
@@ -951,6 +944,7 @@ my @names = (qw(OURFA_ATTR_CALL OURFA_ATTR_CHAP_CHALLENGE
             {name=>"OURFA_ERROR_OTHER", type=>"IV", macro=>"1"},
             {name=>"OURFA_ERROR_PKT_TERM", type=>"IV", macro=>"1"},
             {name=>"OURFA_ERROR_SESSION_ACTIVE", type=>"IV", macro=>"1"},
+            {name=>"OURFA_ERROR_SOCKET", type=>"IV", macro=>"1"},
             {name=>"OURFA_ERROR_SSL", type=>"IV", macro=>"1"},
             {name=>"OURFA_ERROR_SYSTEM", type=>"IV", macro=>"1"},
             {name=>"OURFA_ERROR_WRONG_ATTRIBUTE", type=>"IV", macro=>"1"},
@@ -963,14 +957,13 @@ my @names = (qw(OURFA_ATTR_CALL OURFA_ATTR_CHAP_CHALLENGE
             {name=>"OURFA_ERROR_WRONG_SSL_TYPE", type=>"IV", macro=>"1"},
             {name=>"OURFA_FUNC_CALL_STATE_BREAK", type=>"IV", macro=>"1"},
             {name=>"OURFA_FUNC_CALL_STATE_END", type=>"IV", macro=>"1"},
-            {name=>"OURFA_FUNC_CALL_STATE_ENDCALL", type=>"IV", macro=>"1"},
+            {name=>"OURFA_FUNC_CALL_STATE_ENDCALLPARAMS", type=>"IV", macro=>"1"},
             {name=>"OURFA_FUNC_CALL_STATE_ENDFOR", type=>"IV", macro=>"1"},
             {name=>"OURFA_FUNC_CALL_STATE_ENDFORSTEP", type=>"IV", macro=>"1"},
             {name=>"OURFA_FUNC_CALL_STATE_ENDIF", type=>"IV", macro=>"1"},
-            {name=>"OURFA_FUNC_CALL_STATE_ERROR", type=>"IV", macro=>"1"},
             {name=>"OURFA_FUNC_CALL_STATE_NODE", type=>"IV", macro=>"1"},
             {name=>"OURFA_FUNC_CALL_STATE_START", type=>"IV", macro=>"1"},
-            {name=>"OURFA_FUNC_CALL_STATE_STARTCALL", type=>"IV", macro=>"1"},
+            {name=>"OURFA_FUNC_CALL_STATE_STARTCALLPARAMS", type=>"IV", macro=>"1"},
             {name=>"OURFA_FUNC_CALL_STATE_STARTFOR", type=>"IV", macro=>"1"},
             {name=>"OURFA_FUNC_CALL_STATE_STARTFORSTEP", type=>"IV", macro=>"1"},
             {name=>"OURFA_FUNC_CALL_STATE_STARTIF", type=>"IV", macro=>"1"},
@@ -978,7 +971,6 @@ my @names = (qw(OURFA_ATTR_CALL OURFA_ATTR_CHAP_CHALLENGE
             {name=>"OURFA_SCRIPT_CALL_END", type=>"IV", macro=>"1"},
             {name=>"OURFA_SCRIPT_CALL_END_REQ", type=>"IV", macro=>"1"},
             {name=>"OURFA_SCRIPT_CALL_END_RESP", type=>"IV", macro=>"1"},
-            {name=>"OURFA_SCRIPT_CALL_ERROR", type=>"IV", macro=>"1"},
             {name=>"OURFA_SCRIPT_CALL_NODE", type=>"IV", macro=>"1"},
             {name=>"OURFA_SCRIPT_CALL_REQ", type=>"IV", macro=>"1"},
             {name=>"OURFA_SCRIPT_CALL_RESP", type=>"IV", macro=>"1"},
@@ -1121,35 +1113,14 @@ __END__
     return constant_28 (aTHX_ name, iv_return);
     break;
   case 29:
-    /* Names all of length 29.  */
-    /* OURFA_FUNC_CALL_STATE_ENDCALL OURFA_FUNC_CALL_STATE_STARTIF */
-    /* Offset 24 gives the best switch position.  */
-    switch (name[24]) {
-    case 'A':
-      if (memEQ(name, "OURFA_FUNC_CALL_STATE_STARTIF", 29)) {
-      /*                                       ^           */
-        *iv_return = OURFA_FUNC_CALL_STATE_STARTIF;
-        return PERL_constant_ISIV;
-      }
-      break;
-    case 'D':
-      if (memEQ(name, "OURFA_FUNC_CALL_STATE_ENDCALL", 29)) {
-      /*                                       ^           */
-        *iv_return = OURFA_FUNC_CALL_STATE_ENDCALL;
-        return PERL_constant_ISIV;
-      }
-      break;
+    if (memEQ(name, "OURFA_FUNC_CALL_STATE_STARTIF", 29)) {
+      *iv_return = OURFA_FUNC_CALL_STATE_STARTIF;
+      return PERL_constant_ISIV;
     }
     break;
   case 30:
     if (memEQ(name, "OURFA_FUNC_CALL_STATE_STARTFOR", 30)) {
       *iv_return = OURFA_FUNC_CALL_STATE_STARTFOR;
-      return PERL_constant_ISIV;
-    }
-    break;
-  case 31:
-    if (memEQ(name, "OURFA_FUNC_CALL_STATE_STARTCALL", 31)) {
-      *iv_return = OURFA_FUNC_CALL_STATE_STARTCALL;
       return PERL_constant_ISIV;
     }
     break;
@@ -1186,9 +1157,21 @@ __END__
       return PERL_constant_ISIV;
     }
     break;
+  case 35:
+    if (memEQ(name, "OURFA_FUNC_CALL_STATE_ENDCALLPARAMS", 35)) {
+      *iv_return = OURFA_FUNC_CALL_STATE_ENDCALLPARAMS;
+      return PERL_constant_ISIV;
+    }
+    break;
   case 36:
     if (memEQ(name, "OURFA_ERROR_WRONG_CLIENT_CERTIFICATE", 36)) {
       *iv_return = OURFA_ERROR_WRONG_CLIENT_CERTIFICATE;
+      return PERL_constant_ISIV;
+    }
+    break;
+  case 37:
+    if (memEQ(name, "OURFA_FUNC_CALL_STATE_STARTCALLPARAMS", 37)) {
+      *iv_return = OURFA_FUNC_CALL_STATE_STARTCALLPARAMS;
       return PERL_constant_ISIV;
     }
     break;
