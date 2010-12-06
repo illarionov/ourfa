@@ -316,7 +316,7 @@ load_file_end:
    if (res != OURFA_OK) {
       free(xmlapi->file);
       xmlapi->file = NULL;
-      /* XXX: cean mlapi->func_by_name  */
+      /* XXX: clean xmlapi->func_by_name */
    }
 
    return res;

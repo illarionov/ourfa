@@ -58,6 +58,7 @@ struct params_t {
    char *ssl_cert;
    char *ssl_key;
    char *config_file;
+   char *data_file;
    char *action;
    char *session_id;
    struct in_addr *session_ip;
@@ -84,6 +85,8 @@ void *dump_new(
 void dump_free(void *dump);
 int dump_step(void *vdump);
 
+/* client_datafile.c  */
+int load_datafile(const char *file, ourfa_hash_t *res_h, char *err_str, size_t err_str_size);
 
 static int usage()
 {
@@ -141,6 +144,7 @@ static int help(ourfa_xmlapi_func_t *f)
 	 " %-2s %-20s %s\n"
 	 " %-2s %-20s %s\n"
 	 " %-2s %-20s %s\n"
+	 " %-2s %-20s %s\n"
 	 "\n",
 	 "-h", "--help", "This message",
 	 "-a", "", "Action name",
@@ -157,6 +161,7 @@ static int help(ourfa_xmlapi_func_t *f)
 	 "-t", "", "Login type: admin, user, or dealer (deault: admin)",
 	 "-A", "", "URFA server API file (default: api.xml)",
 	 "-o", "", "Output format Supported: xml (default), batch, hash ",
+	 "",   "-datafile", "Load array datas from file",
 	 "-d", "--debug",      "Turn on debug",
 	 "",   "--<param>[:idx]", "Set input parameter param(idx)"
 	 );
@@ -180,6 +185,7 @@ static int init_params(struct params_t *params)
    params->xml_api = NULL;
    params->xml_dir = NULL;
    params->config_file = NULL;
+   params->data_file = NULL;
    params->login_type = OURFA_LOGIN_SYSTEM;
    params->ssl_type = OURFA_SSL_TYPE_NONE;
    params->ssl_cert = NULL;
@@ -212,6 +218,7 @@ static void free_params(struct params_t *params)
    free(params->login);
    free(params->password);
    free(params->config_file);
+   free(params->data_file);
    free(params->xml_api);
    free(params->xml_dir);
    free(params->ssl_cert);
@@ -385,6 +392,8 @@ static int load_system_param(struct params_t *params, const char *name, const ch
 	 (void *)&params->password,    { NULL,}},
       {"c", NULL,            set_sysparam_string,
 	 (void *)&params->config_file, { NULL,}},
+      {"datafile", NULL,            set_sysparam_string,
+	 (void *)&params->data_file, { NULL,}},
       {"s", "session_key",   set_sysparam_string,
 	 (void *)&params->session_id,  { NULL,}},
       {"c", NULL,            set_sysparam_string,
@@ -713,6 +722,21 @@ int main(int argc, char **argv)
 
    if (load_config_file(&params) < 0)
       goto main_end;
+
+   if (params.data_file) {
+      char err_str[200];
+      fprintf(stderr, "Loading datafile %s\n", params.data_file);
+      if (load_datafile(params.data_file, params.work_h, err_str, sizeof(err_str)) != OURFA_OK) {
+	 fprintf(stderr, "Can not load datafile. %s\n", err_str);
+	 goto main_end;
+      }
+
+      /* XXX: Command line variables must be loaded after datafile  */
+      if (load_datafile(params.data_file, params.orig_h, err_str, sizeof(err_str)) != OURFA_OK) {
+	 fprintf(stderr, "Can not load datafile. %s\n", err_str);
+	 goto main_end;
+      }
+   }
 
    xmlapi = ourfa_xmlapi_new();
    if (xmlapi == NULL) {

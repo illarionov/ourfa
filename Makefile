@@ -26,10 +26,10 @@ OBJS= hash.o \
 
 all: libourfa.a ourfa_client
 
-ourfa_client: ourfa.h libourfa.a client.o client_dump.o
+ourfa_client: ourfa.h libourfa.a client.o client_dump.o client_datafile.o
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) $(LDFLAGS) $(XML2_LIBS) \
 	  -o ourfa_client \
-	  client.o client_dump.o -L. -lourfa
+	  client.o client_dump.o client_datafile.o -L. -lourfa
 
 libourfa.a: $(OBJS)
 	rm -f libourfa.a
@@ -68,4 +68,6 @@ client.o: client.c ourfa.h
 	$(CC) $(CFLAGS) -c client.c
 client_dump.o: client_dump.c ourfa.h
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c client_dump.c
+client_datafile.o: client_dump.o client_datafile.c ourfa.h
+	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c client_datafile.c
 

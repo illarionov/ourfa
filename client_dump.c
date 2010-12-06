@@ -52,7 +52,7 @@ enum dump_format_t {
 static int dump_hash_fprintf(FILE *stream, unsigned tab_cnt, const char *fmt, ...);
 static int batch_print_val(ourfa_hash_t *h, FILE *stream,
       const char *name, const char *arr_idx, const char *val);
-static int attrlist2str(unsigned *attr_list, size_t attr_list_cnt,
+int attrlist2str(unsigned *attr_list, size_t attr_list_cnt,
       char *dst, size_t dst_size);
 
 struct dump_t {
@@ -374,7 +374,7 @@ static int escape_string(const char *src, char *dst, size_t dst_size)
 }
 
 
-static int attrlist2str(unsigned *attr_list, size_t attr_list_cnt,
+int attrlist2str(unsigned *attr_list, size_t attr_list_cnt,
       char *dst, size_t dst_size)
 {
    if (attr_list_cnt == 0) {
