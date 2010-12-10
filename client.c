@@ -953,7 +953,7 @@ int main(int argc, char **argv)
 		     || (sctx->script.cur == NULL)
 		     || (sctx->script.cur->n.n_call.output != 0)) {
 		  switch (params.output_format) {
-		     case OUTPUT_FORMAT_BATCH:
+		     case OUTPUT_FORMAT_HASH:
 			if (state == OURFA_SCRIPT_CALL_END_RESP)
 			   ourfa_hash_dump(params.work_h, stdout, "CALL FUNC %s END HASH:\n",
 				 sctx->func.f->name);
