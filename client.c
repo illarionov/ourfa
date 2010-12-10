@@ -108,13 +108,21 @@ static int help_params(FILE *stream, ourfa_xmlapi_func_node_t *n)
       if (n->children)
 	 help_params(stream, n->children);
       else if (n->type == OURFA_XMLAPI_NODE_PARAMETER) {
+	 char def[120];
+
 	 if (!delimiter_printed) {
 	    fprintf(stream, "---\n");
 	    delimiter_printed=1;
 	 }
-	 fprintf(stream, "  -%-20s  %-50s\n",
+	 if (n->n.n_parameter.value)
+	    snprintf(def, sizeof(def), " (default: %s)", n->n.n_parameter.value);
+	 else
+	    def[0]='\0';
+
+	 fprintf(stream, "  -%-20s %s%s\n",
 	       n->n.n_parameter.name,
-	       n->n.n_parameter.comment ? n->n.n_parameter.comment : ""
+	       n->n.n_parameter.comment ? n->n.n_parameter.comment : "",
+	       def
 	       );
       }
       n = n->next;
