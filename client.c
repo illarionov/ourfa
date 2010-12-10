@@ -456,6 +456,40 @@ static int load_system_param(struct params_t *params, const char *name, const ch
    return res;
 }
 
+static int hash_arr_push(ourfa_hash_t *h,
+      const char *key, const char *idx, const char *val)
+{
+   unsigned arr_size;
+   const char *old_idx;
+   char new_idx[80];
+
+   assert(h);
+   assert(key);
+
+   arr_size = 0;
+
+   if (!idx || idx[0] == '\0')
+      old_idx = NULL;
+   else
+      old_idx = idx;
+
+   ourfa_hash_get_arr_size(h,
+	 key, old_idx, &arr_size);
+
+   if (!idx || idx[0] == '\0')
+      snprintf(new_idx, sizeof(new_idx), "%u", arr_size);
+   else
+      snprintf(new_idx, sizeof(new_idx), "%s,%u", old_idx, arr_size);
+
+   if (ourfa_hash_set_string(h, key, new_idx, val) != 0) {
+      fprintf(stderr,  "Cannot add '%s(%s)=%s' to hash\n",
+	    key, new_idx, val);
+      return 1;
+   }
+
+   return 0;
+}
+
 
 static int load_config_file(struct params_t *params)
 {
@@ -699,22 +733,11 @@ int main(int argc, char **argv)
 	 else
 	    p_name = &name[0];
 
-	 if ((ourfa_hash_set_string(params.work_h,
-		  p_name,
-		  idx[0] == '\0' ? NULL : idx,
-		  p) != 0)
-	       || (ourfa_hash_set_string(params.orig_h,
-		     p_name,
-		     idx[0] == '\0' ? NULL : idx,
-		     p) != 0)
-	       )
-	 {
-	    fprintf(stderr,  "Cannot add '%s(%s)=%s' to hash\n",
-		  p_name,
-		  idx[0] == '\0' ? "0" : idx,
-		  p);
-	    return 1;
-	 }
+	 if ((hash_arr_push(params.work_h,
+		  p_name, idx, p) != 0)
+	       || (hash_arr_push(params.orig_h,
+		      p_name, idx, p) != 0))
+	       goto main_end;
       }
 
       i = i + incr_i + 1;
