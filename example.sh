@@ -10,7 +10,7 @@ PASSWORD=${5:-"init"}
 XML_DIR=${6:-"/netup/utm5/xml"}
 OURFA_CLIENT=${OURFA_CLIENT:-"/netup/utm5/bin/ourfa_client"}
 
-$OURFA_CLIENT -H "$HOST" -l "$LOGIN" -p "$PASSWORD" -x "$XML_DIR" \
+$OURFA_CLIENT -H "$HOST" -l "$LOGIN" -P "$PASSWORD" -x "$XML_DIR" \
  -a rpcf_get_users_list -o batch --from=${user_from} --to=${user_to} \
  | awk -F "\t" '
  NF==3 {

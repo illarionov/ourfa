@@ -154,7 +154,7 @@ static int help(ourfa_xmlapi_func_t *f)
 	 " %-2s %-20s %s\n"
 	 " %-2s %-20s %s\n"
 	 "\n",
-	 "-h", "--help", "This message",
+	 "-help", "", "This message",
 	 "-a", "", "Action name",
 	 "-H", "", "URFA server address:port (default: localhost:11758)",
 	 "-l", "", "URFA server login. (default: init)",
@@ -384,44 +384,43 @@ static int load_system_param(struct params_t *params, const char *name, const ch
       const char *configfile_param;
       set_sysparam_f *f;
       void *f_data;
-      const char *names[3];
    } string_params[] = {
       {"a", NULL,            set_sysparam_string,
-	 (void *)&params->action,      { NULL,}},
+	 (void *)&params->action },
       {"x", "core_xml_dir",            set_sysparam_string,
-	 (void *)&params->xml_dir,     { NULL,}},
+	 (void *)&params->xml_dir},
       {"api", NULL,            set_sysparam_string,
-	 (void *)&params->xml_api,     { NULL,}},
+	 (void *)&params->xml_api},
       {"H", "core_host" ,    set_sysparam_string,
-	 (void *)&params->host,        { NULL,}},
+	 (void *)&params->host},
       {"l", "core_login",    set_sysparam_string,
-	 (void *)&params->login,       { NULL,}},
+	 (void *)&params->login},
       {"P", "core_password", set_sysparam_string,
-	 (void *)&params->password,    { NULL,}},
+	 (void *)&params->password},
       {"c", NULL,            set_sysparam_string,
-	 (void *)&params->config_file, { NULL,}},
+	 (void *)&params->config_file},
       {"datafile", NULL,            set_sysparam_string,
-	 (void *)&params->data_file, { NULL,}},
+	 (void *)&params->data_file},
       {"s", "session_key",   set_sysparam_string,
-	 (void *)&params->session_id,  { NULL,}},
+	 (void *)&params->session_id,},
       {"c", NULL,            set_sysparam_string,
-	 (void *)&params->ssl_cert,    { NULL,}},
+	 (void *)&params->ssl_cert,},
       {"k", NULL,            set_sysparam_string,
-	 (void *)&params->ssl_key,     { NULL,}},
+	 (void *)&params->ssl_key,},
       {"o", NULL,            set_sysparam_output_format,
-	 NULL,     { NULL,}},
+	 NULL,},
       {"t", NULL,            set_sysparam_login_type,
-	 NULL,     { NULL,}},
+	 NULL,},
       {"debug", NULL,            set_sysparam_debug,
-	 NULL,     { NULL,}},
+	 NULL,},
       {"S", NULL,            set_sysparam_ssl,
-	 NULL,     { NULL,}},
+	 NULL,},
       {"i", NULL,            set_sysparam_session_ip,
-	 NULL,     { NULL,}},
+	 NULL,},
       {"help", NULL,            set_sysparam_show_help,
-	 NULL,     { NULL,}},
+	 NULL,},
 
-      {NULL,  NULL, NULL, NULL,     { NULL,}},
+      {NULL,  NULL, NULL, NULL},
    };
    unsigned i;
    int found;
@@ -441,13 +440,6 @@ static int load_system_param(struct params_t *params, const char *name, const ch
 	 if ((string_params[i].short_name != NULL)
 	       &&  (strcmp(string_params[i].short_name, name) == 0)) {
 	    found = 1;
-	 }else {
-	    int j;
-	    assert(string_params[i].names);
-	    for (j=0; string_params[i].names[j] && !found; j++) {
-	       if (strcmp(string_params[i].names[j], name) == 0)
-		  found = 1;
-	    }
 	 }
       }
       if (found) {
@@ -457,7 +449,7 @@ static int load_system_param(struct params_t *params, const char *name, const ch
    }
 
    if ((res >= 2) && (val == NULL)) {
-      fprintf(stderr, "Wrong parameter '%s': cannot parse value\n", name);
+      fprintf(stderr, "Wrong parameter '%s': can not parse value\n", name);
       res = -1;
    }
 
