@@ -93,7 +93,7 @@ static int usage()
    fprintf(stdout,
 	 "ourfa_client, URFA (UTM Remote Function Access) client. Version %u\n\n "
 	 " usage: ourfa_client -a action \n"
-	 "   [-H addr:port] [-l login] [-p pass] [-A api.xml] [-h]\n\n",
+	 "   [-H addr:port] [-l login] [-P pass] [-api api.xml] [-h]\n\n",
 	 ourfa_lib_version());
    return 0;
 }
@@ -158,7 +158,7 @@ static int help(ourfa_xmlapi_func_t *f)
 	 "-a", "", "Action name",
 	 "-H", "", "URFA server address:port (default: localhost:11758)",
 	 "-l", "", "URFA server login. (default: init)",
-	 "-p", "", "URFA server password. (default: init)",
+	 "-P", "", "URFA server password. (default: init)",
 	 "-c", "", "Config file (default: " DEFAULT_CONFIG_FILE ")",
 	 "-s", "", "Restore session with ID",
 	 "-i", "", "Restore session with IP",
@@ -167,10 +167,10 @@ static int help(ourfa_xmlapi_func_t *f)
 	 "-k", "", "Private key file for rsa_cert SSL (PEM format)",
 	 "-x", "", "URFA server xml dir. (default: " DEFAULT_XML_DIR ")",
 	 "-t", "", "Login type: admin, user, or dealer (deault: admin)",
-	 "-A", "", "URFA server API file (default: api.xml)",
 	 "-o", "", "Output format Supported: xml (default), batch, hash ",
+	 "-d", "-debug",      "Turn on debug",
 	 "",   "-datafile", "Load array datas from file",
-	 "-d", "--debug",      "Turn on debug",
+	 "",   "-api", "URFA server API file (default: api.xml)",
 	 "",   "-<param>[:idx]", "Set input parameter param(idx)"
 	 );
 
@@ -390,13 +390,13 @@ static int load_system_param(struct params_t *params, const char *name, const ch
 	 (void *)&params->action,      { NULL,}},
       {"x", "core_xml_dir",            set_sysparam_string,
 	 (void *)&params->xml_dir,     { NULL,}},
-      {"A", NULL,            set_sysparam_string,
+      {"api", NULL,            set_sysparam_string,
 	 (void *)&params->xml_api,     { NULL,}},
       {"H", "core_host" ,    set_sysparam_string,
 	 (void *)&params->host,        { NULL,}},
       {"l", "core_login",    set_sysparam_string,
 	 (void *)&params->login,       { NULL,}},
-      {"p", "core_password", set_sysparam_string,
+      {"P", "core_password", set_sysparam_string,
 	 (void *)&params->password,    { NULL,}},
       {"c", NULL,            set_sysparam_string,
 	 (void *)&params->config_file, { NULL,}},
@@ -412,14 +412,14 @@ static int load_system_param(struct params_t *params, const char *name, const ch
 	 NULL,     { NULL,}},
       {"t", NULL,            set_sysparam_login_type,
 	 NULL,     { NULL,}},
-      {"d", NULL,            set_sysparam_debug,
-	 NULL,     { "debug", NULL,}},
+      {"debug", NULL,            set_sysparam_debug,
+	 NULL,     { NULL,}},
       {"S", NULL,            set_sysparam_ssl,
 	 NULL,     { NULL,}},
       {"i", NULL,            set_sysparam_session_ip,
 	 NULL,     { NULL,}},
-      {"h", NULL,            set_sysparam_show_help,
-	 NULL,     { "help", NULL,}},
+      {"help", NULL,            set_sysparam_show_help,
+	 NULL,     { NULL,}},
 
       {NULL,  NULL, NULL, NULL,     { NULL,}},
    };
