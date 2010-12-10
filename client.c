@@ -605,30 +605,10 @@ static int load_config_file(struct params_t *params)
    return res;
 }
 
-int main(int argc, char **argv)
+static int load_command_line_params(int argc, char **argv, struct params_t *params)
 {
-   int i, res;
-   ourfa_connection_t *connection;
-   ourfa_xmlapi_t *xmlapi;
-   ourfa_xmlapi_func_t *f;
+   int i=1;
 
-   struct params_t params;
-
-   if (init_params(&params) < 0)
-      return 1;
-
-   if (argc <= 1)
-      return usage();
-
-   SSL_load_error_strings();
-   SSL_library_init();
-
-   connection = NULL;
-   xmlapi = NULL;
-   f = NULL;
-   res=1;
-
-   i=1;
    while (i<argc) {
       int incr_i, is_system_param;
       const char *p;
@@ -667,7 +647,7 @@ int main(int argc, char **argv)
       if (res_idx == sizeof(name)-1) {
 	 fprintf(stderr, "Wrong parameter '%s': too long parameter name\n",
 	       argv[i]);
-	 goto main_end;
+	 return 1;
       }
 
       res_idx=0;
@@ -714,9 +694,9 @@ int main(int argc, char **argv)
       /* Compare values with system parameters */
       if (idx[0] == '\0') {
 	 int load_res;
-	 load_res=load_system_param(&params, name, p, 0);
+	 load_res=load_system_param(params, name, p, 0);
 	 if (load_res < 0)
-	    goto main_end;
+	    return 1;
 	 else if (load_res == 0)
 	    is_system_param=0;
 	 else {
@@ -729,7 +709,7 @@ int main(int argc, char **argv)
       if (!is_system_param) {
 	 char *p_name;
 	 if (p==NULL) {
-	    fprintf(stderr, "Wrong parameter '%s': cannot parse value\n",
+	    fprintf(stderr, "Wrong parameter '%s': can not parse value\n",
 		  argv[i]);
 	    return 1;
 	 }
@@ -741,15 +721,46 @@ int main(int argc, char **argv)
 	 else
 	    p_name = &name[0];
 
-	 if ((hash_arr_push(params.work_h,
+	 if ((hash_arr_push(params->work_h,
 		  p_name, idx, p) != 0)
-	       || (hash_arr_push(params.orig_h,
+	       || (hash_arr_push(params->orig_h,
 		      p_name, idx, p) != 0))
-	       goto main_end;
+	    return 1;
       }
 
       i = i + incr_i + 1;
    } /* while(i<argc) */
+
+   return 0;
+}
+
+int main(int argc, char **argv)
+{
+   int res;
+   ourfa_connection_t *connection;
+   ourfa_xmlapi_t *xmlapi;
+   ourfa_xmlapi_func_t *f;
+
+   struct params_t params;
+
+   if (init_params(&params) < 0)
+      return 1;
+
+   if (argc <= 1)
+      return usage();
+
+   SSL_load_error_strings();
+   SSL_library_init();
+
+   connection = NULL;
+   xmlapi = NULL;
+   f = NULL;
+   res=1;
+
+   /* Load config filename and data filename  */
+   res = load_command_line_params(argc, argv, &params);
+   if (res != 0)
+      goto main_end;
 
    if (load_config_file(&params) < 0)
       goto main_end;
@@ -768,6 +779,14 @@ int main(int argc, char **argv)
 	 goto main_end;
       }
    }
+
+   /*
+    * load command line once again
+    * (priority over config and data files)
+    */
+   res = load_command_line_params(argc, argv, &params);
+   if (res != 0)
+      goto main_end;
 
    xmlapi = ourfa_xmlapi_new();
    if (xmlapi == NULL) {
