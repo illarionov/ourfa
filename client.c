@@ -171,7 +171,7 @@ static int help(ourfa_xmlapi_func_t *f)
 	 "-o", "", "Output format Supported: xml (default), batch, hash ",
 	 "",   "-datafile", "Load array datas from file",
 	 "-d", "--debug",      "Turn on debug",
-	 "",   "--<param>[:idx]", "Set input parameter param(idx)"
+	 "",   "-<param>[:idx]", "Set input parameter param(idx)"
 	 );
 
    if (f && f->script) {
