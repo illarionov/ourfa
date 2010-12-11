@@ -497,6 +497,7 @@ int ourfa_connection_open(ourfa_connection_t *connection)
 
       if (err != 0)
 	 return connection->printf_err(OURFA_ERROR_WRONG_HOSTNAME,
+	       connection->err_ctx,
 	       "Error connecting to `%s`: %s",
 	       ourfa_connection_hostname(connection), gai_strerror(err));
    }
