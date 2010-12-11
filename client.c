@@ -614,7 +614,8 @@ static int load_config_file(struct params_t *params)
    return res;
 }
 
-static int load_command_line_params(int argc, char **argv, struct params_t *params)
+static int load_command_line_params(int argc, char **argv, struct params_t *params,
+      unsigned only_system_params)
 {
    int i=1;
 
@@ -715,7 +716,7 @@ static int load_command_line_params(int argc, char **argv, struct params_t *para
       }
 
       /* Add parameter to hash  */
-      if (!is_system_param) {
+      if (!is_system_param && !only_system_params) {
 	 char *p_name;
 	 if (p==NULL) {
 	    fprintf(stderr, "Wrong parameter '%s': can not parse value\n",
@@ -768,7 +769,7 @@ int main(int argc, char **argv)
    res=1;
 
    /* Load config filename and data filename  */
-   res = load_command_line_params(argc, argv, &params);
+   res = load_command_line_params(argc, argv, &params, 0);
    if (res != 0)
       goto main_end;
 
@@ -788,6 +789,11 @@ int main(int argc, char **argv)
    }
 
    if (load_config_file(&params) < 0)
+      goto main_end;
+
+   /* Reload system params from command line  */
+   res = load_command_line_params(argc, argv, &params, 1);
+   if (res != 0)
       goto main_end;
 
    xmlapi = ourfa_xmlapi_new();
