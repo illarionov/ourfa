@@ -421,7 +421,6 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 	    {
 	       char *s1;
 	       s1 = NULL;
-	       /* XXX */
 	       if (fctx->cur->n.n_error.variable) {
 		  if (ourfa_hash_get_string(fctx->h, fctx->cur->n.n_error.variable, NULL, &s1) != 0 )
 		     s1 = NULL;

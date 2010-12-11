@@ -781,7 +781,6 @@ int main(int argc, char **argv)
 	 goto main_end;
       }
 
-      /* XXX: Command line variables must be loaded after datafile  */
       if (load_datafile(params.data_file, params.orig_h, err_str, sizeof(err_str)) != OURFA_OK) {
 	 fprintf(stderr, "Can not load datafile. %s\n", err_str);
 	 goto main_end;

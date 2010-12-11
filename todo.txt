@@ -1,5 +1,3 @@
-ATTR_TERMINATION error code
-load config from file
 nodes: message, out
 
 

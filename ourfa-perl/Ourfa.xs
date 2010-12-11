@@ -577,7 +577,6 @@ ourfa_ssl_ctx_new(CLASS)
    OUTPUT:
       RETVAL
 
-#XXX: Constant
 unsigned
 ourfa_ssl_ctx_ssl_type(ssl_ctx, val=NO_INIT)
    ourfa_ssl_ctx_t *ssl_ctx
