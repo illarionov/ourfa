@@ -588,12 +588,14 @@ static int load_config_file(struct params_t *params)
 	 continue;
 
       /* add to hash  */
-      if (
-	   (ourfa_hash_set_string(params->work_h, param, NULL, val) != 0)
-	   || (ourfa_hash_set_string(params->orig_h, param, NULL, val) != 0)
-	   ) {
-	 fprintf(stderr,  "Cannot add '%s[%s]=%s' to hash\n",
-	       param,"0",val);
+      if (ourfa_hash_get_string(params->work_h, param, NULL, NULL) != 0) {
+	 if (
+	       (ourfa_hash_set_string(params->work_h, param, NULL, val) != 0)
+	       || (ourfa_hash_set_string(params->orig_h, param, NULL, val) != 0)
+	    ) {
+	    fprintf(stderr,  "Can not add '%s(%s)=%s' to hash\n",
+		  param,"0",val);
+	 }
       }
 
    } /* while (fgets) */
@@ -767,9 +769,6 @@ int main(int argc, char **argv)
    if (res != 0)
       goto main_end;
 
-   if (load_config_file(&params) < 0)
-      goto main_end;
-
    if (params.data_file) {
       char err_str[200];
       fprintf(stderr, "Loading datafile %s\n", params.data_file);
@@ -785,12 +784,7 @@ int main(int argc, char **argv)
       }
    }
 
-   /*
-    * load command line once again
-    * (priority over config and data files)
-    */
-   res = load_command_line_params(argc, argv, &params);
-   if (res != 0)
+   if (load_config_file(&params) < 0)
       goto main_end;
 
    xmlapi = ourfa_xmlapi_new();

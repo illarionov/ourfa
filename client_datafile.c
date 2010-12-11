@@ -203,19 +203,21 @@ static int add_array(xmlNode *arr_node, ourfa_hash_t *res_h, char *err_str, size
 	 return OURFA_ERROR_OTHER;
       }
       attrlist2str(idx, dimension, idx_str, sizeof(idx_str));
-      if (ourfa_hash_set_string(res_h,
-	       (const char *)arr_name,
-	       idx_str,
-	       content ? (const char *)content : "" ) != 0) {
-	 snprintf(err_str, err_str_size,
-	       "Can not set hash value %s(%s)=`%s`. Line: %hu",
-	       (const char *)arr_name,
-	       idx_str,
-	       content ? (const char *)content : "",
-	       cur->line
-	       );
-	 xmlFree(arr_name);
-	 return OURFA_ERROR_OTHER;
+      if (ourfa_hash_get_string(res_h, (const char *)arr_name, idx_str, NULL) != 0) {
+	 if (ourfa_hash_set_string(res_h,
+		  (const char *)arr_name,
+		  idx_str,
+		  content ? (const char *)content : "" ) != 0) {
+	    snprintf(err_str, err_str_size,
+		  "Can not set hash value %s(%s)=`%s`. Line: %hu",
+		  (const char *)arr_name,
+		  idx_str,
+		  content ? (const char *)content : "",
+		  cur->line
+		  );
+	    xmlFree(arr_name);
+	    return OURFA_ERROR_OTHER;
+	 }
       }
 
 move_to_next_node:
