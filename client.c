@@ -38,6 +38,10 @@
 #include <string.h>
 #include "ourfa.h"
 
+#define DEFAULT_HOST "localhost"
+#define DEFAULT_PORT "11758"
+#define DEFAULT_HOST_PORT ( DEFAULT_HOST ":" DEFAULT_PORT )
+
 #define DEFAULT_CONFIG_FILE "/netup/utm5/utm5_urfaclient.cfg"
 #define DEFAULT_XML_DIR "/netup/utm5/xml"
 
@@ -49,6 +53,7 @@ enum output_format_t {
 
 struct params_t {
    char *host;
+   char *port;
    char *login;
    char *password;
    char *xml_api;
@@ -93,7 +98,7 @@ static int usage()
    fprintf(stdout,
 	 "ourfa_client, URFA (UTM Remote Function Access) client. Version %u\n\n "
 	 " usage: ourfa_client -a action \n"
-	 "   [-H addr:port] [-l login] [-P pass] [-api api.xml] [-h]\n\n",
+	 "   [-H addr] [-p port] [-l login] [-P pass] [-api api.xml] [-h]\n\n",
 	 ourfa_lib_version());
    return 0;
 }
@@ -153,10 +158,12 @@ static int help(ourfa_xmlapi_func_t *f)
 	 " %-2s %-20s %s\n"
 	 " %-2s %-20s %s\n"
 	 " %-2s %-20s %s\n"
+	 " %-2s %-20s %s\n"
 	 "\n",
 	 "-help", "", "This message",
 	 "-a", "", "Action name",
-	 "-H", "", "URFA server address:port (default: localhost:11758)",
+	 "-H", "", "URFA server host (default: " DEFAULT_HOST ")",
+	 "-p", "", "URFA server port (default: " DEFAULT_PORT ")",
 	 "-l", "", "URFA server login. (default: init)",
 	 "-P", "", "URFA server password. (default: init)",
 	 "-c", "", "Config file (default: " DEFAULT_CONFIG_FILE ")",
@@ -188,6 +195,7 @@ static int init_params(struct params_t *params)
 {
    assert(params);
    params->host = NULL;
+   params->port = NULL;
    params->login = NULL;
    params->password = NULL;
    params->xml_api = NULL;
@@ -223,6 +231,7 @@ static void free_params(struct params_t *params)
 {
    assert(params);
    free(params->host);
+   free(params->port);
    free(params->login);
    free(params->password);
    free(params->config_file);
@@ -364,6 +373,7 @@ static int set_sysparam_session_ip(struct params_t *params,
 
    return 2;
 }
+
 static int set_sysparam_show_help(struct params_t *params,
       const char *name __unused,
       const char *val __unused,
@@ -393,6 +403,8 @@ static int load_system_param(struct params_t *params, const char *name, const ch
 	 (void *)&params->xml_api},
       {"H", "core_host" ,    set_sysparam_string,
 	 (void *)&params->host},
+      {"p", "core_port" ,    set_sysparam_string,
+	 (void *)&params->port},
       {"l", "core_login",    set_sysparam_string,
 	 (void *)&params->login},
       {"P", "core_password", set_sysparam_string,
@@ -732,6 +744,7 @@ int main(int argc, char **argv)
    ourfa_connection_t *connection;
    ourfa_xmlapi_t *xmlapi;
    ourfa_xmlapi_func_t *f;
+   char *host_port;
 
    struct params_t params;
 
@@ -859,8 +872,26 @@ int main(int argc, char **argv)
    assert(res == OURFA_OK);
    res = ourfa_connection_set_password(connection, params.password);
    assert(res == OURFA_OK);
-   res = ourfa_connection_set_hostname(connection, params.host);
+
+   /* Give higher priority to port number in host definition */
+   if ((params.port == NULL)
+	 || strchr(params.host ? params.host : DEFAULT_HOST_PORT, ':')) {
+      host_port = strdup(params.host ? params.host : DEFAULT_HOST_PORT);
+   }else {
+      asprintf(&host_port, "%s:%s",
+	    params.host ? params.host : DEFAULT_HOST_PORT,
+	    params.port
+	    );
+   }
+
+   if (host_port == NULL) {
+      fprintf(stderr, "malloc error\n");
+      goto main_end;
+   }
+
+   res = ourfa_connection_set_hostname(connection, host_port);
    assert(res == OURFA_OK);
+   free(host_port);
    res = ourfa_connection_set_login_type(connection, params.login_type);
    assert(res == OURFA_OK);
    if (params.session_id) {
