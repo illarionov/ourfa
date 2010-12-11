@@ -140,45 +140,47 @@ static int help(ourfa_xmlapi_func_t *f)
 {
    usage();
    fprintf(stdout,
-	 " %-2s %-20s %s\n"
-	 " %-2s %-20s %s\n"
-	 " %-2s %-20s %s\n"
-	 " %-2s %-20s %s\n"
-	 " %-2s %-20s %s\n"
-	 " %-2s %-20s %s\n"
-	 " %-2s %-20s %s\n"
-	 " %-2s %-20s %s\n"
-	 " %-2s %-20s %s\n"
-	 " %-2s %-20s %s\n"
-	 " %-2s %-20s %s\n"
-	 " %-2s %-20s %s\n"
-	 " %-2s %-20s %s\n"
-	 " %-2s %-20s %s\n"
-	 " %-2s %-20s %s\n"
-	 " %-2s %-20s %s\n"
-	 " %-2s %-20s %s\n"
-	 " %-2s %-20s %s\n"
-	 " %-2s %-20s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
+	 " %-10s %s\n"
 	 "\n",
-	 "-help", "", "This message",
-	 "-a", "", "Action name",
-	 "-H", "", "URFA server host (default: " DEFAULT_HOST ")",
-	 "-p", "", "URFA server port (default: " DEFAULT_PORT ")",
-	 "-l", "", "URFA server login. (default: init)",
-	 "-P", "", "URFA server password. (default: init)",
-	 "-c", "", "Config file (default: " DEFAULT_CONFIG_FILE ")",
-	 "-s", "", "Restore session with ID",
-	 "-i", "", "Restore session with IP",
-	 "-S", "", "SSL/TLS method: none (default), tlsv1, sslv3, cert, rsa_cert",
-	 "-C", "", "Certificate file for rsa_cert SSL (PEM format)",
-	 "-k", "", "Private key file for rsa_cert SSL (PEM format)",
-	 "-x", "", "URFA server xml dir. (default: " DEFAULT_XML_DIR ")",
-	 "-t", "", "Login type: admin, user, or dealer (deault: admin)",
-	 "-o", "", "Output format Supported: xml (default), batch, hash ",
-	 "-d", "-debug",      "Turn on debug",
-	 "",   "-datafile", "Load array datas from file",
-	 "",   "-api", "URFA server API file (default: api.xml)",
-	 "",   "-<param>[:idx]", "Set input parameter param(idx)"
+	 "-help", "This message",
+	 "-a", "Action name",
+	 "-H", "URFA server host (default: " DEFAULT_HOST ")",
+	 "-p", "URFA server port (default: " DEFAULT_PORT ")",
+	 "-l", "URFA server login. (default: init)",
+	 "-P", "URFA server password. (default: init)",
+	 "-c", "Config file (default: " DEFAULT_CONFIG_FILE ")",
+	 "-s", "Restore session with ID",
+	 "-i", "Restore session with IP",
+	 "-S", "SSL/TLS method: none (default), tlsv1, sslv3, cert, rsa_cert",
+	 "-C", "Certificate file for rsa_cert SSL (PEM format)",
+	 "-k", "Private key file for rsa_cert SSL (PEM format)",
+	 "-x", "URFA server xml dir. (default: " DEFAULT_XML_DIR ")",
+	 "-u", "Login as user (not admin)",
+	 "-dealer", "Login as dealer (not admin)",
+	 "-o", "Output format: xml (default), batch, or hash",
+	 "-debug",      "Turn on debug",
+	 "-datafile", "Load array datas from file",
+	 "-api", "URFA server API file (default: api.xml)",
+	 "-<param>[:idx]", "Set input parameter param(idx)"
 	 );
 
    if (f && f->script) {
@@ -292,29 +294,28 @@ static int set_sysparam_output_format(struct params_t *params,
    return 2;
 }
 
-static int set_sysparam_login_type(struct params_t *params,
+static int set_sysparam_login_type_user(struct params_t *params,
       const char *name __unused,
-      const char *val,
+      const char *val __unused,
       unsigned is_config_file __unused,
       void *data __unused)
 {
-   if (val == NULL)
-      return -1;
+   params->login_type = OURFA_LOGIN_USER;
 
-   if (strcasecmp(val,"admin")==0)
-      params->login_type = OURFA_LOGIN_SYSTEM;
-   else if (strcasecmp(val, "user")==0)
-      params->login_type = OURFA_LOGIN_USER;
-   else if (strcasecmp(val, "dealer")==0)
-      params->login_type = OURFA_LOGIN_CARD;
-   else {
-      fprintf(stderr, "Unknown login type '%s'. "
-	    "Allowed values: admin, user, dealer\n", val);
-      return -1;
-   }
-
-   return 2;
+   return 1;
 }
+
+static int set_sysparam_login_type_dealer(struct params_t *params,
+      const char *name __unused,
+      const char *val __unused,
+      unsigned is_config_file __unused,
+      void *data __unused)
+{
+   params->login_type = OURFA_LOGIN_CARD;
+
+   return 1;
+}
+
 
 static int set_sysparam_debug(struct params_t *params,
       const char *name __unused,
@@ -421,7 +422,9 @@ static int load_system_param(struct params_t *params, const char *name, const ch
 	 (void *)&params->ssl_key,},
       {"o", NULL,            set_sysparam_output_format,
 	 NULL,},
-      {"t", NULL,            set_sysparam_login_type,
+      {"u", NULL,            set_sysparam_login_type_user,
+	 NULL,},
+      {"dealer", NULL,            set_sysparam_login_type_dealer,
 	 NULL,},
       {"debug", NULL,            set_sysparam_debug,
 	 NULL,},
