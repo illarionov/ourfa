@@ -487,16 +487,17 @@ int ourfa_connection_open(ourfa_connection_t *connection)
 	 }
       }
       memset(&hints, 0, sizeof(hints));
-      hints.ai_family = AF_UNSPEC;
+      hints.ai_family = AF_INET;
       hints.ai_socktype = SOCK_STREAM;
       hints.ai_protocol = IPPROTO_TCP;
+      hints.ai_flags = AI_ADDRCONFIG | AI_CANONNAME;
 
       /* Resolv hostname */
       err = getaddrinfo(host_name, service_name, &hints, &res0);
 
       if (err != 0)
 	 return connection->printf_err(OURFA_ERROR_WRONG_HOSTNAME,
-	       "Error connecting to '%s': %s",
+	       "Error connecting to `%s`: %s",
 	       ourfa_connection_hostname(connection), gai_strerror(err));
    }
 
@@ -520,16 +521,11 @@ int ourfa_connection_open(ourfa_connection_t *connection)
       }
 
       if (connect(sockfd, res->ai_addr, res->ai_addrlen) < 0) {
-	 int last_errno;
-	 char ip[INET6_ADDRSTRLEN+1];
-	 last_errno = errno;
-
-	 if (inet_ntop(res->ai_family, &res->ai_addr, ip, sizeof(ip)) == NULL) {
-	    ip[0]='\0';
-	 }
-
 	 connection->printf_err(OURFA_ERROR_SYSTEM, connection->err_ctx,
-	       "Error connecting to `%s`: %s", ip, strerror(last_errno));
+	       "Error connecting to `%s:%u`: %s",
+	       res->ai_canonname,
+	       ntohs(((struct sockaddr_in *)res->ai_addr)->sin_port),
+	       strerror(errno));
 	 close(sockfd);
 	 sockfd=-1;
 	 continue;
