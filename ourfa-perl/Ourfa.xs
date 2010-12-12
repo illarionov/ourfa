@@ -43,7 +43,7 @@
 /*  Debugging output */
 #if 0
 #define PR(s) warn(s);
-#define PRN(s,n) warn("'%s' (%lx)\n",s,n);
+#define PRN(format, ... ) warn(format, __VA_ARGS__);
 #else
 #define PR(s)
 #define PRN(s,n)
@@ -65,6 +65,7 @@ struct t_idx_list {
    char idx_list_s[80];
 };
 
+static in_addr_t sv2in_addr_t(SV *val, const char *proc);
 
 static void init_idx_list_s(struct t_idx_list *t)
 {
@@ -107,7 +108,7 @@ static int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct 
 	 {
 	    long long val;
 	    val = SvIV(sv);
-	    /*  printf("adding key: %s idx: %s long: %d\n", key, idx->idx_list_s, val); */
+	    PRN("adding key: %s idx: %s long: %d\n", key, idx->idx_list_s, val);
 	    if (ourfa_hash_set_long(res, key, idx->idx_list_s, val) != 0)
 	       err = -1;
 	 }
@@ -116,7 +117,7 @@ static int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct 
 	 {
 	    double val;
 	    val = SvNV(sv);
-	    /*   printf("adding key: %s idx: %s double: %d\n", key, idx->idx_list_s, val); */
+	    PRN("adding key: %s idx: %s double: %d\n", key, idx->idx_list_s, val);
 	    if (ourfa_hash_set_double(res, key, idx->idx_list_s, val) != 0)
 	       err = -1;
 	 }
@@ -126,7 +127,7 @@ static int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct 
 	 {
 	    char *str;
 	    str = SvPV_nolen(sv);
-	    /*  printf("adding key: %s idx: %s str: %s\n", key, idx->idx_list_s, str); */
+	    PRN("adding key: %s idx: %s str: %s\n", key, idx->idx_list_s, str);
 	    if (ourfa_hash_set_string(res, key, idx->idx_list_s, str) != 0)
 	       err = -1;
 	 }
@@ -137,7 +138,7 @@ static int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct 
 	    SV **val;
 	    SV *val1;
 
-	    /*   printf("adding array\n"); */
+	    PRN("adding %s\n", "PVAV array");
 
 	    last = av_len((AV *)sv);
 	    if (last < 0)
@@ -167,7 +168,7 @@ static int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct 
 		  char *key2;
 		  I32 retlen;
 
-		  /* printf("adding hash\n"); */
+		  PRN("adding %s\n", "PVHV hash");
 		  hv = (HV *)(*val);
 		  hv_iterinit(hv);
 		  while ((val0 = hv_iternextsv(hv, &key2, &retlen)) != NULL) {
@@ -186,7 +187,7 @@ static int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct 
 	    char *key2;
 	    I32 retlen;
 
-	    /* printf("adding hash0\n"); */
+	    PRN("adding %s\n", "PVHV hash0");
 
 	    hv = (HV *)sv;
 	    if (idx->cnt >= IDX_LIST_SIZE)
@@ -205,23 +206,23 @@ static int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct 
         if (SvIOK(sv)) {
 	    long long val;
 	    val = SvIV(sv);
-	    /*  printf("adding key: %s idx: %s long: %d\n", key, idx->idx_list_s, val); */
+	    PRN("adding key: %s idx: %s long: %d\n", key, idx->idx_list_s, val);
 	    if (ourfa_hash_set_long(res, key, idx->idx_list_s, val) != 0)
 	       err = -1;
         }else if (SvNOK(sv)) {
 	    double val;
 	    val = SvNV(sv);
-	    /*   printf("adding key: %s idx: %s double: %d\n", key, idx->idx_list_s, val); */
+	    PRN("adding key: %s idx: %s double: %d\n", key, idx->idx_list_s, val);
 	    if (ourfa_hash_set_double(res, key, idx->idx_list_s, val) != 0)
 	       err = -1;
         }else if (SvPOK(sv)) {
             char *str;
             str = SvPV_nolen(sv);
-            /*  printf("adding key: %s idx: %s str: %s\n", key, idx->idx_list_s, str); */
+            PRN("adding key: %s idx: %s str: %s\n", key, idx->idx_list_s, str);
             if (ourfa_hash_set_string(res, key, idx->idx_list_s, str) != 0)
                err = -1;
          }else {
-            printf("cannot add: unknown type %u\n", SvTYPE(sv));
+            warn("Can not add: unknown type %u\n", SvTYPE(sv));
             err = -1;
          }
 	 break;
@@ -849,7 +850,7 @@ ourfa_connection_session_ip(connection, val=NO_INIT)
 	 char * ip_address;
 	 if (SvOK(val)) {
 	    ip.s_addr = sv2in_addr_t(val, "Ourfa::Connection::session_ip");
-	    PRN(inet_ntoa(ip), ip);
+	    PRN("set session ip: %s", inet_ntoa(ip));
 	    res = ourfa_connection_set_session_ip(connection, &ip.s_addr);
 	 }else
 	    res = ourfa_connection_set_session_ip(connection, NULL);
@@ -860,7 +861,7 @@ ourfa_connection_session_ip(connection, val=NO_INIT)
       if (ip0) {
 	 struct in_addr ip;
 	 ip.s_addr = *ip0;
-	 PRN(inet_ntoa(ip), ip.s_addr);
+	 PRN("session ip: %s", inet_ntoa(ip));
 	 ST(0) = sv_newmortal();
 	 sv_setpvn(ST(0), (char *)&ip, sizeof(ip));
       }else
