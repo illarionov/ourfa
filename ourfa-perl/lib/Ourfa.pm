@@ -140,7 +140,11 @@ our @EXPORT_OK = qw(
 
 our @EXPORT = (@EXPORT_OK);
 
-our $VERSION = '521008.0.0_01';
+BEGIN {
+   require XSLoader;
+   our $VERSION = '521008.0.0_01';
+   XSLoader::load('Ourfa', $VERSION);
+}
 
 sub AUTOLOAD {
     # This AUTOLOAD is used to 'autoload' constants from the constant()
@@ -169,13 +173,6 @@ sub AUTOLOAD {
 #XXX	}
     }
     goto &$AUTOLOAD;
-}
-
-require XSLoader;
-
-BEGIN {
-   our $VERSION = '521008.0.0_01';
-   XSLoader::load('Ourfa', $VERSION);
 }
 
 
@@ -360,11 +357,13 @@ sub new {
 sub call {
    my ($self, $method, $params) = @_;
 
+   my $res;
+
    eval {
       $self->connection->open
       if (!$self->connection->is_connected);
 
-      return Ourfa::ScriptCall->call(
+      $res = Ourfa::ScriptCall->call(
 	 $self->connection,
 	 $self->xmlapi,
 	 $method,
@@ -372,6 +371,8 @@ sub call {
       );
    };
    croak($@) if ($@);
+
+   return $res;
 }
 
 =head2 rpcf_*() rpcf_ function call
