@@ -659,13 +659,18 @@ int ourfa_hash_parse_ip(const char *str, struct in_addr *res)
    if (str == NULL || (str[0]=='\0') || res == NULL)
       return -1;
 
-   long_val = strtol(str, &p_end, 0);
-   /* Numeric?  */
-   if ((*p_end == '\0')) {
-      if (long_val == -1)
-	 res->s_addr = INADDR_NONE;
-      else
-	 res->s_addr = (in_addr_t)long_val;
+   /* Dirty hack for ourfa-perl. */
+   if (strlen(str) == 4) {
+      /* String is a binary in_addr_t  */
+      const unsigned char *ustr;
+
+      ustr = (const unsigned char *)str;
+
+      res->s_addr = htonl((ustr[0] & 0xFF) << 24 |
+      (ustr[1] & 0xFF) << 16 |
+      (ustr[2] & 0xFF) <<  8 |
+      (ustr[3] & 0xFF));
+
       return 0;
    }
 
@@ -677,6 +682,16 @@ int ourfa_hash_parse_ip(const char *str, struct in_addr *res)
 	 return -1;
       m = 32-long_val;
       res->s_addr = ((INADDR_NONE >> m) << m) & 0xffffffff;
+      return 0;
+   }
+
+   long_val = strtol(str, &p_end, 0);
+   /* Numeric?  */
+   if ((*p_end == '\0')) {
+      if (long_val == -1)
+	 res->s_addr = INADDR_NONE;
+      else
+	 res->s_addr = (in_addr_t)long_val;
       return 0;
    }
 

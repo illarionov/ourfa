@@ -41,7 +41,7 @@
 #define NEED_sv_2pv_flags
 
 /*  Debugging output */
-#if 1
+#if 0
 #define PR(s) warn(s);
 #define PRN(format, ... ) warn(format, __VA_ARGS__);
 #else
@@ -65,7 +65,7 @@ struct t_idx_list {
    char idx_list_s[80];
 };
 
-static in_addr_t sv2in_addr_t(SV *val, const char *proc);
+static int sv2in_addr_t(SV *val, const char *proc, in_addr_t *res, int croak_on_error);
 
 static void init_idx_list_s(struct t_idx_list *t)
 {
@@ -129,17 +129,23 @@ static int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct 
 	    STRLEN len;
 	    str = SvPV(sv, len);
 	    if ((len > 0) && (strlen(str) != len)) {
-	       /* Binary data. Set as ip  */
+	       /* Binary data. Try to set as ip  */
 	       struct in_addr ip;
-	       ip.s_addr = sv2in_addr_t(sv, "hv2ourfah_add_val");
-	       PRN("adding key: %s idx: %s ip: %s\n", key, idx->idx_list_s, inet_ntoa(ip));
-	       if (ourfa_hash_set_ip(res, key, idx->idx_list_s, ip.s_addr) != 0)
-		  err = -1;
-	    }else {
-	       PRN("adding key: %s idx: %s str: %s\n", key, idx->idx_list_s, str);
-	       if (ourfa_hash_set_string(res, key, idx->idx_list_s, str) != 0)
-		  err = -1;
+	       if (sv2in_addr_t(sv, "hv2ourfah_add_val", &ip.s_addr, 0) == 0) {
+		  PRN("adding key: %s idx: %s ip: %s\n", key, idx->idx_list_s, inet_ntoa(ip));
+		  if (ourfa_hash_set_ip(res, key, idx->idx_list_s, ip.s_addr) != 0)
+		     err = -1;
+		  break;
+	       }
 	    }
+	    /*
+	     * XXX: in_addr_t with no \0 (for example 55.55.55.55)
+	     * inserts to ourfa hash as string with length equal to 4.
+	     * This case is handled in ourfa library.
+	     */
+	    PRN("adding key: %s idx: %s str: %s\n", key, idx->idx_list_s, str);
+	    if (ourfa_hash_set_string(res, key, idx->idx_list_s, str) != 0)
+	       err = -1;
 	 }
 	 break;
       case SVt_PVAV:
@@ -269,23 +275,31 @@ static int hv2ourfah(HV *hv, ourfa_hash_t **h)
    return 1;
 }
 
-static in_addr_t sv2in_addr_t(SV *val, const char *proc)
+static int sv2in_addr_t(SV *val, const char *proc, in_addr_t *res, int croak_on_error)
 {
    STRLEN addrlen;
    struct in_addr addr;
-   char * ip_address;
-   if (DO_UTF8(val) && !sv_utf8_downgrade(val, 1))
-      croak("Wide character in %s", proc);
-   ip_address = SvPVbyte(val, addrlen);
-   if (addrlen != sizeof(addr) && addrlen != 4)
-      croak("Bad arg length for %s, length is %d, should be %d",
-	    "Ourfa::Connection::session_ip",
-	    addrlen, sizeof(addr));
+   unsigned char * ip_address;
+   if (DO_UTF8(val) && !sv_utf8_downgrade(val, 1)) {
+      if (croak_on_error)
+	 croak("Wide character in %s", proc);
+      return -1;
+   }
+   ip_address = (unsigned char *)SvPVbyte(val, addrlen);
+   if (addrlen != sizeof(addr) && addrlen != 4) {
+      if (croak_on_error)
+	 croak("Bad arg length for %s, length is %d, should be %d",
+	       "Ourfa::Connection::session_ip",
+	       addrlen, sizeof(addr));
+      return -1;
+   }
 
-   return htonl((ip_address[0] & 0xFF) << 24 |
+   *res = htonl((ip_address[0] & 0xFF) << 24 |
       (ip_address[1] & 0xFF) << 16 |
       (ip_address[2] & 0xFF) <<  8 |
       (ip_address[3] & 0xFF));
+
+   return 0;
 }
 
 static int ourfa_err_f_warn(int err_code, void *user_ctx, const char *fmt, ...)
@@ -859,7 +873,7 @@ ourfa_connection_session_ip(connection, val=NO_INIT)
 	 struct in_addr ip;
 	 char * ip_address;
 	 if (SvOK(val)) {
-	    ip.s_addr = sv2in_addr_t(val, "Ourfa::Connection::session_ip");
+	    sv2in_addr_t(val, "Ourfa::Connection::session_ip", &ip.s_addr, 1);
 	    PRN("set session ip: %s", inet_ntoa(ip));
 	    res = ourfa_connection_set_session_ip(connection, &ip.s_addr);
 	 }else
@@ -1065,7 +1079,7 @@ ourfa_connection_write_ip(connection, val, type=OURFA_ATTR_DATA)
    PREINIT:
       in_addr_t addr;
    CODE:
-      addr = sv2in_addr_t(val, "Ourfa::Connection::write_ip");
+      sv2in_addr_t(val, "Ourfa::Connection::write_ip", &addr, 1);
       RETVAL = ourfa_connection_write_ip(connection, type, addr);
       if (RETVAL != OURFA_OK)
 	 croak("%s: %s", "Ourfa::Connection::write_string", ourfa_error_strerror(RETVAL));

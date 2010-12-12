@@ -92,8 +92,9 @@ my $service = $ourfa->rpcf_get_iptraffic_service_link(
 );
 my $removed_ip_group;
 foreach my $ip_group (@{$service->{'array-1'}}) {
+   warn("ipgroup_ip: " . inet_ntoa($ip_group->{ip_address}) . " our_ip: $ip_address");
    if ( (inet_ntoa($ip_group->{ip_address}) eq $ip_address)
-      && ($ip_group->{mask} eq $mask)) {
+      && (inet_ntoa($ip_group->{mask}) eq $mask)) {
       if (($ip_group->{mac} eq $mac)
 	 && ($ip_group->{iptraffic_login} eq $iptraffic_login)
 	 && ($ip_group->{iptraffic_password} eq $iptraffic_password)
@@ -106,6 +107,8 @@ foreach my $ip_group (@{$service->{'array-1'}}) {
 	 #Изменение IP группы: удаляем текущую группу, затем добавляем
 	 #измененную. Сохраняем удаленную группу
 	 $removed_ip_group = $ip_group;
+	 warn("rpcf_delete_from_ipgroup ip: $ip_address slink_id: " .
+	    $service_rec->{slink_id_array});
 	 $ourfa->rpcf_delete_from_ipgroup(
 	    slink_id=>$service_rec->{slink_id_array},
 	    ip_address=>$ip_address,
@@ -137,7 +140,8 @@ eval {
       ip_groups=>[
       {
 	 ip_address=>inet_aton($ip_address),
-	 mask=>$mask,
+	 mac => $mac,
+	 mask=>inet_aton($mask),
 	 iptraffic_login=>$iptraffic_login,
 	 iptraffic_allowed_cid=>$iptraffic_allowed_cid,
 	 iptraffic_password=>$iptraffic_password,

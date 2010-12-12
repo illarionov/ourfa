@@ -7,7 +7,7 @@ BEGIN {
    }
 };
 
-use Test::More tests => 28;
+use Test::More tests => 51;
 use Ourfa;
 use Socket;
 use Data::Dumper;
@@ -137,9 +137,47 @@ my $ourfa = Ourfa->new(
    password=>$ENV{OURFA_PASSWORD} || 'test'
 );
 
-my $h = $ourfa->rpcf_core_version();
+$h = $ourfa->rpcf_core_version();
 isa_ok($h, "HASH", "returns hash");
 ok(defined $h->{core_version});
 diag("core_version: " . $h->{core_version});
 
+
+#Test ip_address on rpcf_add_ipzone
+my @testips = (
+   ["0.0.0.0",         "255.255.255.0",   "0.0.0.1"],
+   ["192.168.0.0",     "255.255.0.0",     "192.168.1.0"],
+   ["10.10.1.0",       "255.255.255.0",   "10.10.1.1"],
+   ["10.10.2.2",       "255.255.255.255", "10.10.2.2"],
+   ["55.55.55.55",     "255.255.255.255", "55.55.55.55"],
+   ["240.240.240.240", "255.255.255.255", "240.240.240.240"]
+);
+
+#XXX: gateAway is a typo in api.xml
+my $zone_id = $ourfa->rpcf_add_ipzone(
+   id => 0,
+   name => 'testzone',
+   count => scalar(@testips),
+   zones => [ map { net=>inet_aton($_->[0]),
+      mask => inet_aton($_->[1]),
+      gateaway => inet_aton($_->[2])
+   }, @testips ]
+);
+
+ok($zone_id->{id} > 0, "create new IP zone");
+
+my $z = $ourfa->rpcf_get_ipzone(id=>$zone_id->{id});
+isa_ok($h, "HASH", "returns hash");
+is($z->{count}, scalar(@testips), "all ip zones added");
+is($z->{name}, "testzone", "same zone name");
+#diag("ip zone: " . Dumper($z));
+
+isa_ok($z->{'array-1'}, "ARRAY", "zones is array");
+
+for (my $i = 0; $i < scalar(@testips); $i++) {
+   is(inet_ntoa($z->{'array-1'}->[$i]->{'net'}), $testips[$i]->[0], "net $i");
+   is(inet_ntoa($z->{'array-1'}->[$i]->{'mask'}), $testips[$i]->[1], "mask $i");
+   #XXX: gateAway is a typo in api.xml
+   is(inet_ntoa($z->{'array-1'}->[$i]->{'gateaway'}), $testips[$i]->[2], "gateway $i");
+}
 
