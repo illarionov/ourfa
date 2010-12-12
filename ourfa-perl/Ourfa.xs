@@ -1388,17 +1388,17 @@ ourfa_script_call_call(CLASS, connection, xmlapi, func_name, h=NO_INIT)
    CODE:
       f = ourfa_xmlapi_func(xmlapi, func_name);
       if (f == NULL)
-	    croak("%s: Function `%s` not found in API",
-		  "Ourfa::Script::Call::call",
+	    croak("%s: Function `%s` not found in API\n",
+		  "Ourfa::ScriptCall::call",
 		  func_name);
       if (items <= 4)
 	 h = NULL;
       if (hv2ourfah(h, &ourfa_in) <= 0)
-	    croak("Can not parse input parameters");
+	    croak("Can not parse input parameters\n");
       ret = ourfa_exec(connection, f, ourfa_in, &RETVAL, err, sizeof(err));
       ourfa_hash_free(ourfa_in);
       if (ret != OURFA_OK)
-	    croak("%s: %s", "Ourfa::Script::Call::call", err);
+	    croak("%s: %s\n", "Ourfa::ScriptCall::call", err);
       sv_2mortal((SV*)RETVAL);
    OUTPUT:
       RETVAL

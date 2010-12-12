@@ -17,6 +17,7 @@ use Ourfa::FuncCall;
 use Ourfa::ScriptCall;
 
 our @ISA = qw(Exporter);
+our @CARP_NOT;
 
 # Items to export into callers namespace by default. Note: do not export
 # names by default without a very good reason. Use EXPORT_OK instead.
@@ -359,16 +360,18 @@ sub new {
 sub call {
    my ($self, $method, $params) = @_;
 
-   $self->connection->open
+   eval {
+      $self->connection->open
       if (!$self->connection->is_connected);
 
-   return Ourfa::ScriptCall->call(
-      $self->connection,
-      $self->xmlapi,
-      $method,
-      $params
-   );
-
+      return Ourfa::ScriptCall->call(
+	 $self->connection,
+	 $self->xmlapi,
+	 $method,
+	 $params
+      );
+   };
+   croak($@) if ($@);
 }
 
 =head2 rpcf_*() rpcf_ function call
