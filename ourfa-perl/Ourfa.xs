@@ -41,12 +41,12 @@
 #define NEED_sv_2pv_flags
 
 /*  Debugging output */
-#if 0
+#if 1
 #define PR(s) warn(s);
 #define PRN(format, ... ) warn(format, __VA_ARGS__);
 #else
 #define PR(s)
-#define PRN(s,n)
+#define PRN(format, ...)
 #endif
 
 #define OURFA2HV_S_SIZE 20
@@ -126,10 +126,20 @@ static int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct 
       case SVt_PVMG:
 	 {
 	    char *str;
-	    str = SvPV_nolen(sv);
-	    PRN("adding key: %s idx: %s str: %s\n", key, idx->idx_list_s, str);
-	    if (ourfa_hash_set_string(res, key, idx->idx_list_s, str) != 0)
-	       err = -1;
+	    STRLEN len;
+	    str = SvPV(sv, len);
+	    if ((len > 0) && (strlen(str) != len)) {
+	       /* Binary data. Set as ip  */
+	       struct in_addr ip;
+	       ip.s_addr = sv2in_addr_t(sv, "hv2ourfah_add_val");
+	       PRN("adding key: %s idx: %s ip: %s\n", key, idx->idx_list_s, inet_ntoa(ip));
+	       if (ourfa_hash_set_ip(res, key, idx->idx_list_s, ip.s_addr) != 0)
+		  err = -1;
+	    }else {
+	       PRN("adding key: %s idx: %s str: %s\n", key, idx->idx_list_s, str);
+	       if (ourfa_hash_set_string(res, key, idx->idx_list_s, str) != 0)
+		  err = -1;
+	    }
 	 }
 	 break;
       case SVt_PVAV:
