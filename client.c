@@ -40,6 +40,9 @@
 
 #define DEFAULT_HOST "localhost"
 #define DEFAULT_PORT "11758"
+#define DEFAULT_TIMEOUT 30
+#define STR_(x) #x
+#define STR(x) STR_(x)
 #define DEFAULT_HOST_PORT ( DEFAULT_HOST ":" DEFAULT_PORT )
 
 #define DEFAULT_CONFIG_FILE "/netup/utm5/utm5_urfaclient.cfg"
@@ -70,6 +73,7 @@ struct params_t {
    struct in_addr session_ip_buf;
    FILE *debug;
    unsigned show_help;
+   unsigned timeout;
    enum output_format_t output_format;
    ourfa_hash_t *work_h;
    ourfa_hash_t *orig_h;
@@ -160,6 +164,7 @@ static int help(ourfa_xmlapi_func_t *f)
 	 " %-10s %s\n"
 	 " %-10s %s\n"
 	 " %-10s %s\n"
+	 " %-10s %s\n"
 	 "\n",
 	 "-help", "This message",
 	 "-a", "Action name",
@@ -176,6 +181,7 @@ static int help(ourfa_xmlapi_func_t *f)
 	 "-x", "URFA server xml dir. (default: " DEFAULT_XML_DIR ")",
 	 "-u", "Login as user (not admin)",
 	 "-dealer", "Login as dealer (not admin)",
+	 "-timeout", "Timeout in seconds (default: " STR(DEFAULT_TIMEOUT) ")",
 	 "-o", "Output format: xml (default), batch, or hash",
 	 "-debug",      "Turn on debug",
 	 "-datafile", "Load array datas from file",
@@ -213,6 +219,7 @@ static int init_params(struct params_t *params)
    params->session_id = NULL;
    params->debug = NULL;
    params->show_help = 0;
+   params->timeout = DEFAULT_TIMEOUT;
    params->output_format = OUTPUT_FORMAT_XML;
    params->work_h = ourfa_hash_new(0);
    if (params->work_h == NULL) {
@@ -375,6 +382,31 @@ static int set_sysparam_session_ip(struct params_t *params,
    return 2;
 }
 
+static int set_sysparam_timeout(struct params_t *params,
+      const char *name __unused,
+      const char *val,
+      unsigned is_config_file __unused,
+      void *data __unused)
+{
+   char *endv;
+   unsigned tmout;
+
+   if (val == NULL || (val[0] == '\0'))
+      return -1;
+
+   tmout = strtoul(val, &endv, 10);
+
+   if (*endv != '\0') {
+      fprintf(stderr, "Wrong timeout `%s`\n", val);
+      return -1;
+   }
+
+   params->timeout = tmout;
+
+   return 2;
+}
+
+
 static int set_sysparam_show_help(struct params_t *params,
       const char *name __unused,
       const char *val __unused,
@@ -425,6 +457,8 @@ static int load_system_param(struct params_t *params, const char *name, const ch
       {"u", NULL,            set_sysparam_login_type_user,
 	 NULL,},
       {"dealer", NULL,            set_sysparam_login_type_dealer,
+	 NULL,},
+      {"timeout", "connection_timeout", set_sysparam_timeout,
 	 NULL,},
       {"debug", NULL,            set_sysparam_debug,
 	 NULL,},
@@ -895,6 +929,8 @@ int main(int argc, char **argv)
    assert(res == OURFA_OK);
    free(host_port);
    res = ourfa_connection_set_login_type(connection, params.login_type);
+   assert(res == OURFA_OK);
+   res = ourfa_connection_set_timeout(connection, params.timeout);
    assert(res == OURFA_OK);
    if (params.session_id) {
       res = ourfa_connection_set_session_id(connection, params.session_id);
