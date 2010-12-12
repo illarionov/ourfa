@@ -303,7 +303,7 @@ sub new {
 	    'user' => scalar(constant("OURFA_LOGIN_USER")),
 	    'card' => scalar(constant("OURFA_LOGIN_CARD"))
 	 );
-	 croak("Wrong login_type $type")
+	 croak("Wrong login_type `$type`. Allowed: admin, user, card")
 	    if (!exists($types{$type}));
 	 return $self->connection->login_type($types{$type});
       },
@@ -317,7 +317,7 @@ sub new {
 	    'cert' => scalar(constant("OURFA_SSL_TYPE_CRT")),
 	    'rsa_cert' => scalar(constant("OURFA_SSL_TYPE_RSA_CRT"))
 	 );
-	 croak("Wrong SSL method $type")
+	 croak("Wrong SSL method `$type`. Allowed: none, tlsv1, sslv3, cert, rsa_cert")
 	    if (!exists($types{$type}));
 	 return $self->connection->ssl_ctx->ssl_type($types{$type});
       },
@@ -341,7 +341,8 @@ sub new {
       if (exists($params_subs{$k})) {
 	 $params_subs{$k}($self, $v);
       }else {
-	 croak("Unknown attribute $k\n");
+	 croak("Unknown attribute `$k`. Allowed attributes: "
+	    . join(', ', keys(%params_subs)) .  "\n");
       }
    }
 

@@ -7,7 +7,7 @@ BEGIN {
    }
 };
 
-use Test::More tests => 26;
+use Test::More tests => 28;
 use Ourfa;
 use Socket;
 use Data::Dumper;
@@ -124,7 +124,22 @@ SKIP: {
 	 credit => -5000
       });
    isa_ok($h, "HASH", "rpcf_add_user_new returns hash");
-   diag(Dumper($h));
+   #diag(Dumper($h));
 }
+
+
+my $ourfa = Ourfa->new(
+   api_xml_file=>$ENV{OURFA_XML_API} || "/netup/utm5/xml/api.xml",
+   login_type=>'admin',
+   server=>$ENV{OURFA_HOSTNAME} || "localhost",
+   ssl=>'sslv3',
+   login=>$ENV{OURFA_LOGIN} || 'test',
+   password=>$ENV{OURFA_PASSWORD} || 'test'
+);
+
+my $h = $ourfa->rpcf_core_version();
+isa_ok($h, "HASH", "returns hash");
+ok(defined $h->{core_version});
+diag("core_version: " . $h->{core_version});
 
 
