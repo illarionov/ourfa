@@ -293,7 +293,6 @@ sub new {
    my ($class, %params) = @_;
 
    our %params_subs = (
-      'api_xml_file' => sub {shift->xmlapi->load_apixml(shift)},
       'login' => sub { shift->connection->login(shift) },
       'password' => sub {shift->connection->password(shift) },
       'login_type' => sub {
@@ -336,6 +335,15 @@ sub new {
 
    $self->xmlapi(Ourfa::Xmlapi->new());
    $self->connection(Ourfa::Connection->new());
+
+   my $api_xml_file = delete($params{api_xml_file});
+   my $api_xml_dir = delete($params{api_xml_dir});
+
+   if (defined($api_xml_file) || defined($api_xml_dir)) {
+      $api_xml_file ||= 'api.xml';
+      $api_xml_dir ||= '.';
+      $self->xmlapi->load_apixml($api_xml_dir . '/' . $api_xml_file);
+   }
 
    while (my ($k, $v) = each (%params)) {
       if (exists($params_subs{$k})) {
