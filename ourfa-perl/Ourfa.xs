@@ -36,6 +36,7 @@
 
 #include "const-c.inc"
 
+#define NEED_sv_2pvbyte
 #define NEED_newRV_noinc
 #define NEED_newSVpvn_flags
 #define NEED_sv_2pv_flags
@@ -98,7 +99,7 @@ static int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct 
 
    init_idx_list_s(idx);
 
-   if (SvTYPE(sv) == SVt_RV)
+   if (SvROK(sv))
       sv = SvRV(sv);
 
    switch (SvTYPE(sv)) {
@@ -263,6 +264,9 @@ static int hv2ourfah(HV *hv, ourfa_hash_t **h)
       *h = res;
       return 1;
    }
+
+   PRN("Now in %s\n", "hv2ourfah");
+
 
    idx_list.cnt=0;
    hv_iterinit(hv);
