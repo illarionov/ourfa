@@ -764,8 +764,7 @@ int ourfa_connection_recv_packet(ourfa_connection_t *connection,
       ourfa_pkt_t **res,
       const char *descr)
 {
-   ssize_t recv_size;
-   size_t packet_size;
+   ssize_t last_recv_size, recv_size, packet_size;
    ourfa_pkt_t *pkt;
 
    struct {
@@ -782,15 +781,20 @@ int ourfa_connection_recv_packet(ourfa_connection_t *connection,
       return connection->printf_err(OURFA_ERROR_NOT_CONNECTED, connection->err_ctx, NULL);
    }
 
-   recv_size = BIO_read(connection->bio, &pkt_hdr, 4);
-
-   if (recv_size == 0) {
-      return connection->printf_err(OURFA_ERROR_NO_DATA, connection->err_ctx, NULL);
-   }else if (recv_size < 0) {
-      return close_bio_with_err(connection, "recv_pkt_hdr BIO_read");
-   }else if (recv_size < 4) {
-      return close_bio_with_err(connection, "recv_pkt_hdr BIO_read recv_size<4");
+   recv_size = 0;
+   for(;;) {
+      last_recv_size = BIO_read(connection->bio, &pkt_hdr, 4-recv_size);
+      recv_size += last_recv_size;
+      if (recv_size >= 4)
+	 break;
+      if (last_recv_size <= 0) {
+	 if (!BIO_should_retry(connection->bio)) {
+	    return close_bio_with_err(connection, "recv_pkt_hdr BIO_read");
+	 }
+      }
    }
+
+   assert(recv_size == 4);
 
    /* Check header */
    if (!ourfa_pkt_is_valid_code(pkt_hdr.code)) {
@@ -810,14 +814,25 @@ int ourfa_connection_recv_packet(ourfa_connection_t *connection,
    }
 
    memcpy(buf, &pkt_hdr, 4);
-   recv_size = BIO_read(connection->bio, buf+4, packet_size-4)+4;
-
-   if (recv_size < 4) {
-      int res;
-      res = close_bio_with_err(connection, "recv_pkt_data");
-      free(buf);
-      return res;
+   assert(recv_size == 4);
+   if (packet_size != recv_size) {
+      for(;;) {
+	 last_recv_size = BIO_read(connection->bio, buf+recv_size, packet_size-recv_size);
+	 recv_size += last_recv_size;
+	 if (recv_size >= packet_size)
+	    break;
+	 if (last_recv_size <= 0) {
+	    if (!BIO_should_retry(connection->bio)) {
+	       int res;
+	       res = close_bio_with_err(connection, "recv_pkt_data");
+	       free(buf);
+	       return res;
+	    }
+	 }
+      }
    }
+
+   assert(recv_size == packet_size);
 
    /* Create new packet */
    pkt = ourfa_pkt_new2(buf, recv_size);
