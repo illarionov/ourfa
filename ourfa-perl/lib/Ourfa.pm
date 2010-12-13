@@ -341,8 +341,8 @@ sub new {
 
    if (defined($api_xml_file) || defined($api_xml_dir)) {
       $api_xml_file ||= 'api.xml';
-      $api_xml_dir ||= '.';
-      $self->xmlapi->load_apixml($api_xml_dir . '/' . $api_xml_file);
+      $self->xmlapi->load_apixml(defined($api_xml_dir) ?
+	    $api_xml_dir . '/' . $api_xml_file : $api_xml_file);
    }
 
    while (my ($k, $v) = each (%params)) {
