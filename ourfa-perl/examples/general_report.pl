@@ -30,7 +30,8 @@ my $ourfa = Ourfa->new(
       login=>$ENV{OURFA_LOGIN} || 'init',
       password=>$ENV{OURFA_PASSWORD} || 'init',
       timeout => 500,
-      #debug=>1
+      debug=>$ENV{OURFA_DEBUG}+0,
+#      ssl => 'sslv3'
     );
 
 my $report = $ourfa->rpcf_general_report_new(

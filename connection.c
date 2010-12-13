@@ -586,13 +586,11 @@ static int login(ourfa_connection_t *connection)
    assert(connection);
    read_pkt = NULL;
    write_pkt = NULL;
-   res = OURFA_ERROR_OTHER;
 
    /* Read initial packet */
-   if (ourfa_connection_recv_packet(connection, &read_pkt, "RECVD HANDSHAKE PKT...\n") <= 0) {
-      res = OURFA_ERROR_NO_DATA;
+   res = ourfa_connection_recv_packet(connection, &read_pkt, "RECVD HANDSHAKE PKT...\n");
+   if (res != OURFA_OK)
       goto login_exit;
-   }
 
    if (ourfa_pkt_code(read_pkt) != OURFA_PKT_SESSION_INIT) {
       res = connection->printf_err(OURFA_ERROR_WRONG_INITIAL_PACKET,
@@ -604,7 +602,7 @@ static int login(ourfa_connection_t *connection)
    /* Generate MD5 hash */
    attr_md5_salt = ourfa_pkt_get_attrs_list(read_pkt, OURFA_ATTR_SESSION_ID);
    if (attr_md5_salt == NULL) {
-      connection->printf_err(OURFA_ERROR_WRONG_INITIAL_PACKET,
+      res = connection->printf_err(OURFA_ERROR_WRONG_INITIAL_PACKET,
         connection->err_ctx, "Wrong code: no MD5 challenge attribute");
       goto login_exit;
    }
@@ -649,10 +647,9 @@ static int login(ourfa_connection_t *connection)
    }
 
    /* Send packet */
-   if (ourfa_connection_send_packet(connection, write_pkt, "SENDING LOGIN PACKET ...\n") <= 0) {
-      res = OURFA_ERROR_SOCKET;
+   res = ourfa_connection_send_packet(connection, write_pkt, "SENDING LOGIN PACKET ...\n");
+   if (res != OURFA_OK)
       goto login_exit;
-   }
 
    /* INIT session_id  */
    if ((connection->session_id == NULL)
@@ -666,7 +663,8 @@ static int login(ourfa_connection_t *connection)
    read_pkt = NULL;
 
    /* Read response */
-   if (ourfa_connection_recv_packet(connection, &read_pkt, "RECVD LOGIN RESPONSE PKT ...\n") <= 0) {
+   res = ourfa_connection_recv_packet(connection, &read_pkt, "RECVD LOGIN RESPONSE PKT ...\n");
+   if (res != OURFA_OK) {
       res = OURFA_ERROR_NO_DATA;
       goto login_exit;
    }
@@ -724,7 +722,6 @@ static int login(ourfa_connection_t *connection)
       }
    }
 
-   res=OURFA_OK;
 login_exit:
    ourfa_pkt_free(read_pkt);
    ourfa_pkt_free(write_pkt);
@@ -734,7 +731,7 @@ login_exit:
    return res;
 }
 
-ssize_t ourfa_connection_send_packet(ourfa_connection_t *connection,
+int ourfa_connection_send_packet(ourfa_connection_t *connection,
       const ourfa_pkt_t *pkt,
       const char *descr)
 {
@@ -743,7 +740,7 @@ ssize_t ourfa_connection_send_packet(ourfa_connection_t *connection,
    const void *buf;
 
    if (connection == NULL || pkt == NULL)
-      return -1;
+      return OURFA_ERROR_NOT_CONNECTED;
 
    ourfa_pkt_dump(pkt, connection->debug_stream,
 	 descr ? descr : "SEND\n");
@@ -760,10 +757,10 @@ ssize_t ourfa_connection_send_packet(ourfa_connection_t *connection,
    if (transmitted_size < (ssize_t)pkt_size)
       return close_bio_with_err(connection, "Can not send packet");
 
-   return transmitted_size;
+   return OURFA_OK;
 }
 
-ssize_t ourfa_connection_recv_packet(ourfa_connection_t *connection,
+int ourfa_connection_recv_packet(ourfa_connection_t *connection,
       ourfa_pkt_t **res,
       const char *descr)
 {
@@ -782,58 +779,56 @@ ssize_t ourfa_connection_recv_packet(ourfa_connection_t *connection,
       return 0;
 
    if (!ourfa_connection_is_connected(connection)) {
-      connection->printf_err(OURFA_ERROR_NOT_CONNECTED, connection->err_ctx, NULL);
-      return -1;
+      return connection->printf_err(OURFA_ERROR_NOT_CONNECTED, connection->err_ctx, NULL);
    }
 
    recv_size = BIO_read(connection->bio, &pkt_hdr, 4);
 
    if (recv_size == 0) {
-      connection->printf_err(OURFA_ERROR_NO_DATA, connection->err_ctx, NULL);
-      return 0;
+      return connection->printf_err(OURFA_ERROR_NO_DATA, connection->err_ctx, NULL);
    }else if (recv_size < 0) {
-      close_bio_with_err(connection, "recv_pkt_hdr BIO_read");
-      return -1;
+      return close_bio_with_err(connection, "recv_pkt_hdr BIO_read");
    }else if (recv_size < 4) {
-      close_bio_with_err(connection, "recv_pkt_hdr BIO_read recv_size<4");
-      return -1;
+      return close_bio_with_err(connection, "recv_pkt_hdr BIO_read recv_size<4");
    }
 
    /* Check header */
    if (!ourfa_pkt_is_valid_code(pkt_hdr.code)) {
-      connection->printf_err(OURFA_ERROR_INVALID_PACKET_FORMAT, connection->err_ctx,
+      return connection->printf_err(OURFA_ERROR_INVALID_PACKET_FORMAT, connection->err_ctx,
 	    "Invalid packet code: 0x%x",(unsigned)pkt_hdr.code);
-      return -1;
    }
 
    if (pkt_hdr.version != OURFA_PROTO_VERSION) {
-      connection->printf_err(OURFA_ERROR_INVALID_PACKET_FORMAT, connection->err_ctx,
+      return connection->printf_err(OURFA_ERROR_INVALID_PACKET_FORMAT, connection->err_ctx,
 	    "Invalid protocol version: 0x%x", (unsigned)pkt_hdr.code);
-      return -1;
    }
 
    packet_size = ntohs(pkt_hdr.length);
    buf = (uint8_t *)malloc(packet_size);
    if (buf == NULL) {
-      connection->printf_err(OURFA_ERROR_SYSTEM, connection->err_ctx, NULL);
-      return -1;
+      return connection->printf_err(OURFA_ERROR_SYSTEM, connection->err_ctx, NULL);
    }
 
    memcpy(buf, &pkt_hdr, 4);
    recv_size = BIO_read(connection->bio, buf+4, packet_size-4)+4;
 
    if (recv_size < 4) {
-      close_bio_with_err(connection, "recv_pkt_data");
+      int res;
+      res = close_bio_with_err(connection, "recv_pkt_data");
       free(buf);
-      return -1;
+      return res;
    }
 
    /* Create new packet */
    pkt = ourfa_pkt_new2(buf, recv_size);
    free(buf);
    if (pkt == NULL) {
-      connection->printf_err(OURFA_ERROR_SYSTEM, connection->err_ctx, NULL);
-      return -1;
+      int res;
+      if (errno)
+	 res = connection->printf_err(OURFA_ERROR_SYSTEM, connection->err_ctx, NULL);
+      else
+	 res = connection->printf_err(OURFA_ERROR_INVALID_PACKET_FORMAT, connection->err_ctx, NULL);
+      return res;
    }
 
    *res = pkt;
@@ -841,7 +836,7 @@ ssize_t ourfa_connection_recv_packet(ourfa_connection_t *connection,
    ourfa_pkt_dump(pkt, connection->debug_stream,
 	 descr ? descr : "RECVD\n");
 
-   return recv_size;
+   return OURFA_OK;
 }
 
 int ourfa_connection_start_func_call(ourfa_connection_t *connection, int func_id)
@@ -852,7 +847,7 @@ int ourfa_connection_start_func_call(ourfa_connection_t *connection, int func_id
    int res;
 
    if (connection == NULL)
-      return -1;
+      return OURFA_ERROR_NOT_CONNECTED;
 
    pkt = recv_pkt = NULL;
    res = OURFA_ERROR_NOT_CONNECTED;
@@ -861,10 +856,12 @@ int ourfa_connection_start_func_call(ourfa_connection_t *connection, int func_id
    if (pkt == NULL)
       return connection->printf_err(OURFA_ERROR_SYSTEM, connection->err_ctx, NULL);
 
-   if (ourfa_connection_send_packet(connection, pkt, "SEND START FUNC CALL PKT ...\n") <= 0)
+   res = ourfa_connection_send_packet(connection, pkt, "SEND START FUNC CALL PKT ...\n");
+   if (res != OURFA_OK)
       goto ourfa_start_call_exit;
 
-   if (ourfa_connection_recv_packet(connection, &recv_pkt, "RECVD START FUNC CALL RESPONSE PKT ...\n") <= 0)
+   res = ourfa_connection_recv_packet(connection, &recv_pkt, "RECVD START FUNC CALL RESPONSE PKT ...\n");
+   if (res != OURFA_OK)
       goto ourfa_start_call_exit;
 
    if (ourfa_pkt_code(recv_pkt) != OURFA_PKT_SESSION_DATA) {
@@ -1096,31 +1093,32 @@ static void pktbuf_free(struct pktbuf_t *buf)
 
 static int read_pkt_to_buf(ourfa_connection_t *conn)
 {
-   ssize_t recvd_bytes;
+   int res;
    ourfa_pkt_t *pkt;
    const ourfa_attr_hdr_t *attr_list;
 
    if (!conn || !ourfa_connection_is_connected(conn))
-      return -1;
+      return OURFA_ERROR_NOT_CONNECTED;
 
    if (conn->rbuf.term_attr_in_tail)
-      return 0;
+      return OURFA_OK;
 
-   recvd_bytes = ourfa_connection_recv_packet(conn, &pkt, "RECEIVED FUNC OUTPUT PKT ...\n");
-   if (recvd_bytes <= 0)
-      return -1;
+   res = ourfa_connection_recv_packet(conn, &pkt, "RECEIVED FUNC OUTPUT PKT ...\n");
+   if (res != OURFA_OK)
+      return res;
 
    if (pktbuf_queue(&conn->rbuf, pkt) != 0) {
-      conn->printf_err(OURFA_ERROR_SYSTEM, conn->err_ctx, "Can not insert packet to queue");
+      /* XXX */
+      res = conn->printf_err(OURFA_ERROR_SYSTEM, conn->err_ctx, "Can not insert packet to queue");
       ourfa_pkt_free(pkt);
-      return -1;
+      return res;
    }
 
    /* Check for termination attribute */
    attr_list = ourfa_pkt_get_attrs_list(pkt, OURFA_ATTR_TERMINATION);
    conn->rbuf.term_attr_in_tail = (attr_list != NULL);
 
-   return recvd_bytes;
+   return res;
 }
 
 /* Read next attribute and put it into res
@@ -1132,7 +1130,7 @@ static int read_pkt_to_buf(ourfa_connection_t *conn)
  */
 int ourfa_connection_read_attr(ourfa_connection_t *conn, const ourfa_attr_hdr_t **res)
 {
-   ssize_t recvd_bytes;
+   int read_pkt_res;
 
    if (conn == NULL)
       return OURFA_ERROR_NOT_CONNECTED;
@@ -1144,8 +1142,9 @@ int ourfa_connection_read_attr(ourfa_connection_t *conn, const ourfa_attr_hdr_t 
       if (conn->rbuf.head != NULL) {
 	 ourfa_pkt_free(pktbuf_dequeue(&conn->rbuf));
       }else {
-	 recvd_bytes = read_pkt_to_buf(conn);
-	 if (recvd_bytes < 0)
+	 read_pkt_res = read_pkt_to_buf(conn);
+	 if (read_pkt_res != OURFA_OK)
+	    /* XXX  */
 	    return OURFA_ERROR_NO_DATA;
       }
    }
@@ -1270,19 +1269,19 @@ int ourfa_connection_flush_read(ourfa_connection_t *conn)
   if (ourfa_connection_is_connected(conn) && !conn->rbuf.term_attr_in_tail) {
      do {
 	res = ourfa_connection_recv_packet(conn, &pkt, "FLUSHED PKT ...\n");
-	if (res > 0) {
+	if (res == OURFA_OK) {
 	 attr_list = ourfa_pkt_get_attrs_list(pkt, OURFA_ATTR_TERMINATION);
 	 if (attr_list != NULL)
-	    res=-1;
+	    res=OURFA_ERROR_OTHER;
 	 ourfa_pkt_free(pkt);
 	}
-     }while (res > 0);
+     }while (res == OURFA_OK);
   }
 
   pktbuf_free(&conn->rbuf);
   conn->rbuf.term_attr_in_tail = 0;
 
-  return 0;
+  return OURFA_OK;
 }
 
 
@@ -1455,17 +1454,17 @@ static int partial_flush_write(ourfa_connection_t *conn)
 
    /* Flush ready packets from queue */
    while (conn->wbuf.head != conn->wbuf.tail) {
-      size_t sent;
+      int res;
       pkt = conn->wbuf.tail->pkt;
-      sent = ourfa_connection_send_packet(conn, pkt, "SEND DATA ...\n");
-      if (sent > 0){
+      res = ourfa_connection_send_packet(conn, pkt, "SEND DATA ...\n");
+      if (res == OURFA_OK){
 	 ourfa_pkt_t *pkt2;
 	 pkt2 = pktbuf_dequeue(&conn->wbuf);
 	 assert(pkt == pkt2);
 	 ourfa_pkt_free(pkt2);
       }else
 	 /* Leave error packet in queue */
-	 return OURFA_ERROR_OTHER;
+	 return res;
    }
 
    return OURFA_OK;
@@ -1473,13 +1472,13 @@ static int partial_flush_write(ourfa_connection_t *conn)
 
 int ourfa_connection_flush_write(ourfa_connection_t *conn)
 {
-  size_t sent;
+  int res;
   ourfa_pkt_t *pkt;
 
-  sent = 1;
+  res = OURFA_OK;
   if (ourfa_connection_is_connected(conn)) {
-     while ((sent > 0) && (pkt = pktbuf_dequeue(&conn->wbuf)) != NULL) {
-	sent = ourfa_connection_send_packet(conn, pkt, "SEND DATA ...\n");
+     while ((res == OURFA_OK) && (pkt = pktbuf_dequeue(&conn->wbuf)) != NULL) {
+	res = ourfa_connection_send_packet(conn, pkt, "SEND DATA ...\n");
 	ourfa_pkt_free(pkt);
      }
   }
@@ -1487,7 +1486,7 @@ int ourfa_connection_flush_write(ourfa_connection_t *conn)
   pktbuf_free(&conn->wbuf);
   conn->wbuf.term_attr_in_tail = 0;
 
-  return sent > 0 ? OURFA_OK : OURFA_ERROR_OTHER;
+  return res;
 }
 
 

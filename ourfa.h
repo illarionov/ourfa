@@ -27,7 +27,7 @@
 #ifndef _OURFA_H
 #define _OURFA_H
 
-#define OURFA_LIB_VERSION	 521008000
+#define OURFA_LIB_VERSION	 521008001
 #define OURFA_PROTO_VERSION	 0x23
 
 #define OURFA_PKT_SESSION_INIT   0xc0
@@ -287,10 +287,10 @@ int ourfa_connection_set_debug_stream(ourfa_connection_t *connection, FILE *stre
 int ourfa_connection_open(ourfa_connection_t *connection);
 int ourfa_connection_close(ourfa_connection_t *connection);
 
-ssize_t ourfa_connection_send_packet(ourfa_connection_t *connection,
+int ourfa_connection_send_packet(ourfa_connection_t *connection,
       const ourfa_pkt_t *pkt,
       const char *descr);
-ssize_t ourfa_connection_recv_packet(ourfa_connection_t *connection,
+int ourfa_connection_recv_packet(ourfa_connection_t *connection,
       ourfa_pkt_t **res,
       const char *descr);
 
