@@ -300,7 +300,10 @@ sub new {
 	 my %types= (
 	    'admin' =>scalar(constant("OURFA_LOGIN_SYSTEM")),
 	    'user' => scalar(constant("OURFA_LOGIN_USER")),
-	    'card' => scalar(constant("OURFA_LOGIN_CARD"))
+	    'card' => scalar(constant("OURFA_LOGIN_CARD")),
+	    constant("OURFA_LOGIN_SYSTEM")."" => scalar(constant("OURFA_LOGIN_SYSTEM")),
+	    constant("OURFA_LOGIN_USER")."" => scalar(constant("OURFA_LOGIN_USER")),
+	    constant("OURFA_LOGIN_CARD")."" => scalar(constant("OURFA_LOGIN_CARD"))
 	 );
 	 croak("Wrong login_type `$type`. Allowed: admin, user, card")
 	    if (!exists($types{$type}));
@@ -314,7 +317,12 @@ sub new {
 	    'tlsv1' => scalar(constant("OURFA_SSL_TYPE_TLS1")),
 	    'sslv3' => scalar(constant("OURFA_SSL_TYPE_SSL3")),
 	    'cert' => scalar(constant("OURFA_SSL_TYPE_CRT")),
-	    'rsa_cert' => scalar(constant("OURFA_SSL_TYPE_RSA_CRT"))
+	    'rsa_cert' => scalar(constant("OURFA_SSL_TYPE_RSA_CRT")),
+	    constant("OURFA_SSL_TYPE_NONE")."" => scalar(constant("OURFA_SSL_TYPE_NONE")),
+	    constant("OURFA_SSL_TYPE_TLS1")."" => scalar(constant("OURFA_SSL_TYPE_TLS1")),
+	    constant("OURFA_SSL_TYPE_SSL3")."" => scalar(constant("OURFA_SSL_TYPE_SSL3")),
+	    constant("OURFA_SSL_TYPE_CRT")."" => scalar(constant("OURFA_SSL_TYPE_CRT")),
+	    constant("OURFA_SSL_TYPE_RSA_CRT")."" => scalar(constant("OURFA_SSL_TYPE_RSA_CRT"))
 	 );
 	 croak("Wrong SSL method `$type`. Allowed: none, tlsv1, sslv3, cert, rsa_cert")
 	    if (!exists($types{$type}));
