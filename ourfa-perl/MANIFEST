@@ -14,3 +14,4 @@ lib/Ourfa/ScriptCall.pm
 lib/Ourfa/Xmlapi.pm
 lib/Ourfa/Xmlapi/Func.pm
 lib/Ourfa/Xmlapi/Func/Node.pm
+typemap

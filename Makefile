@@ -49,6 +49,27 @@ install: ourfa_client
 clean:
 	rm -f *.o ourfa_client libourfa.a
 
+DISTNAME=ourfa-521008001
+
+dist:
+	rm -f $(DISTNAME)
+	ln -s -f . $(DISTNAME)
+	tar czvf $(DISTNAME).tar.gz \
+	   $(DISTNAME)/Makefile \
+	   $(DISTNAME)/README \
+	   $(DISTNAME)/ourfa.h \
+	   $(DISTNAME)/pkt.c \
+	   $(DISTNAME)/error.c \
+	   $(DISTNAME)/connection.c \
+	   $(DISTNAME)/func_call.c \
+	   $(DISTNAME)/ssl_ctx.c \
+	   $(DISTNAME)/hash.c \
+	   $(DISTNAME)/xmlapi.c \
+	   $(DISTNAME)/client.c \
+	   $(DISTNAME)/client_dump.c \
+	   $(DISTNAME)/client_datafile.c \
+	   $(DISTNAME)/example.sh
+	rm $(DISTNAME)
 
 pkt.o: pkt.c ourfa.h
 	$(CC) $(CFLAGS) -c pkt.c

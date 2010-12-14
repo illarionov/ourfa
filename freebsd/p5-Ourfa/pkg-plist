@@ -1,6 +1,17 @@
 %%SITE_PERL%%/%%PERL_ARCH%%/Ourfa.pm
+%%SITE_PERL%%/%%PERL_ARCH%%/Ourfa/Connection.pm
+%%SITE_PERL%%/%%PERL_ARCH%%/Ourfa/FuncCall.pm
+%%SITE_PERL%%/%%PERL_ARCH%%/Ourfa/SSLCtx.pm
+%%SITE_PERL%%/%%PERL_ARCH%%/Ourfa/ScriptCall.pm
+%%SITE_PERL%%/%%PERL_ARCH%%/Ourfa/Xmlapi.pm
+%%SITE_PERL%%/%%PERL_ARCH%%/Ourfa/Xmlapi/Func.pm
+%%SITE_PERL%%/%%PERL_ARCH%%/Ourfa/Xmlapi/Func/Node.pm
 %%SITE_PERL%%/%%PERL_ARCH%%/auto/Ourfa/.packlist
 %%SITE_PERL%%/%%PERL_ARCH%%/auto/Ourfa/Ourfa.bs
 %%SITE_PERL%%/%%PERL_ARCH%%/auto/Ourfa/Ourfa.so
 %%SITE_PERL%%/%%PERL_ARCH%%/auto/Ourfa/autosplit.ix
 @dirrm %%SITE_PERL%%/%%PERL_ARCH%%/auto/Ourfa
+@dirrm %%SITE_PERL%%/%%PERL_ARCH%%/Ourfa/Xmlapi/Func
+@dirrm %%SITE_PERL%%/%%PERL_ARCH%%/Ourfa/Xmlapi
+@dirrm %%SITE_PERL%%/%%PERL_ARCH%%/Ourfa/
+
