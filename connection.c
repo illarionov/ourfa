@@ -784,14 +784,16 @@ int ourfa_connection_recv_packet(ourfa_connection_t *connection,
    recv_size = 0;
    for(;;) {
       last_recv_size = BIO_read(connection->bio, &pkt_hdr, 4-recv_size);
-      recv_size += last_recv_size;
+      if (last_recv_size <= 0) {
+	 if (!BIO_should_retry(connection->bio)
+	       /* XXX: do not retry on timeout  */
+	       || (errno == EAGAIN))
+	       return close_bio_with_err(connection, "recv_pkt_hdr BIO_read");
+      }else
+	 recv_size += last_recv_size;
+
       if (recv_size >= 4)
 	 break;
-      if (last_recv_size <= 0) {
-	 if (!BIO_should_retry(connection->bio)) {
-	    return close_bio_with_err(connection, "recv_pkt_hdr BIO_read");
-	 }
-      }
    }
 
    assert(recv_size == 4);
@@ -818,17 +820,20 @@ int ourfa_connection_recv_packet(ourfa_connection_t *connection,
    if (packet_size != recv_size) {
       for(;;) {
 	 last_recv_size = BIO_read(connection->bio, buf+recv_size, packet_size-recv_size);
-	 recv_size += last_recv_size;
+	 if (last_recv_size <= 0) {
+	    int close_res;
+	    if (!BIO_should_retry(connection->bio)
+		  /* XXX: do not retry on timeout  */
+		  || (errno == EAGAIN)) {
+	       close_res = close_bio_with_err(connection, "recv_pkt_data");
+	       free(buf);
+	       return close_res;
+	    }
+	 }else
+	    recv_size += last_recv_size;
+
 	 if (recv_size >= packet_size)
 	    break;
-	 if (last_recv_size <= 0) {
-	    if (!BIO_should_retry(connection->bio)) {
-	       int res;
-	       res = close_bio_with_err(connection, "recv_pkt_data");
-	       free(buf);
-	       return res;
-	    }
-	 }
       }
    }
 
