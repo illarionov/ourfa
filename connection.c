@@ -490,7 +490,10 @@ int ourfa_connection_open(ourfa_connection_t *connection)
       hints.ai_family = AF_INET;
       hints.ai_socktype = SOCK_STREAM;
       hints.ai_protocol = IPPROTO_TCP;
-      hints.ai_flags = AI_ADDRCONFIG | AI_CANONNAME;
+      hints.ai_flags = AI_CANONNAME;
+#ifdef AI_ADDRCONFIG
+      hints.ai_flags = AI_ADDRCONFIG;
+#endif
 
       /* Resolv hostname */
       err = getaddrinfo(host_name, service_name, &hints, &res0);

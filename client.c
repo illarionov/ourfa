@@ -48,6 +48,15 @@
 #define DEFAULT_CONFIG_FILE "/netup/utm5/utm5_urfaclient.cfg"
 #define DEFAULT_XML_DIR "/netup/utm5/xml"
 
+#ifdef UNUSED
+#elif defined(__GNUC__)
+# define UNUSED(x) UNUSED_ ## x __attribute__((unused))
+#elif defined(__LCLINT__)
+# define UNUSED(x) /*@unused@*/ x
+#else
+# define UNUSED(x) x
+#endif
+
 enum output_format_t {
    OUTPUT_FORMAT_XML,
    OUTPUT_FORMAT_HASH,
@@ -255,10 +264,10 @@ static void free_params(struct params_t *params)
    ourfa_hash_free(params->orig_h);
 }
 
-static int set_sysparam_string(struct params_t *params __unused,
-      const char *name __unused,
+static int set_sysparam_string(struct params_t *UNUSED(params),
+      const char *UNUSED(name),
       const char *val,
-      unsigned is_config_file __unused,
+      unsigned UNUSED(is_config_file),
       void *data)
 {
    char **dst;
@@ -278,10 +287,10 @@ static int set_sysparam_string(struct params_t *params __unused,
 }
 
 static int set_sysparam_output_format(struct params_t *params,
-      const char *name __unused,
+      const char *UNUSED(name),
       const char *val,
-      unsigned is_config_file __unused,
-      void *data __unused)
+      unsigned (is_config_file),
+      void *UNUSED(data))
 {
    if (val == NULL)
       return -1;
@@ -302,10 +311,10 @@ static int set_sysparam_output_format(struct params_t *params,
 }
 
 static int set_sysparam_login_type_user(struct params_t *params,
-      const char *name __unused,
-      const char *val __unused,
-      unsigned is_config_file __unused,
-      void *data __unused)
+      const char *UNUSED(name),
+      const char *UNUSED(val),
+      unsigned UNUSED(is_config_file),
+      void *UNUSED(data))
 {
    params->login_type = OURFA_LOGIN_USER;
 
@@ -313,10 +322,10 @@ static int set_sysparam_login_type_user(struct params_t *params,
 }
 
 static int set_sysparam_login_type_dealer(struct params_t *params,
-      const char *name __unused,
-      const char *val __unused,
-      unsigned is_config_file __unused,
-      void *data __unused)
+      const char *UNUSED(name),
+      const char *UNUSED(val),
+      unsigned UNUSED(is_config_file),
+      void *UNUSED(data))
 {
    params->login_type = OURFA_LOGIN_CARD;
 
@@ -325,10 +334,10 @@ static int set_sysparam_login_type_dealer(struct params_t *params,
 
 
 static int set_sysparam_debug(struct params_t *params,
-      const char *name __unused,
+      const char *UNUSED(name),
       const char *val,
-      unsigned is_config_file __unused,
-      void *data __unused)
+      unsigned UNUSED(is_config_file),
+      void *UNUSED(data))
 {
 
    if (val && (strcasecmp(val,"no")==0))
@@ -340,10 +349,10 @@ static int set_sysparam_debug(struct params_t *params,
 }
 
 static int set_sysparam_ssl(struct params_t *params,
-      const char *name __unused,
+      const char *UNUSED(name),
       const char *val,
-      unsigned is_config_file __unused,
-      void *data __unused)
+      unsigned UNUSED(is_config_file),
+      void *UNUSED(data))
 {
    if (val==NULL) {
       params->ssl_type=OURFA_SSL_TYPE_SSL3;
@@ -366,10 +375,10 @@ static int set_sysparam_ssl(struct params_t *params,
 }
 
 static int set_sysparam_session_ip(struct params_t *params,
-      const char *name __unused,
+      const char *UNUSED(name),
       const char *val,
-      unsigned is_config_file __unused,
-      void *data __unused)
+      unsigned UNUSED(is_config_file),
+      void *UNUSED(data))
 {
    if (val == NULL)
       return -1;
@@ -383,10 +392,10 @@ static int set_sysparam_session_ip(struct params_t *params,
 }
 
 static int set_sysparam_timeout(struct params_t *params,
-      const char *name __unused,
+      const char *UNUSED(name),
       const char *val,
-      unsigned is_config_file __unused,
-      void *data __unused)
+      unsigned UNUSED(is_config_file),
+      void *UNUSED(data))
 {
    char *endv;
    unsigned tmout;
@@ -408,10 +417,10 @@ static int set_sysparam_timeout(struct params_t *params,
 
 
 static int set_sysparam_show_help(struct params_t *params,
-      const char *name __unused,
-      const char *val __unused,
-      unsigned is_config_file __unused,
-      void *data __unused)
+      const char *UNUSED(name),
+      const char *UNUSED(val),
+      unsigned UNUSED(is_config_file),
+      void *UNUSED(data))
 {
    params->show_help=1;
 

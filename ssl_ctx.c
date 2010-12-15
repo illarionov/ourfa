@@ -185,21 +185,29 @@ int ourfa_ssl_ctx_set_ssl_type(ourfa_ssl_ctx_t *ssl_ctx, unsigned ssl_type)
 	 break;
       case OURFA_SSL_TYPE_TLS1:
 	 SSL_CTX_set_options(ssl_ctx->ssl_ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3);
+#ifdef SSL_CTRL_CLEAR_OPTIONS
 	 SSL_CTX_clear_options(ssl_ctx->ssl_ctx, SSL_OP_NO_TLSv1);
+#endif
 	 break;
       case OURFA_SSL_TYPE_SSL3:
 	 SSL_CTX_set_options(ssl_ctx->ssl_ctx, SSL_OP_NO_TLSv1 | SSL_OP_NO_SSLv2);
+#ifdef SSL_CTRL_CLEAR_OPTIONS
 	 SSL_CTX_clear_options(ssl_ctx->ssl_ctx, SSL_OP_NO_SSLv3);
+#endif
 	 break;
       case OURFA_SSL_TYPE_RSA_CRT:
 	 SSL_CTX_set_options(ssl_ctx->ssl_ctx, SSL_OP_NO_TLSv1 | SSL_OP_NO_SSLv2);
+#ifdef SSL_CTRL_CLEAR_OPTIONS
 	 SSL_CTX_clear_options(ssl_ctx->ssl_ctx, SSL_OP_NO_SSLv3);
+#endif
 	 cipher_list = "RC4-MD5";
 	 break;
       case OURFA_SSL_TYPE_CRT:
 	 /* XXX: Cert, key required  */
 	 SSL_CTX_set_options(ssl_ctx->ssl_ctx, SSL_OP_NO_TLSv1 | SSL_OP_NO_SSLv2);
+#ifdef SSL_CTRL_CLEAR_OPTIONS
 	 SSL_CTX_clear_options(ssl_ctx->ssl_ctx, SSL_OP_NO_SSLv3);
+#endif
 	 break;
       default:
 	 return ssl_ctx->printf_err(OURFA_ERROR_WRONG_SSL_TYPE, ssl_ctx->err_ctx,
