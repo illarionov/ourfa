@@ -2,6 +2,7 @@ SHELL=/bin/sh
 
 CC?=gcc
 AR?=ar
+RANLIB?=ranlib
 CFLAGS?= -W -Wall -O2 -DNDEBUG -s
 #CFLAGS=-W -Wall -g -O0
 #CFLAGS+= -DNDEBUG -s

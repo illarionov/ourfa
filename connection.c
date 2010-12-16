@@ -232,7 +232,11 @@ int ourfa_connection_session_id(ourfa_connection_t *connection, char *res, size_
    unsigned i;
    const char hex[] = {'0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f'};
 
-   assert(buf_size >= 1+2*sizeof(connection->session_id_buf));
+   if(buf_size < 1+2*sizeof(connection->session_id_buf)) {
+   	res[0] = '\0';
+   	return 0;
+   }
+
    if (connection->session_id == NULL) {
       res[0]='\0';
       return 0;
@@ -508,6 +512,7 @@ int ourfa_connection_open(ourfa_connection_t *connection)
    /* Connect */
    tv.tv_sec = ourfa_connection_timeout(connection);
    tv.tv_usec = 0;
+   sockfd = -1;
    for (res = res0; res; res = res->ai_next) {
       sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
       if (sockfd < 0) {

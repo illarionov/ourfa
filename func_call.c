@@ -478,7 +478,7 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 		  break;
 	       }
 	       if (ourfa_hash_get_double(fctx->h,
-			fctx->cur->n.n_math.arg2, NULL, &arg1) != 0) {
+			fctx->cur->n.n_math.arg2, NULL, &arg2) != 0) {
 		  setf_err(fctx, OURFA_ERROR_HASH,
 			"Can not get '%s' value", "arg2");
 		  break;
@@ -492,6 +492,7 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 		     break;
 		  case OURFA_XMLAPI_NODE_DIV:
 		     if (arg2 == 0) {
+		     	dst = 0;
 			setf_err(fctx, OURFA_ERROR_OTHER,
 			      "Division by zero");
 		     }else
@@ -502,6 +503,7 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 		     break;
 		  default:
 		     assert(0);
+		     dst=-1;
 		     break;
 	       }
 	       if ((fctx->err == OURFA_OK)

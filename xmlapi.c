@@ -331,6 +331,7 @@ int ourfa_xmlapi_load_script(ourfa_xmlapi_t *xmlapi,  const char *file,
    int res;
    size_t funcname_len;
    const char *func_name;
+   char *file_dup;
 
    assert(xmlapi);
    assert(file);
@@ -338,16 +339,22 @@ int ourfa_xmlapi_load_script(ourfa_xmlapi_t *xmlapi,  const char *file,
    xmldoc = NULL;
    res = OURFA_OK;
 
-   if (function_name)
+   if (function_name) {
       func_name = function_name;
-   else
-      func_name = basename(file);
+      file_dup = NULL;
+   }else {
+      file_dup = strdup(file);
+      if (file_dup == NULL)
+      	return xmlapi->printf_err(OURFA_ERROR_SYSTEM, xmlapi->err_ctx, NULL);
+      func_name = basename(file_dup);
+   }
 
    if (func_name == NULL
 	 || func_name[0] == '\0'
 	 || func_name[0] == '\\') {
       res = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
 	    "Wrong function name");
+      free(file_dup);
       return res;
    }
 
@@ -355,6 +362,7 @@ int ourfa_xmlapi_load_script(ourfa_xmlapi_t *xmlapi,  const char *file,
    f = (ourfa_xmlapi_func_t *)malloc(sizeof(*f)+funcname_len+2);
    if (f == NULL) {
       res = xmlapi->printf_err(OURFA_ERROR_SYSTEM, xmlapi->err_ctx, NULL);
+      free(file_dup);
       return res;
    }
 
@@ -362,6 +370,7 @@ int ourfa_xmlapi_load_script(ourfa_xmlapi_t *xmlapi,  const char *file,
    f->id = 0;
    f->xmlapi = xmlapi;
    memcpy(f->name, function_name ? function_name : file, funcname_len+1);
+   free(file_dup);
    if (funcname_len > 4
 	 && (f->name[funcname_len-4] == '.')
 	 && (f->name[funcname_len-3] == 'x' || (f->name[funcname_len-3] == 'X'))
@@ -681,14 +690,13 @@ static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t
 	       ret_code=get_xml_attributes(xml_node, my_nodes, sizeof(my_nodes)/sizeof(my_nodes[0]), xmlapi);
 	       node->children = node; /* uninitialized  */
 
+	       i = 1;
 	       if (ret_code == OURFA_OK) {
-		  i=1;
 		  if (cur_node && cur_node->parent) {
 		     for(tmp = cur_node->parent->children; tmp; tmp = tmp->next)
 			if (tmp->type == OURFA_XMLAPI_NODE_FOR)
 			   i++;
-		  }else
-		     i = 1;
+		  }
 	       }
 	       node->n.n_for.array_name = NULL;
 	       if (asprintf(&node->n.n_for.array_name, "array-%d", i) <= 0) {

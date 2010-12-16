@@ -24,6 +24,8 @@
  * SUCH DAMAGE.
  */
 
+#define _GNU_SOURCE
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -289,7 +291,7 @@ static int set_sysparam_string(struct params_t *UNUSED(params),
 static int set_sysparam_output_format(struct params_t *params,
       const char *UNUSED(name),
       const char *val,
-      unsigned (is_config_file),
+      unsigned UNUSED(is_config_file),
       void *UNUSED(data))
 {
    if (val == NULL)
