@@ -4,7 +4,7 @@ CC=gcc
 AR=ar
 RANLIB=ranlib
 
-CFLAGS+=-I/include -mno-cygwin  -DNDEBUG 
+CFLAGS+=-I/include -DNDEBUG 
 
 PREFIX=/usr/
 
@@ -25,9 +25,9 @@ OBJS= hash.o \
 all: libourfa.a ourfa_client
 
 ourfa_client: ourfa.h libourfa.a client.o client_dump.o client_datafile.o
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) $(LDFLAGS) $(XML2_LIBS) \
-	  -o ourfa_client \
-	  client.o client_dump.o client_datafile.o -L. -L/usr/lib -lourfa
+	$(CC) $(CFLAGS) $(XML2_CFLAGS) \
+	  -o ourfa_client -L. -L/usr/lib \
+	  client.o client_dump.o client_datafile.o -lourfa -lssl $(XML2_LIBS) $(LDFLAGS)
 
 libourfa.a: $(OBJS)
 	rm -f libourfa.a

@@ -1078,10 +1078,11 @@ main_end:
    ourfa_xmlapi_free(xmlapi);
    /* xmlCleanupParser(); */
 
+/*
    ERR_free_strings();
    EVP_cleanup();
    CRYPTO_cleanup_all_ex_data();
-
+*/
    return res;
 }
 
