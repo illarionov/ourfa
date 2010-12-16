@@ -8,8 +8,7 @@ CFLAGS?= -W -Wall -O2 -DNDEBUG -s
 #CFLAGS+= -DNDEBUG -s
 
 PREFIX=/usr/local
-
-LDFLAGS= -L/usr/local/lib -lssl -lcrypto
+LDFLAGS?=-L/usr/local/lib
 
 XML2_CFLAGS?=	`xml2-config --cflags`
 XML2_LIBS?=	`xml2-config --libs`
@@ -28,9 +27,10 @@ OBJS= hash.o \
 all: libourfa.a ourfa_client
 
 ourfa_client: ourfa.h libourfa.a client.o client_dump.o client_datafile.o
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) $(LDFLAGS) $(XML2_LIBS) \
+	$(CC) $(CFLAGS) $(XML2_CFLAGS) \
 	  -o ourfa_client \
-	  client.o client_dump.o client_datafile.o -L. -lourfa
+	  client.o client_dump.o client_datafile.o \
+	  $(LDFLAGS) -L. -lourfa -lssl -lcrypto $(XML2_LIBS)
 
 libourfa.a: $(OBJS)
 	rm -f libourfa.a
