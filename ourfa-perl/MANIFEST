@@ -14,4 +14,10 @@ lib/Ourfa/ScriptCall.pm
 lib/Ourfa/Xmlapi.pm
 lib/Ourfa/Xmlapi/Func.pm
 lib/Ourfa/Xmlapi/Func/Node.pm
+examples/add_to_ipgroup.pl
+examples/general_report.pl
+examples/get_core_version.pl
+examples/get_userinfo.pl
+examples/get_users_list.pl
+examples/search_users.pl
 typemap
