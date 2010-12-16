@@ -28,10 +28,17 @@
 #define _GNU_SOURCE
 #endif
 
+#ifdef WIN32
+#include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
+#endif
+
 #include <assert.h>
 #include <errno.h>
 #include <libgen.h>
