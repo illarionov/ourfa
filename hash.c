@@ -460,8 +460,15 @@ int ourfa_hash_set_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr
 	 break;
       case OURFA_ELM_STRING:
 	 {
+	    struct in_addr ip_s;
 	    char ip[INET_ADDRSTRLEN+1];
-	    inet_ntop(AF_INET, &val, ip, INET_ADDRSTRLEN);
+
+	    ip_s.s_addr = val;
+#ifdef WIN32
+	    strncpy(ip, inet_ntoa(ip_s), INET_ADDRSTRLEN);
+#else
+	    inet_ntop(AF_INET, &ip_s, ip, INET_ADDRSTRLEN);
+#endif
 	    ip[INET_ADDRSTRLEN]='\0';
 	    res = ourfa_hash_set_string(h, key, idx, ip);
 	 }
@@ -701,7 +708,7 @@ int ourfa_hash_parse_ip(const char *str, struct in_addr *res)
    }
 
    /* ip */
-   if (inet_pton(AF_INET, str, res) != 1)
+   if (inet_aton(str, res) == 0)
       return -1;
 
    return 0;
@@ -845,7 +852,11 @@ int ourfa_hash_get_string(ourfa_hash_t *h,
 	    if (*res != NULL) {
 	       struct in_addr in;
 	       in.s_addr = ((in_addr_t *)arr->data)[last_idx];
+#ifdef WIN32
+	       strncpy(*res, inet_ntoa(in), INET_ADDRSTRLEN);
+#else
 	       inet_ntop(AF_INET, &in, *res, INET_ADDRSTRLEN);
+#endif
 	       (*res)[INET_ADDRSTRLEN]='\0';
 	       retval = 0;
 	    }
@@ -1056,7 +1067,11 @@ static int convert_hashval2string(struct hash_val_t *val)
 	    if (str != NULL) {
 	       struct in_addr in;
 	       in.s_addr = ((in_addr_t *)val->data)[tmp->elm_cnt];
+#ifdef WIN32
+	       strncpy(str, inet_ntoa(in), INET_ADDRSTRLEN);
+#else
 	       inet_ntop(AF_INET, &in, str, INET_ADDRSTRLEN);
+#endif
 	       str[INET_ADDRSTRLEN]='\0';
 	    }
 	    break;
