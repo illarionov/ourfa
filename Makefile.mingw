@@ -1,14 +1,12 @@
 SHELL=/bin/sh
 
-CC?=gcc
-AR?=ar
-RANLIB?=ranlib
-CFLAGS?= -W -Wall -O2 -DNDEBUG -s
-#CFLAGS=-W -Wall -g -O0
-#CFLAGS+= -DNDEBUG -s
+CC=gcc
+AR=ar
+RANLIB=ranlib
 
-PREFIX=/usr/local
-LDFLAGS?=-L/usr/local/lib
+CFLAGS+=-I/include -DNDEBUG 
+
+PREFIX=/usr/
 
 XML2_CFLAGS?=	`xml2-config --cflags`
 XML2_LIBS?=	`xml2-config --libs`
@@ -28,9 +26,8 @@ all: libourfa.a ourfa_client
 
 ourfa_client: ourfa.h libourfa.a client.o client_dump.o client_datafile.o
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) \
-	  -o ourfa_client \
-	  client.o client_dump.o client_datafile.o \
-	  $(LDFLAGS) -L. -lourfa -lssl -lcrypto $(XML2_LIBS)
+	  -o ourfa_client -L. -L/usr/lib \
+	  client.o client_dump.o client_datafile.o -lourfa -lssl -lcrypto $(XML2_LIBS) $(LDFLAGS) 
 
 libourfa.a: $(OBJS)
 	rm -f libourfa.a
