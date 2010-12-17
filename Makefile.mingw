@@ -4,7 +4,7 @@ CC?=gcc
 AR=ar
 RANLIB=ranlib
 
-CFLAGS+=-I/include -DNDEBUG 
+CFLAGS+=-I/include -I/usr/local/ssl/include -DNDEBUG -D_WIN32_WINNT=0x0501
 
 PREFIX=/usr/
 
@@ -24,11 +24,12 @@ OBJS= hash.o \
 
 all: libourfa.a ourfa_client
 
-ourfa_client: ourfa.h libourfa.a client.o client_dump.o client_datafile.o
+ourfa_client: ourfa.h libourfa.a client.o client_dump.o client_datafile.o asprintf.o
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) \
-	  -o ourfa_client -L. -L/usr/lib \
-	  client.o client_dump.o client_datafile.o -lws2_32 -lourfa -lssl -lcrypto \
-	  $(XML2_LIBS) $(LDFLAGS) -lws2_32 -lasprintf
+	  -o ourfa_client -L. -L/usr/lib -L/usr/local/ssl/lib \
+	  client.o client_dump.o client_datafile.o asprintf.o \
+	  -lourfa -lssl -lcrypto \
+	  $(XML2_LIBS) $(LDFLAGS) -lws2_32 -lgdi32 -lcrypt32 -lmingw32
 
 libourfa.a: $(OBJS)
 	rm -f libourfa.a
@@ -70,6 +71,8 @@ dist:
 	   $(DISTNAME)/example.sh
 	rm $(DISTNAME)
 
+asprintf.o: asprintf.c
+	$(CC) $(CFLAGS) -c asprintf.c
 pkt.o: pkt.c ourfa.h
 	$(CC) $(CFLAGS) -c pkt.c
 error.o: error.c ourfa.h

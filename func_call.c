@@ -45,7 +45,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
-#include <strings.h>
+#include <string.h>
 #include <openssl/ssl.h>
 
 #include "ourfa.h"
@@ -112,7 +112,7 @@ static int ourfa_parse_builtin_func(ourfa_hash_t *globals, const char *func, int
       unsigned u_res;
       if (sscanf(func, "size(%40[a-zA-Z0-9_,-])", arr_name) != 1)
 	 return -1;
-      arr_idx = index(arr_name, ',');
+      arr_idx = strchr(arr_name, ',');
       if (arr_idx) {
 	 char *t;
 	 if (arr_idx == &arr_name[0])

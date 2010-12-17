@@ -708,8 +708,12 @@ int ourfa_hash_parse_ip(const char *str, struct in_addr *res)
    }
 
    /* ip */
+#ifdef WIN32
+   res->s_addr = inet_addr(str);
+#else
    if (inet_aton(str, res) == 0)
       return -1;
+#endif
 
    return 0;
 }
