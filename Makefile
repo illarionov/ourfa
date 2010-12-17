@@ -57,6 +57,7 @@ dist:
 	ln -s -f . $(DISTNAME)
 	tar czvf $(DISTNAME).tar.gz \
 	   $(DISTNAME)/Makefile \
+	   $(DISTNAME)/Makefile.mingw \
 	   $(DISTNAME)/README \
 	   $(DISTNAME)/ourfa.h \
 	   $(DISTNAME)/pkt.c \

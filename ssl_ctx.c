@@ -24,19 +24,27 @@
  * SUCH DAMAGE.
  */
 
+#ifdef WIN32
+#include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <stdint.h>
+#else
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include <sys/errno.h>
-#include <sys/socket.h>
-#include <sys/types.h>
+#include <netdb.h>
+#endif
+
 
 #include <assert.h>
-#include <netdb.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include <openssl/bio.h>
 #include <openssl/err.h>

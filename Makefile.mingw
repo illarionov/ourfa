@@ -1,6 +1,6 @@
 SHELL=/bin/sh
 
-CC=gcc
+CC?=gcc
 AR=ar
 RANLIB=ranlib
 
@@ -27,7 +27,8 @@ all: libourfa.a ourfa_client
 ourfa_client: ourfa.h libourfa.a client.o client_dump.o client_datafile.o
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) \
 	  -o ourfa_client -L. -L/usr/lib \
-	  client.o client_dump.o client_datafile.o -lourfa -lssl -lcrypto $(XML2_LIBS) $(LDFLAGS) 
+	  client.o client_dump.o client_datafile.o -lws2_32 -lourfa -lssl -lcrypto \
+	  $(XML2_LIBS) $(LDFLAGS) -lws2_32 -lasprintf
 
 libourfa.a: $(OBJS)
 	rm -f libourfa.a

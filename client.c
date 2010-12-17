@@ -24,12 +24,20 @@
  * SUCH DAMAGE.
  */
 
-#define _GNU_SOURCE
 
+#ifdef WIN32
+#include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <stdint.h>
+#else
+#define _GNU_SOURCE
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#endif
 
 #include <assert.h>
 #include <ctype.h>
