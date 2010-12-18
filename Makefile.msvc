@@ -4,13 +4,16 @@ LD=link.exe
 AR=lib.exe
 ARFLAGS=/nologo
 
-XML_DIR=../libxml
-ICONV_DIR=../iconv
-SSL_DIR=c:\OpenSSL-Win32\
+XML_DIR=..\libxml
+ICONV_DIR=..\iconv
+SSL_DIR=c:\OpenSSL-Win32\ 
+ZLIB_DIR=..\zlib
 
-CFLAGS=/W3 /nologo /Zi /TC /Gd
-CFLAGS=$(CFLAGS) /DWIN32 /D_WIN32_WINNT=0x5001 /D_MBCS \
+CFLAGS=/W3 /nologo /Zi /TC /Gd /MD
+
+CFLAGS=$(CFLAGS) /DWIN32 /D_MBCS \
 	/D_CRT_SECURE_NO_WARNINGS \
+#	/DNDEBUG \
 	/Dstrcasecmp=_stricmp /Dsnprintf=_snprintf /Dstrdup=_strdup
 CFLAGS=$(CFLAGS) /I$(XML_DIR)\include /I$(SSL_DIR)\include \
 	/I$(ICONV_DIR)\include
@@ -39,7 +42,22 @@ libourfa.lib: $(OBJS)
 	$(AR) $(ARFLAGS) /OUT:libourfa.lib $(OBJS)
 
 clean:
-	del *.obj ourfa_client libourfa.lib vc100.pdb
+	del /Q /F *.obj ourfa_client libourfa.lib vc100.pdb ourfa_client.exe
+	rmdir /S /Q ourfa_client
+
+package: libourfa.lib ourfa_client.exe
+	mkdir ourfa_client\bin
+	mkdir ourfa_client\lib
+	mkdir ourfa_client\include
+	copy libourfa.lib ourfa_client\lib
+	copy ourfa.h ourfa_client\include
+	copy ourfa_client.exe ourfa_client\bin
+	copy $(ICONV_DIR)\bin\iconv.dll ourfa_client\bin
+	copy $(XML_DIR)\bin\libxml2.dll ourfa_client\bin
+	copy $(SSL_DIR)\libeay32.dll ourfa_client\bin
+	copy $(SSL_DIR)\ssleay32.dll ourfa_client\bin
+	copy $(ZLIB_DIR)\bin\zlib1.dll ourfa_client\bin
+	
 
 asprintf.obj: asprintf.c
 	$(CC) $(CFLAGS) -c asprintf.c
