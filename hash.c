@@ -67,7 +67,7 @@ struct hash_val_t {
    void *data;
 };
 
-static inline size_t elm_size_by_type(enum ourfa_elm_type_t t);
+static size_t elm_size_by_type(enum ourfa_elm_type_t t);
 static struct hash_val_t *hash_val_new(enum ourfa_elm_type_t type, size_t size);
 static int convert_hashval2string(struct hash_val_t *val);
 static int increase_pool_size(struct hash_val_t *ha, size_t add);
@@ -603,7 +603,7 @@ int ourfa_hash_get_double(ourfa_hash_t *h, const char *key, const char *idx, dou
 	    s = ((char **)arr->data)[last_idx];
 	    if ((s == NULL) || (s[0]=='\0'))
 	       return -1;
-	    tmp = strtof(s, &end_p);
+	    tmp = strtod(s, &end_p);
 	    if ((*end_p != '\0') || (errno==ERANGE))
 	       return -1;
 	    if (res)
@@ -1182,7 +1182,7 @@ int ourfa_hash_parse_idx_list(ourfa_hash_t *h, const char *idx_list,
    return (int)cnt;
 }
 
-static inline size_t elm_size_by_type(enum ourfa_elm_type_t t)
+static size_t elm_size_by_type(enum ourfa_elm_type_t t)
 {
    size_t res;
 

@@ -29,19 +29,18 @@
 #endif
 
 #ifdef WIN32
-#include <windows.h>
-#include <winsock2.h>
+#include <stdlib.h>
 #include <ws2tcpip.h>
 #else
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <libgen.h>
 #endif
 
 #include <assert.h>
 #include <errno.h>
-#include <libgen.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -350,10 +349,18 @@ int ourfa_xmlapi_load_script(ourfa_xmlapi_t *xmlapi,  const char *file,
       func_name = function_name;
       file_dup = NULL;
    }else {
+#ifdef WIN32
+      file_dup=malloc(_MAX_FNAME);
+      if (file_dup == NULL)
+      	return xmlapi->printf_err(OURFA_ERROR_SYSTEM, xmlapi->err_ctx, NULL);
+      _splitpath(file, NULL, NULL, file_dup, NULL);
+      func_name = file_dup;    
+#else
       file_dup = strdup(file);
       if (file_dup == NULL)
       	return xmlapi->printf_err(OURFA_ERROR_SYSTEM, xmlapi->err_ctx, NULL);
       func_name = basename(file_dup);
+#endif
    }
 
    if (func_name == NULL

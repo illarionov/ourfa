@@ -1,0 +1,66 @@
+CC=cl
+LD=link.exe
+
+AR=lib.exe
+ARFLAGS=/nologo
+
+XML_DIR=../libxml
+ICONV_DIR=../iconv
+SSL_DIR=c:\OpenSSL-Win32\
+
+CFLAGS=/W3 /nologo /Zi /TC /Gd
+CFLAGS=$(CFLAGS) /DWIN32 /D_WIN32_WINNT=0x5001 /D_MBCS \
+	/D_CRT_SECURE_NO_WARNINGS \
+	/Dstrcasecmp=_stricmp /Dsnprintf=_snprintf /Dstrdup=_strdup
+CFLAGS=$(CFLAGS) /I$(XML_DIR)\include /I$(SSL_DIR)\include \
+	/I$(ICONV_DIR)\include
+
+LDFLAGS=/LIBPATH:$(XML_DIR)/lib /LIBPATH:$(SSL_DIR)/lib \
+	/LIBPATH:$(ICONV_DIR)/lib
+
+OBJS= hash.obj \
+      xmlapi.obj \
+      pkt.obj \
+      error.obj \
+      connection.obj \
+      func_call.obj \
+      ssl_ctx.obj
+
+all: libourfa.lib ourfa_client.exe
+
+ourfa_client.exe: ourfa.h libourfa.lib client.obj client_dump.obj client_datafile.obj asprintf.obj
+	$(LD) $(LDFLAGS) /OUT:ourfa_client.exe \
+	  client.obj client_dump.obj client_datafile.obj asprintf.obj \
+	  libourfa.lib libeay32.lib ssleay32.lib iconv.lib \
+	  ws2_32.lib libxml2.lib
+
+libourfa.lib: $(OBJS)
+	del libourfa.lib
+	$(AR) $(ARFLAGS) /OUT:libourfa.lib $(OBJS)
+
+clean:
+	del *.obj ourfa_client libourfa.lib vc100.pdb
+
+asprintf.obj: asprintf.c
+	$(CC) $(CFLAGS) -c asprintf.c
+pkt.obj: pkt.c ourfa.h
+	$(CC) $(CFLAGS) -c pkt.c
+error.obj: error.c ourfa.h
+	$(CC) $(CFLAGS) -c error.c
+connection.obj: connection.c ourfa.h
+	$(CC) $(CFLAGS) -c connection.c
+func_call.obj: func_call.c ourfa.h
+	$(CC) $(CFLAGS) -c func_call.c
+ssl_ctx.obj: ssl_ctx.c ourfa.h
+	$(CC) $(CFLAGS) -c ssl_ctx.c
+hash.obj: hash.c ourfa.h
+	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c hash.c
+xmlapi.obj: xmlapi.c ourfa.h
+	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c xmlapi.c
+client.obj: client.c ourfa.h
+	$(CC) $(CFLAGS) -c client.c
+client_dump.obj: client_dump.c ourfa.h
+	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c client_dump.c
+client_datafile.o: client_dump.o client_datafile.c ourfa.h
+	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c client_datafile.c
+

@@ -25,8 +25,6 @@
  */
 
 #ifdef WIN32
-#include <windows.h>
-#include <winsock2.h>
 #include <ws2tcpip.h>
 #include <stdint.h>
 #else
@@ -35,15 +33,14 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <unistd.h>
 #endif
-
 
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <errno.h>
 
 #include <openssl/bio.h>

@@ -25,15 +25,16 @@
  */
 
 #ifdef WIN32
-#include <windows.h>
-#include <winsock2.h>
 #include <ws2tcpip.h>
+#include <stdint.h>
+#include <io.h>
 #else
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <unistd.h>
 #endif
 
 #include <assert.h>
@@ -42,7 +43,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #include <openssl/bio.h>
 #include <openssl/err.h>
@@ -750,7 +750,7 @@ int ourfa_connection_send_packet(ourfa_connection_t *connection,
       const char *descr)
 {
    size_t pkt_size;
-   ssize_t transmitted_size;
+   int transmitted_size;
    const void *buf;
 
    if (connection == NULL || pkt == NULL)
@@ -768,7 +768,7 @@ int ourfa_connection_send_packet(ourfa_connection_t *connection,
       return connection->printf_err(OURFA_ERROR_SYSTEM, connection->err_ctx, NULL);
 
    transmitted_size= BIO_write(connection->bio, buf, pkt_size);
-   if (transmitted_size < (ssize_t)pkt_size)
+   if (transmitted_size < (int)pkt_size)
       return close_bio_with_err(connection, "Can not send packet");
 
    return OURFA_OK;
@@ -778,7 +778,7 @@ int ourfa_connection_recv_packet(ourfa_connection_t *connection,
       ourfa_pkt_t **res,
       const char *descr)
 {
-   ssize_t last_recv_size, recv_size, packet_size;
+   int last_recv_size, recv_size, packet_size;
    ourfa_pkt_t *pkt;
 
    struct {

@@ -32,10 +32,11 @@
 #endif
 
 #ifdef WIN32
-#include <windows.h>
-#include <winsock2.h>
 #include <ws2tcpip.h>
 #include <stdint.h>
+#ifndef va_copy
+#define va_copy(d,s) ((d) = (s))
+#endif
 #else
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -72,14 +73,22 @@ struct attr_list_t {
 struct attr_hdr_t {
    uint16_t type; /*  network byte order */
    uint16_t size; /*  network byte order */
+#ifdef _MSC_VER
+   uint8_t  data[1];
+#else
    uint8_t  data[];
+#endif
 };
 
 struct pkt_hdr_t {
    uint8_t code;
    uint8_t version;
    uint16_t size; /*   network byte order */
+#ifdef _MSC_VER
+   struct attr_hdr_t attrs[1];
+#else
    struct attr_hdr_t attrs[];
+#endif
 };
 
 struct ourfa_pkt_t {
@@ -595,7 +604,7 @@ ourfa_pkt_t *ourfa_pkt_new2(const void *data, size_t data_size)
       return NULL;
 
    /* Load attributes */
-   for (p = data+4; p < (uint8_t *)data + pkt_size;) {
+   for (p = (uint8_t *)data+4; p < (uint8_t *)data + pkt_size;) {
       unsigned attr_type;
       size_t data_length;
 
@@ -949,7 +958,7 @@ static int increase_pkt_data_pool_size(ourfa_pkt_t *pkt, size_t add_size)
 	 if (h->data) {
 	    int32_t offset;
 	    offset = (uint8_t *)h->data - (uint8_t *)pkt->data_pool;
-	    h->data = ptr + offset;
+	    h->data = (uint8_t *)ptr + offset;
 	 }
       }
 
