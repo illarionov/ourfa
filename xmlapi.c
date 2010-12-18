@@ -51,7 +51,11 @@
 
 #include "ourfa.h"
 
+#ifdef WIN32
+#define DEFAULT_API_XML_FILE "C:\\Program Files\\NetUP\\UTM5\\share\\api.xml"
+#else
 #define DEFAULT_API_XML_FILE "/netup/utm5/xml/api.xml"
+#endif
 #define FUNC_BY_NAME_HASH_SIZE 180
 
 struct t_nodes {
@@ -240,13 +244,13 @@ int ourfa_xmlapi_load_apixml(ourfa_xmlapi_t *xmlapi,  const char *file)
       f = (ourfa_xmlapi_func_t *)malloc(sizeof(*f)+len+2);
       if (f == NULL) {
 	 res = xmlapi->printf_err(OURFA_ERROR_SYSTEM, xmlapi->err_ctx, NULL);
-	 free(prop_func_name);
+	 xmlFree(prop_func_name);
 	 break; /* foreach function  */
       }
       f->in = f->out = f->script = NULL;
       f->xmlapi = xmlapi;
       memcpy(f->name, prop_func_name, len+1);
-      free(prop_func_name);
+      xmlFree(prop_func_name);
 
       /*  pasrse function id */
       prop_func_id = xmlGetProp(cur_node, (const xmlChar *)"id");

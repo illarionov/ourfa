@@ -118,9 +118,24 @@ ourfa_connection_t *ourfa_connection_new(ourfa_ssl_ctx_t *ssl_ctx)
    if (res == NULL)
       return NULL;
 
+#ifdef _MSC_VER
+   else {
+      WSADATA wsaData;
+
+      if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
+	 free(res);
+	 return NULL;
+      }
+   }
+#endif
+
+
    if (ssl_ctx == NULL) {
       ssl_ctx = ourfa_ssl_ctx_new();
       if (ssl_ctx == NULL) {
+#ifdef _MSC_VER
+	 WSACleanup();
+#endif
 	 free(res);
 	 return NULL;
       }
@@ -174,6 +189,10 @@ void ourfa_connection_free(ourfa_connection_t *connection)
    free(connection->password);
    free(connection->hostname);
    free(connection);
+
+#ifdef _MSC_VER
+   WSACleanup();
+#endif
 
    return;
 }

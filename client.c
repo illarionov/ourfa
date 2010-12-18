@@ -53,8 +53,13 @@
 #define STR(x) STR_(x)
 #define DEFAULT_HOST_PORT ( DEFAULT_HOST ":" DEFAULT_PORT )
 
+#ifdef WIN32
+#define DEFAULT_CONFIG_FILE "C:\\Program Files\\NetUP\\UTM5\\utm5_urfaclient.cfg"
+#define DEFAULT_XML_DIR "C:\\Program Files\\NetUP\\UTM5\\share"
+#else
 #define DEFAULT_CONFIG_FILE "/netup/utm5/utm5_urfaclient.cfg"
 #define DEFAULT_XML_DIR "/netup/utm5/xml"
+#endif
 
 #ifdef UNUSED
 #elif defined(__GNUC__)
@@ -858,7 +863,12 @@ int main(int argc, char **argv)
       char *script_file = NULL;
       int action_len = strlen(params.action);
 
-      asprintf(&xmlapi_fname,"%s/%s",
+      asprintf(&xmlapi_fname,
+#ifdef WIN32
+	    "%s\\%s",
+#else
+	    "%s/%s",
+#endif
 	    params.xml_dir ? params.xml_dir : DEFAULT_XML_DIR,
 	    params.xml_api ? params.xml_api : "api.xml");
 
@@ -883,7 +893,12 @@ int main(int argc, char **argv)
 	    &&  ((params.action[4] == '_'))) {
 	 /* rpcf_ action  */
       }else {
-	 asprintf(&script_file, "%s/%s.xml",
+	 asprintf(&script_file, 
+#ifdef WIN32
+			 "%s\\%s.xml",
+#else
+			 "%s/%s.xml",
+#endif
 	       params.xml_dir ? params.xml_dir : DEFAULT_XML_DIR,
 	       params.action);
 	 if (script_file == NULL) {
