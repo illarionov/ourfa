@@ -58,6 +58,18 @@
 #define DEFAULT_TIMEOUT 5
 #define DEFAULT_LOGIN_TYPE OURFA_LOGIN_USER
 
+#ifndef INVALID_SOCKET
+#define INVALID_SOCKET -1
+#endif
+
+#ifdef WIN32
+#define CLOSESOCKET(_n) closesocket(_n); sockfd = INVALID_SOCKET;
+#define SOCKET_ERRNO WSAGetLastError()
+#else
+#define CLOSESOCKET(_n) close(_n); sockfd = INVALID_SOCKET;
+#define SOCKET_ERRNO errno
+#endif
+
 struct pktbuf_elm_t {
    ourfa_pkt_t *pkt;
    struct pktbuf_elm_t *next;
@@ -537,31 +549,44 @@ int ourfa_connection_open(ourfa_connection_t *connection)
    /* Connect */
    tv.tv_sec = ourfa_connection_timeout(connection);
    tv.tv_usec = 0;
-   sockfd = -1;
+   sockfd = INVALID_SOCKET;
    for (res = res0; res; res = res->ai_next) {
       sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
       if (sockfd < 0) {
 	 connection->printf_err(OURFA_ERROR_SYSTEM, connection->err_ctx, NULL);
 	 continue;
       }
-
       /* Socket timeout */
       if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv))
 	    || setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv))) {
 	 connection->printf_err(OURFA_ERROR_SYSTEM, connection->err_ctx, NULL);
-	 close(sockfd);
-	 sockfd=-1;
+	 CLOSESOCKET(sockfd);
 	 continue;
       }
 
       if (connect(sockfd, res->ai_addr, res->ai_addrlen) < 0) {
-	 connection->printf_err(OURFA_ERROR_SYSTEM, connection->err_ctx,
-	       "Error connecting to `%s:%u`: %s",
-	       res->ai_canonname,
-	       ntohs(((struct sockaddr_in *)res->ai_addr)->sin_port),
-	       strerror(errno));
-	 close(sockfd);
-	 sockfd=-1;
+	 char err_msg_buf[200];
+	 char *err_msg;
+#ifdef WIN32
+	 err_msg = err_msg_buf;
+	 snprintf(err_msg_buf, sizeof(err_msg_buf), "WSA erro %lu", SOCKET_ERRNO);
+#else
+	 err_msg = strerror(SOCKET_ERRNO);
+#endif
+
+	 if (res->ai_canonname) {
+	    connection->printf_err(OURFA_ERROR_SYSTEM, connection->err_ctx,
+		  "Error connecting to `%s:%u`: %s",
+		  res->ai_canonname,
+		  ntohs(((struct sockaddr_in *)res->ai_addr)->sin_port),
+		  err_msg);
+	 }else {
+	    connection->printf_err(OURFA_ERROR_SYSTEM, connection->err_ctx,
+		  "Error connecting to %s: %s",
+		  ourfa_connection_hostname(connection),
+		  err_msg);
+	 }
+	 CLOSESOCKET(sockfd);
 	 continue;
       }
       break;
@@ -820,7 +845,7 @@ int ourfa_connection_recv_packet(ourfa_connection_t *connection,
       if (last_recv_size <= 0) {
 	 if (!BIO_should_retry(connection->bio)
 	       /* XXX: do not retry on timeout  */
-	       || (errno == EAGAIN))
+	       || (SOCKET_ERRNO == EAGAIN))
 	       return close_bio_with_err(connection, "recv_pkt_hdr BIO_read");
       }else
 	 recv_size += last_recv_size;
@@ -857,7 +882,7 @@ int ourfa_connection_recv_packet(ourfa_connection_t *connection,
 	    int close_res;
 	    if (!BIO_should_retry(connection->bio)
 		  /* XXX: do not retry on timeout  */
-		  || (errno == EAGAIN)) {
+		  || (SOCKET_ERRNO == EAGAIN)) {
 	       close_res = close_bio_with_err(connection, "recv_pkt_data");
 	       free(buf);
 	       return close_res;
@@ -963,10 +988,10 @@ static int close_bio_with_err(ourfa_connection_t *connection, const char *err_st
    const char *err_string;
    int res = OURFA_ERROR_OTHER;
 
-   if (errno) {
+   if (SOCKET_ERRNO) {
       if(err_str)
 	 res=connection->printf_err(OURFA_ERROR_SYSTEM, connection->err_ctx,
-	       "%s: %s", err_str, strerror(errno));
+	       "%s: %s", err_str, strerror(SOCKET_ERRNO));
       else
 	 res=connection->printf_err(OURFA_ERROR_SYSTEM, connection->err_ctx,
 	       "%s", err_str);

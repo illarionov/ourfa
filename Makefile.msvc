@@ -9,18 +9,26 @@ ICONV_DIR=..\iconv
 SSL_DIR=c:\OpenSSL-Win32\ 
 ZLIB_DIR=..\zlib
 
-CFLAGS=/W3 /nologo /ZI /Yc /TC /MDd /Od
+CFLAGS=/W3 /nologo /TC /MD
 
 CFLAGS=$(CFLAGS) /DWIN32 /D_MBCS \
 	/D_CRT_SECURE_NO_WARNINGS \
-	/DDEBUG \
 	/Dstrcasecmp=_stricmp /Dsnprintf=ourfa_snprintf /Dstrdup=_strdup
 CFLAGS=$(CFLAGS) /I$(XML_DIR)\include /I$(SSL_DIR)\include \
 	/I$(ICONV_DIR)\include
 
 LDFLAGS=/LIBPATH:$(XML_DIR)/lib /LIBPATH:$(SSL_DIR)/lib \
-	/LIBPATH:$(ICONV_DIR)/lib \
-	/DEBUG
+	/LIBPATH:$(ICONV_DIR)/lib 
+
+
+!if "$(DEBUG)" == "1"
+CFLAGS=$(CFLAGS) /D_DEBUG /Od /Z7
+LDFLAGS=$(LDFLAGS) /DEBUG 
+!else
+CFLAGS=$(CFLAGS) /DNDEBUG /O2
+LDFLAGS=$(LDFLAGS) 
+!endif
+
 
 OBJS= hash.obj \
       xmlapi.obj \
