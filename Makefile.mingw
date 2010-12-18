@@ -4,7 +4,7 @@ CC?=gcc
 AR=ar
 RANLIB=ranlib
 
-CFLAGS+=-I/include -I/usr/local/ssl/include -DNDEBUG -D_WIN32_WINNT=0x0501
+CFLAGS+=-I/include -I/usr/local/ssl/include -DNDEBUG -D_WIN32_WINNT=0x0501 -DWIN32
 
 PREFIX=/usr/
 
@@ -28,8 +28,8 @@ ourfa_client: ourfa.h libourfa.a client.o client_dump.o client_datafile.o asprin
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) \
 	  -o ourfa_client -L. -L/usr/lib -L/usr/local/ssl/lib \
 	  client.o client_dump.o client_datafile.o asprintf.o \
-	  -lourfa -lssl -lcrypto \
-	  $(XML2_LIBS) $(LDFLAGS) -lws2_32 -lgdi32 -lcrypt32 -lmingw32
+	  -lourfa -leay32 -lssleay32 \
+	  $(XML2_LIBS) $(LDFLAGS) -lws2_32 
 
 libourfa.a: $(OBJS)
 	rm -f libourfa.a

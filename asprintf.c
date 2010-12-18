@@ -1,6 +1,10 @@
+#ifdef WIN32
+#include <windows.h>
+#else 
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#endif
 
 int asprintf( char **, char *, ... );
 int vasprintf( char **, char *, va_list );
