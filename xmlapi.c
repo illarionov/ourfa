@@ -36,6 +36,9 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#endif
+
+#ifndef _MSC_VER
 #include <libgen.h>
 #endif
 
@@ -262,6 +265,7 @@ int ourfa_xmlapi_load_apixml(ourfa_xmlapi_t *xmlapi,  const char *file)
 	 xmlapi_func_free(f, NULL);
 	 continue;
       }
+      errno=0;
       f->id = (int)strtol((const char *)prop_func_id, &p_end, 0);
       if ((*p_end != '\0') || errno == ERANGE) {
 	 xmlapi->printf_err(
@@ -353,7 +357,7 @@ int ourfa_xmlapi_load_script(ourfa_xmlapi_t *xmlapi,  const char *file,
       func_name = function_name;
       file_dup = NULL;
    }else {
-#ifdef WIN32
+#ifdef _MSC_VER
       file_dup=malloc(_MAX_FNAME);
       if (file_dup == NULL)
       	return xmlapi->printf_err(OURFA_ERROR_SYSTEM, xmlapi->err_ctx, NULL);
@@ -717,7 +721,7 @@ static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t
 		  }
 	       }
 	       node->n.n_for.array_name = NULL;
-	       if (asprintf(&node->n.n_for.array_name, "array-%d", i) <= 0) {
+	       if (ourfa_asprintf(&node->n.n_for.array_name, "array-%d", i) <= 0) {
 		  ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx, "asprintf error");
 		  free_func_def(node);
 		  break;

@@ -14,7 +14,7 @@ CFLAGS=/W3 /nologo /ZI /Yc /TC /MDd /Od
 CFLAGS=$(CFLAGS) /DWIN32 /D_MBCS \
 	/D_CRT_SECURE_NO_WARNINGS \
 	/DDEBUG \
-	/Dstrcasecmp=_stricmp /Dsnprintf=_snprintf /Dstrdup=_strdup
+	/Dstrcasecmp=_stricmp /Dsnprintf=ourfa_snprintf /Dstrdup=_strdup
 CFLAGS=$(CFLAGS) /I$(XML_DIR)\include /I$(SSL_DIR)\include \
 	/I$(ICONV_DIR)\include
 
@@ -28,13 +28,14 @@ OBJS= hash.obj \
       error.obj \
       connection.obj \
       func_call.obj \
-      ssl_ctx.obj
+      ssl_ctx.obj \
+      asprintf.obj
 
 all: libourfa.lib ourfa_client.exe
 
-ourfa_client.exe: ourfa.h libourfa.lib client.obj client_dump.obj client_datafile.obj asprintf.obj
+ourfa_client.exe: ourfa.h libourfa.lib client.obj client_dump.obj client_datafile.obj
 	$(LD) $(LDFLAGS) /OUT:ourfa_client.exe \
-	  client.obj client_dump.obj client_datafile.obj asprintf.obj \
+	  client.obj client_dump.obj client_datafile.obj \
 	  libourfa.lib libeay32.lib ssleay32.lib iconv.lib \
 	  ws2_32.lib libxml2.lib
 

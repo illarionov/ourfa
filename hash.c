@@ -547,6 +547,7 @@ int ourfa_hash_get_long(ourfa_hash_t *h, const char *key, const char *idx, long 
 	    if ((s == NULL) || (s[0]=='\0'))
 	       retval=-1;
 	    else {
+	       errno=0;
 	       tmp = strtod(s, &p_end);
 	       if ((*p_end != '\0') || errno == ERANGE)
 		  retval = -1;
@@ -603,6 +604,7 @@ int ourfa_hash_get_double(ourfa_hash_t *h, const char *key, const char *idx, dou
 	    s = ((char **)arr->data)[last_idx];
 	    if ((s == NULL) || (s[0]=='\0'))
 	       return -1;
+	    errno=0;
 	    tmp = strtod(s, &end_p);
 	    if ((*end_p != '\0') || (errno==ERANGE))
 	       return -1;
@@ -826,17 +828,17 @@ int ourfa_hash_get_string(ourfa_hash_t *h,
 
    switch (arr->type) {
       case OURFA_ELM_INT:
-	 asprintf(res, "%i", ((int *)arr->data)[last_idx]);
+	 ourfa_asprintf(res, "%i", ((int *)arr->data)[last_idx]);
 	 if (*res != NULL)
 	    retval = 0;
 	 break;
       case OURFA_ELM_LONG:
-	 asprintf(res, "%lli", ((long long *)arr->data)[last_idx]);
+	 ourfa_asprintf(res, "%lli", ((long long *)arr->data)[last_idx]);
 	 if (*res != NULL)
 	    retval = 0;
 	 break;
       case OURFA_ELM_DOUBLE:
-	 asprintf(res, "%f", ((double *)arr->data)[last_idx]);
+	 ourfa_asprintf(res, "%f", ((double *)arr->data)[last_idx]);
 	 if (*res != NULL)
 	    retval = 0;
 	 break;
@@ -1058,13 +1060,13 @@ static int convert_hashval2string(struct hash_val_t *val)
       char *str;
       switch (val->type) {
 	 case OURFA_ELM_INT:
-	    asprintf(&str, "%i", ((int *)val->data)[tmp->elm_cnt]);
+	    ourfa_asprintf(&str, "%i", ((int *)val->data)[tmp->elm_cnt]);
 	    break;
 	 case OURFA_ELM_LONG:
-	    asprintf(&str, "%lli", ((long long *)val->data)[tmp->elm_cnt]);
+	    ourfa_asprintf(&str, "%lli", ((long long *)val->data)[tmp->elm_cnt]);
 	    break;
 	 case OURFA_ELM_DOUBLE:
-	    asprintf(&str, "%f", ((double *)val->data)[tmp->elm_cnt]);
+	    ourfa_asprintf(&str, "%f", ((double *)val->data)[tmp->elm_cnt]);
 	    break;
 	 case OURFA_ELM_IP:
 	    str = malloc(INET_ADDRSTRLEN+1);

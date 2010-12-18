@@ -20,14 +20,15 @@ OBJS= hash.o \
       error.o \
       connection.o \
       func_call.o \
-      ssl_ctx.o
+      ssl_ctx.o \
+      asprintf.o
 
 all: libourfa.a ourfa_client
 
-ourfa_client: ourfa.h libourfa.a client.o client_dump.o client_datafile.o asprintf.o
+ourfa_client: ourfa.h libourfa.a client.o client_dump.o client_datafile.o
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) \
 	  -o ourfa_client -L. -L/usr/lib -L/usr/local/ssl/lib \
-	  client.o client_dump.o client_datafile.o asprintf.o \
+	  client.o client_dump.o client_datafile.o \
 	  -lourfa -leay32 -lssleay32 \
 	  $(XML2_LIBS) $(LDFLAGS) -lws2_32 
 
@@ -48,28 +49,6 @@ install: ourfa_client
 	#chmod a+r $(PREFIX)/lib/libourfa.a
 clean:
 	rm -f *.o ourfa_client libourfa.a
-
-DISTNAME=ourfa-521008001
-
-dist:
-	rm -f $(DISTNAME)
-	ln -s -f . $(DISTNAME)
-	tar czvf $(DISTNAME).tar.gz \
-	   $(DISTNAME)/Makefile \
-	   $(DISTNAME)/README \
-	   $(DISTNAME)/ourfa.h \
-	   $(DISTNAME)/pkt.c \
-	   $(DISTNAME)/error.c \
-	   $(DISTNAME)/connection.c \
-	   $(DISTNAME)/func_call.c \
-	   $(DISTNAME)/ssl_ctx.c \
-	   $(DISTNAME)/hash.c \
-	   $(DISTNAME)/xmlapi.c \
-	   $(DISTNAME)/client.c \
-	   $(DISTNAME)/client_dump.c \
-	   $(DISTNAME)/client_datafile.c \
-	   $(DISTNAME)/example.sh
-	rm $(DISTNAME)
 
 asprintf.o: asprintf.c
 	$(CC) $(CFLAGS) -c asprintf.c

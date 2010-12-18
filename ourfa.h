@@ -544,6 +544,10 @@ int ourfa_script_call_start(ourfa_script_call_ctx_t *sctx);
 int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
        ourfa_connection_t *conn);
 
-
+int ourfa_asprintf( char **ret, const char *format, ... );
+int ourfa_vasprintf( char **ret, const char *format, va_list ap);
+#ifdef _MSC_VER
+int ourfa_snprintf(char *str, size_t size, const char *format, ... );
+#endif
 
 #endif  /* _OURFA_H */

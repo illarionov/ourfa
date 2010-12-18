@@ -22,7 +22,8 @@ OBJS= hash.o \
       error.o \
       connection.o \
       func_call.o \
-      ssl_ctx.o
+      ssl_ctx.o \
+      asprintf.o
 
 all: libourfa.a ourfa_client
 
@@ -58,8 +59,10 @@ dist:
 	tar czvf $(DISTNAME).tar.gz \
 	   $(DISTNAME)/Makefile \
 	   $(DISTNAME)/Makefile.mingw \
+	   $(DISTNAME)/Makefile.mvcc \
 	   $(DISTNAME)/README \
 	   $(DISTNAME)/ourfa.h \
+	   $(DISTNAME)/asprintf.c \
 	   $(DISTNAME)/pkt.c \
 	   $(DISTNAME)/error.c \
 	   $(DISTNAME)/connection.c \
@@ -73,6 +76,8 @@ dist:
 	   $(DISTNAME)/example.sh
 	rm $(DISTNAME)
 
+asprintf.o: asprintf.c
+	$(CC) $(CFLAGS) -c asprintf.c
 pkt.o: pkt.c ourfa.h
 	$(CC) $(CFLAGS) -c pkt.c
 error.o: error.c ourfa.h

@@ -1153,6 +1153,7 @@ void ourfa_pkt_dump(const ourfa_pkt_t *pkt, FILE *stream, const char *annotation
 	 char *p_data2;
 	 unsigned p;
 
+	 data_str[0]='\0';
 	 p_data2 = malloc(pkt->attrs.all.data_pool[i].data_length+1);
 	 if (p_data2) {
 	    for (p=0; p < pkt->attrs.all.data_pool[i].data_length; p++)
@@ -1160,8 +1161,7 @@ void ourfa_pkt_dump(const ourfa_pkt_t *pkt, FILE *stream, const char *annotation
 	    p_data2[pkt->attrs.all.data_pool[i].data_length] = '\0';
 	    snprintf(data_str, sizeof(data_str), "data: '%s'", p_data2);
 	    free(p_data2);
-	 }else
-	    data_str[0]='\0';
+	 }
       }else
 	 data_str[0]='\0';
 

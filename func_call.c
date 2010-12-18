@@ -148,6 +148,7 @@ static int ourfa_func_call_get_long_prop_val(ourfa_func_call_ctx_t *fctx,
    if (prop == NULL)
       return OURFA_ERROR_OTHER;
 
+   errno = 0;
    val = strtol(prop, &p_end, 0);
    /* Numeric?  */
    if ((*p_end != '\0') || (errno == ERANGE)) {
@@ -363,7 +364,7 @@ int ourfa_func_call_step(ourfa_func_call_ctx_t *fctx)
 		     if (ourfa_func_call_get_long_prop_val(fctx, fctx->cur->n.n_if.value, &val) != OURFA_OK)
 			d2 = 0;
 		     else
-			d2 = val;
+			d2 = (double)val;
 		  }
 	       }
 	       if_res = (d1 > d2);
@@ -683,6 +684,7 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
 	       }
 
 	       /*  XXX: functions now(), max_time(), size() ??? */
+	       errno = 0;
 	       val = strtod(n->n.n_val.defval, &p_end);
 	       if (((*p_end != '\0') || errno == ERANGE)
 		     && (ourfa_hash_get_double(fctx->h, n->n.n_val.defval,

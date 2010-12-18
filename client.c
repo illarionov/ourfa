@@ -863,7 +863,7 @@ int main(int argc, char **argv)
       char *script_file = NULL;
       int action_len = strlen(params.action);
 
-      asprintf(&xmlapi_fname,
+      ourfa_asprintf(&xmlapi_fname,
 #ifdef WIN32
 	    "%s\\%s",
 #else
@@ -893,7 +893,7 @@ int main(int argc, char **argv)
 	    &&  ((params.action[4] == '_'))) {
 	 /* rpcf_ action  */
       }else {
-	 asprintf(&script_file, 
+	 ourfa_asprintf(&script_file, 
 #ifdef WIN32
 			 "%s\\%s.xml",
 #else
@@ -946,7 +946,7 @@ int main(int argc, char **argv)
 	 || strchr(params.host ? params.host : DEFAULT_HOST_PORT, ':')) {
       host_port = strdup(params.host ? params.host : DEFAULT_HOST_PORT);
    }else {
-      asprintf(&host_port, "%s:%s",
+      ourfa_asprintf(&host_port, "%s:%s",
 	    params.host ? params.host : DEFAULT_HOST_PORT,
 	    params.port
 	    );

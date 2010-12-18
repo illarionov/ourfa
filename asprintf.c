@@ -4,32 +4,48 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <errno.h>
 #endif
 
-int asprintf( char **, char *, ... );
-int vasprintf( char **, char *, va_list );
-
-int vasprintf( char **sptr, char *fmt, va_list argv )
+int ourfa_vasprintf( char **ret, const char *fmt, va_list ap )
 {
 #ifdef _MSC_VER
-  int wanted = _vscprintf(fmt, argv);
+  int wanted = _vscprintf(fmt, ap);
 #else
-  int wanted = vsnprintf( *sptr = NULL, 0, fmt, argv );
+  int wanted = vsnprintf( *ret = NULL, 0, fmt, ap );
 #endif
-  if( (wanted > 0) && ((*sptr = malloc( 1 + wanted )) != NULL) )
-    return vsprintf( *sptr, fmt, argv );
+  if( (wanted > 0) && ((*ret = malloc( 1 + wanted )) != NULL) )
+    return vsprintf( *ret, fmt, ap );
 
   return wanted;
 }
 
-int asprintf( char **sptr, char *fmt, ... )
+int ourfa_asprintf( char **res, const char *fmt, ... )
 {
   int retval;
   va_list argv;
   va_start( argv, fmt );
-  retval = vasprintf( sptr, fmt, argv );
+  retval = ourfa_vasprintf(res, fmt, argv );
   va_end( argv );
   return retval;
 }
+
+#ifdef _MSC_VER
+int ourfa_snprintf(char *str, size_t size, const char *format, ...)
+{
+  int retval;
+  va_list argv;
+  va_start( argv, format );
+  retval = _vsnprintf(str, size, format, argv);
+  va_end( argv );
+  if (((retval < 0) || (retval == size))
+	&& str
+	&& (size > 0))
+	  str[size-1]='\0';
+  if (errno == ERANGE)
+    errno = 0;
+  return retval == size ? retval-1 : retval;
+}
+#endif
 
 

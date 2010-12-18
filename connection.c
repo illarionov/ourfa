@@ -118,7 +118,7 @@ ourfa_connection_t *ourfa_connection_new(ourfa_ssl_ctx_t *ssl_ctx)
    if (res == NULL)
       return NULL;
 
-#ifdef _MSC_VER
+#ifdef WIN32
    else {
       WSADATA wsaData;
 
@@ -133,7 +133,7 @@ ourfa_connection_t *ourfa_connection_new(ourfa_ssl_ctx_t *ssl_ctx)
    if (ssl_ctx == NULL) {
       ssl_ctx = ourfa_ssl_ctx_new();
       if (ssl_ctx == NULL) {
-#ifdef _MSC_VER
+#ifdef WIN32
 	 WSACleanup();
 #endif
 	 free(res);
@@ -190,7 +190,7 @@ void ourfa_connection_free(ourfa_connection_t *connection)
    free(connection->hostname);
    free(connection);
 
-#ifdef _MSC_VER
+#ifdef WIN32
    WSACleanup();
 #endif
 
