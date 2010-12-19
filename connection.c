@@ -566,9 +566,10 @@ int ourfa_connection_open(ourfa_connection_t *connection)
       }
 
       if (connect(sockfd, res->ai_addr, res->ai_addrlen) < 0) {
-	 char err_msg_buf[200];
 	 char *err_msg;
 #ifdef WIN32
+	 char err_msg_buf[200];
+
 	 err_msg = err_msg_buf;
 	 snprintf(err_msg_buf, sizeof(err_msg_buf), "WSA erro %lu", SOCKET_ERRNO);
 #else

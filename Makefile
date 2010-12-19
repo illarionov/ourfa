@@ -4,8 +4,8 @@ CC?=gcc
 AR?=ar
 RANLIB?=ranlib
 CFLAGS?= -W -Wall -O2 -DNDEBUG -s
-#CFLAGS=-W -Wall -g -O0
-#CFLAGS+= -DNDEBUG -s
+#CFLAGS=-W -Wall -g -O0 -fstack-protector
+CFLAGS+= -DNDEBUG -s
 
 PREFIX=/usr/local
 LDFLAGS?=-L/usr/local/lib
