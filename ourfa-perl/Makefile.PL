@@ -23,7 +23,7 @@ my %make_conf = (
        INC            => '',
        DEFINE         => '',
     #OPTIMIZE	      => '-O0 -g',
-    #PERL_MALLOC_OK    => 1 #strdup(), asprintf()
+    PERL_MALLOC_OK    => 0 #strdup(), asprintf()
 );
 
 if ($^O !~ /Win32/) {

@@ -54,6 +54,11 @@
 #define snprintf ourfa_snprintf
 #endif
 
+#ifdef WIN32
+#define malloc win32_malloc
+#define free win32_free
+#endif
+
 #define OURFA2HV_S_SIZE 20
 struct ourfah2hv_ctx {
    ourfa_hash_t *h;
