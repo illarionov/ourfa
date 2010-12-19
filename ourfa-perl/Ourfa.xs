@@ -50,6 +50,10 @@
 #define PRN(format, ...)
 #endif
 
+#ifdef _MSC_VER
+#define snprintf ourfa_snprintf
+#endif
+
 #define OURFA2HV_S_SIZE 20
 struct ourfah2hv_ctx {
    ourfa_hash_t *h;
@@ -337,7 +341,7 @@ static int ourfa_exec(ourfa_connection_t *conn,
    int state;
    int res;
    unsigned s_top;
-   const char *node_type, *node_name, *arr_index;
+   const char *node_name, *arr_index;
    ourfa_script_call_ctx_t *sctx;
    SV *s[50];
 
@@ -873,9 +877,7 @@ ourfa_connection_session_ip(connection, val=NO_INIT)
       int res;
    CODE:
       if (items > 1) {
-	 STRLEN addrlen;
 	 struct in_addr ip;
-	 char * ip_address;
 	 if (SvOK(val)) {
 	    sv2in_addr_t(val, "Ourfa::Connection::session_ip", &ip.s_addr, 1);
 	    PRN("set session ip: %s", inet_ntoa(ip));
@@ -1051,7 +1053,7 @@ ourfa_connection_write_long(connection, val, type=OURFA_ATTR_DATA)
    unsigned type
    long long val
    CODE:
-      RETVAL = ourfa_connection_write_int(connection, type, val);
+      RETVAL = ourfa_connection_write_long(connection, type, val);
       if (RETVAL != OURFA_OK)
 	 croak("%s: %s", "Ourfa::Connection::write_long", ourfa_error_strerror(RETVAL));
 
@@ -1409,7 +1411,6 @@ ourfa_script_call_call(CLASS, connection, xmlapi, func_name, h=NO_INIT)
    const char *func_name
    HV *h
    PREINIT:
-      SV *    sv;
       ourfa_hash_t *ourfa_in;
       ourfa_xmlapi_func_t *f;
       int ret;

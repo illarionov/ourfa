@@ -436,10 +436,11 @@ int ourfa_connection_set_hostname(ourfa_connection_t *connection, const char *ho
 
 int ourfa_connection_set_session_id(ourfa_connection_t *connection, const char *session_id)
 {
-   uint8_t tmp[16];
+   unsigned tmp[16];
+   unsigned i;
 
    assert(connection);
-   assert(sizeof(tmp)==sizeof(connection->session_id_buf));
+   assert((sizeof(tmp)/sizeof(tmp[0]))==sizeof(connection->session_id_buf));
 
    if (ourfa_connection_is_connected(connection))
       return connection->printf_err(OURFA_ERROR_SESSION_ACTIVE, connection->err_ctx, NULL);
@@ -448,17 +449,17 @@ int ourfa_connection_set_session_id(ourfa_connection_t *connection, const char *
       connection->session_id = NULL;
    else {
       if (sscanf(session_id,
-	       "%2hhx%2hhx%2hhx%2hhx"
-	       "%2hhx%2hhx%2hhx%2hhx"
-	       "%2hhx%2hhx%2hhx%2hhx"
-	       "%2hhx%2hhx%2hhx%2hhx",
+	       "%2x%2x%2x%2x"
+	       "%2x%2x%2x%2x"
+	       "%2x%2x%2x%2x"
+	       "%2x%2x%2x%2x",
 	       &tmp[0],&tmp[1],&tmp[2],&tmp[3],
 	       &tmp[4],&tmp[5],&tmp[6],&tmp[7],
 	       &tmp[8],&tmp[9],&tmp[10],&tmp[11],
 	       &tmp[12],&tmp[13],&tmp[14],&tmp[15]) < 16)
 	 return connection->printf_err(OURFA_ERROR_WRONG_SESSION_ID, connection->err_ctx, NULL);
-
-      memcpy(connection->session_id_buf, tmp, sizeof(connection->session_id_buf));
+      for (i=0; i<sizeof(connection->session_id_buf); i++)
+	 connection->session_id_buf[i]=(uint8_t)tmp[i];
       connection->session_id = connection->session_id_buf;
    }
 

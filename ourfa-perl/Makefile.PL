@@ -1,24 +1,74 @@
 use 5.006001;
 use ExtUtils::MakeMaker;
+use Config;
+use strict;
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 
-my $xml2_includes=`xml2-config --cflags`;
-my $xml2_libs = `xml2-config --libs`;
+#Win32
+my $XML_DIR='..\..\libxml';
+my $ICONV_DIR='..\..\iconv';
+my $SSL_DIR='c:\OpenSSL-Win32';
+my $ZLIB_DIR='..\..\zlib';
+my $LIBOURFA_DIR='..\libourfa';
 
-WriteMakefile(
+my %make_conf = (
     NAME              => 'Ourfa',
     VERSION_FROM      => 'lib/Ourfa.pm', # finds $VERSION
     PREREQ_PM         => {}, # e.g., Module::Name => 1.1
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM  => 'lib/Ourfa.pm', # retrieve abstract from module
        AUTHOR         => 'Alexey Illarionov <littlesavage@rambler.ru>') : ()),
-    LIBS              => ["-lssl -lcrypto $xml2_libs -lourfa"], # e.g., '-lm'
-    DEFINE            => $xml2_includes, # e.g., '-DHAVE_SOMETHING'
-    INC               => '-I.', # e.g., '-I. -I/usr/include/other'
+       LIBS           => '',
+       INC            => '',
+       DEFINE         => '',
     #OPTIMIZE	      => '-O0 -g',
     #PERL_MALLOC_OK    => 1 #strdup(), asprintf()
 );
+
+if ($^O !~ /Win32/) {
+   my $xml2_includes=`xml2-config --cflags`;
+   my $xml2_libs = `xml2-config --libs`;
+   $make_conf{LIBS} = "-lssl -lcrypto $xml2_libs -lourfa";
+   $make_conf{DEFINE} = $xml2_includes;
+}else {
+   if ($Config{ld} =~ /link/) {
+      $make_conf{LDDLFLAGS} .= " -MANIFEST";
+      if ($ENV{DEBUG}) {
+	 $make_conf{OPTIMIZE}=" -D_DEBUG -Od -Z7";
+	 $make_conf{LDDLFLAGS}.=" -DEBUG";
+      }
+   }
+
+   #OpenSSL
+   $make_conf{INC} .= " -I$SSL_DIR\\include";
+   $make_conf{LIBS} .= " -L$SSL_DIR\\lib -L$SSL_DIR\\lib\\MinGW";
+   $make_conf{LIBS} .= " -leay32 -lssleay32";
+
+   #LibXML
+   $make_conf{INC} .= " -I$XML_DIR\\include";
+   $make_conf{LIBS} .= " -L$XML_DIR\\lib";
+   $make_conf{LIBS} .= " -lxml2";
+
+   #Iconv
+   $make_conf{INC} .= " -I$ICONV_DIR\\include";
+   $make_conf{LIBS} .= " -L$ICONV_DIR\\lib";
+   $make_conf{LIBS} .= " -liconv";
+
+   #Zlib
+   $make_conf{INC} .= " -I$ZLIB_DIR\\include";
+   $make_conf{LIBS} .= " -L$ZLIB_DIR\\lib";
+   $make_conf{LIBS} .= " -lzlib";
+
+   #Ourfa
+   $make_conf{INC} .= " -I. -I$LIBOURFA_DIR\\include";
+   $make_conf{LIBS} .= " -L$LIBOURFA_DIR\\lib";
+   $make_conf{LIBS} .= " -lourfa";
+
+}
+
+WriteMakefile(%make_conf);
+
 if  (eval {require ExtUtils::Constant; 1}) {
   # If you edit these definitions to change the constants used by this module,
   # you will need to use the generated const-c.inc and const-xs.inc

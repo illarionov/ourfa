@@ -53,20 +53,20 @@ libourfa.lib: $(OBJS)
 
 clean:
 	del /Q /F *.obj ourfa_client libourfa.lib vc100.pdb ourfa_client.exe
-	rmdir /S /Q ourfa_client
+	rmdir /S /Q libourfa
 
 package: libourfa.lib ourfa_client.exe
-	mkdir ourfa_client\bin
-	mkdir ourfa_client\lib
-	mkdir ourfa_client\include
-	copy libourfa.lib ourfa_client\lib
-	copy ourfa.h ourfa_client\include
-	copy ourfa_client.exe ourfa_client\bin
-	copy $(ICONV_DIR)\bin\iconv.dll ourfa_client\bin
-	copy $(XML_DIR)\bin\libxml2.dll ourfa_client\bin
-	copy $(SSL_DIR)\libeay32.dll ourfa_client\bin
-	copy $(SSL_DIR)\ssleay32.dll ourfa_client\bin
-	copy $(ZLIB_DIR)\bin\zlib1.dll ourfa_client\bin
+	mkdir libourfa\bin
+	mkdir libourfa\lib
+	mkdir libourfa\include
+	copy libourfa.lib libourfa\lib
+	copy ourfa.h libourfa\include
+	copy ourfa_client.exe libourfa\bin
+	copy $(ICONV_DIR)\bin\iconv.dll libourfa\bin
+	copy $(XML_DIR)\bin\libxml2.dll libourfa\bin
+	copy $(SSL_DIR)\libeay32.dll libourfa\bin
+	copy $(SSL_DIR)\ssleay32.dll libourfa\bin
+	copy $(ZLIB_DIR)\bin\zlib1.dll libourfa\bin
 	
 
 asprintf.obj: asprintf.c
