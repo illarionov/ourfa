@@ -23,6 +23,8 @@ PERL_CONFIGURE=	yes
 NO_SIZE=        yes
 IGNOREFILES=	${DISTFILES}
 
+MAKE_JOBS_SAFE=	yes
+
 MAN3=		Ourfa.3
 
 .include <bsd.port.mk>

@@ -59,7 +59,7 @@ dist:
 	tar czvf $(DISTNAME).tar.gz \
 	   $(DISTNAME)/Makefile \
 	   $(DISTNAME)/Makefile.mingw \
-	   $(DISTNAME)/Makefile.mvcc \
+	   $(DISTNAME)/Makefile.msvc \
 	   $(DISTNAME)/README \
 	   $(DISTNAME)/ourfa.h \
 	   $(DISTNAME)/asprintf.c \
