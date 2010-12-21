@@ -3,7 +3,7 @@ SHELL=/bin/sh
 CC?=gcc
 AR?=ar
 RANLIB?=ranlib
-CFLAGS?= -W -Wall -O2 -DNDEBUG -s
+#CFLAGS?= -W -Wall -O2 -DNDEBUG -s
 #CFLAGS=-W -Wall -g -O0 -fstack-protector
 CFLAGS+= -DNDEBUG -s
 
@@ -12,6 +12,8 @@ LDFLAGS?=-L/usr/local/lib
 
 XML2_CFLAGS?=	`xml2-config --cflags`
 XML2_LIBS?=	`xml2-config --libs`
+ICONV_CFLAGS?=	-I/usr/local/include
+ICONV_LIBS?=	-L/usr/local/lib -liconv
 
 DESTDIR?=/
 PREFIX?=netup/utm5
@@ -28,10 +30,10 @@ OBJS= hash.o \
 all: libourfa.a ourfa_client
 
 ourfa_client: ourfa.h libourfa.a client.o client_dump.o client_datafile.o
-	$(CC) $(CFLAGS) $(XML2_CFLAGS) \
+	$(CC) $(CFLAGS) $(XML2_CFLAGS) $(ICONV_CFLAGS) \
 	  -o ourfa_client \
 	  client.o client_dump.o client_datafile.o \
-	  $(LDFLAGS) -L. -lourfa -lssl -lcrypto $(XML2_LIBS)
+	  $(LDFLAGS) -L. -lourfa -lssl -lcrypto $(XML2_LIBS) $(ICONV_LIBS)
 
 libourfa.a: $(OBJS)
 	rm -f libourfa.a
@@ -93,7 +95,7 @@ hash.o: hash.c ourfa.h
 xmlapi.o: xmlapi.c ourfa.h
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c xmlapi.c
 client.o: client.c ourfa.h
-	$(CC) $(CFLAGS) -c client.c
+	$(CC) $(CFLAGS) $(ICONV_CFLAGS) -c client.c
 client_dump.o: client_dump.c ourfa.h
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c client_dump.c
 client_datafile.o: client_dump.o client_datafile.c ourfa.h

@@ -44,6 +44,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <iconv.h>
+#include <locale.h>
 #include "ourfa.h"
 
 #define DEFAULT_HOST "localhost"
@@ -94,6 +96,7 @@ struct params_t {
    struct in_addr *session_ip;
    struct in_addr session_ip_buf;
    FILE *debug;
+   unsigned is_in_unicode;
    unsigned show_help;
    unsigned timeout;
    enum output_format_t output_format;
@@ -187,6 +190,7 @@ static int help(ourfa_xmlapi_func_t *f)
 	 " %-10s %s\n"
 	 " %-10s %s\n"
 	 " %-10s %s\n"
+	 " %-10s %s\n"
 	 "\n",
 	 "-help", "This message",
 	 "-a", "Action name",
@@ -204,6 +208,7 @@ static int help(ourfa_xmlapi_func_t *f)
 	 "-u", "Login as user (not admin)",
 	 "-dealer", "Login as dealer (not admin)",
 	 "-timeout", "Timeout in seconds (default: " STR(DEFAULT_TIMEOUT) ")",
+	 "-is_in_unicode", "Turn off conversion of command line arguments to unicode",
 	 "-o", "Output format: xml (default), batch, or hash",
 	 "-debug",      "Turn on debug",
 	 "-datafile", "Load array datas from file",
@@ -241,6 +246,7 @@ static int init_params(struct params_t *params)
    params->session_id = NULL;
    params->debug = NULL;
    params->show_help = 0;
+   params->is_in_unicode = 0;
    params->timeout = DEFAULT_TIMEOUT;
    params->output_format = OUTPUT_FORMAT_XML;
    params->work_h = ourfa_hash_new(0);
@@ -440,6 +446,18 @@ static int set_sysparam_show_help(struct params_t *params,
    return 1;
 }
 
+static int set_sysparam_is_in_unicode(struct params_t *params,
+      const char *UNUSED(name),
+      const char *UNUSED(val),
+      unsigned UNUSED(is_config_file),
+      void *UNUSED(data))
+{
+   params->is_in_unicode=1;
+
+   return 1;
+}
+
+
 
 static int load_system_param(struct params_t *params, const char *name, const char *val, unsigned is_config_file)
 {
@@ -487,6 +505,8 @@ static int load_system_param(struct params_t *params, const char *name, const ch
       {"S", NULL,            set_sysparam_ssl,
 	 NULL,},
       {"i", NULL,            set_sysparam_session_ip,
+	 NULL,},
+      {"is_in_unicode", NULL, set_sysparam_is_in_unicode,
 	 NULL,},
       {"help", NULL,            set_sysparam_show_help,
 	 NULL,},
@@ -675,6 +695,14 @@ static int load_command_line_params(int argc, char **argv, struct params_t *para
 {
    int i=1;
 
+   iconv_t to_utf8;
+
+   to_utf8 = iconv_open("UTF-8", "");
+   if (to_utf8 == (iconv_t)(-1)) {
+      fprintf(stderr, "iconv error");
+      return 1;
+   }
+
    while (i<argc) {
       int incr_i, is_system_param;
       const char *p;
@@ -708,11 +736,13 @@ static int load_command_line_params(int argc, char **argv, struct params_t *para
       if (name[0] == '\0') {
 	 fprintf(stderr, "Wrong parameter '%s': cannot parse parameter name\n",
 	       argv[i]);
+	 iconv_close(to_utf8);
 	 return 1;
       }
       if (res_idx == sizeof(name)-1) {
 	 fprintf(stderr, "Wrong parameter '%s': too long parameter name\n",
 	       argv[i]);
+	 iconv_close(to_utf8);
 	 return 1;
       }
 
@@ -728,6 +758,7 @@ static int load_command_line_params(int argc, char **argv, struct params_t *para
 	 if (p[0] == '\0') {
 	    fprintf(stderr, "Wrong parameter '%s': wrong index\n",
 		  argv[i]);
+	    iconv_close(to_utf8);
 	    return 1;
 	 }
 
@@ -742,6 +773,7 @@ static int load_command_line_params(int argc, char **argv, struct params_t *para
 	 if (res_idx == sizeof(idx)-1) {
 	    fprintf(stderr, "Wrong parameter '%s': too long index name\n",
 		  argv[i]);
+	    iconv_close(to_utf8);
 	    return 1;
 	 }
       }
@@ -761,9 +793,10 @@ static int load_command_line_params(int argc, char **argv, struct params_t *para
       if (idx[0] == '\0') {
 	 int load_res;
 	 load_res=load_system_param(params, name, p, 0);
-	 if (load_res < 0)
+	 if (load_res < 0) {
+	    iconv_close(to_utf8);
 	    return 1;
-	 else if (load_res == 0)
+	 } else if (load_res == 0)
 	    is_system_param=0;
 	 else {
 	    is_system_param = 1;
@@ -774,9 +807,12 @@ static int load_command_line_params(int argc, char **argv, struct params_t *para
       /* Add parameter to hash  */
       if (!is_system_param && !only_system_params) {
 	 char *p_name;
+	 char *p_val;
+
 	 if (p==NULL) {
 	    fprintf(stderr, "Wrong parameter '%s': can not parse value\n",
 		  argv[i]);
+	    iconv_close(to_utf8);
 	    return 1;
 	 }
 
@@ -787,16 +823,90 @@ static int load_command_line_params(int argc, char **argv, struct params_t *para
 	 else
 	    p_name = &name[0];
 
+	 p_val = NULL;
+	 /* convert parameter to utf-8  */
+	 if ((*p != '\0') && !params->is_in_unicode) {
+	    size_t inbytesleft, outbytesleft, pbuf_siz;
+	    const char *inbuf;
+	    char *outbuf;
+
+	    inbytesleft = strlen(p)+1;
+	    pbuf_siz = inbytesleft+1;
+	    p_val = malloc(pbuf_siz);
+	    if (p_val == NULL) {
+	       fprintf(stderr, "malloc error");
+	       iconv_close(to_utf8);
+	    }
+
+	    inbuf = p;
+	    outbuf = p_val;
+	    outbytesleft = pbuf_siz;
+	    while (inbytesleft != 0) {
+	       size_t i;
+	       i = iconv(to_utf8, &inbuf, &inbytesleft,
+		     &outbuf, &outbytesleft);
+	       if (i == (size_t)-1) {
+		  /* No room in output buffer  */
+		  if (errno == E2BIG) {
+		     char *newpbuf;
+		     size_t old_pbuf_siz;
+
+		     assert(inbytesleft > 0);
+		     assert(outbytesleft == 0);
+
+		     old_pbuf_siz = pbuf_siz;
+		     pbuf_siz = pbuf_siz + inbytesleft + 1;
+		     newpbuf = realloc(p_val, pbuf_siz);
+		     if (newpbuf == NULL) {
+			fprintf(stderr, "realloc error");
+			free(p_val);
+			iconv_close(to_utf8);
+			return 1;
+		     }
+		     p_val = newpbuf;
+		     outbuf = &newpbuf[old_pbuf_siz];
+		     outbytesleft=pbuf_siz-old_pbuf_siz;
+		  }else {
+		     fprintf(stderr, "Wrong parameter '%s': can not convert value to UTF-8\n",
+			   p_name);
+		     free(p_val);
+		     iconv_close(to_utf8);
+		     return 1;
+		  }
+	       }
+	    }
+	    if (outbytesleft > 0) {
+	       p_val[pbuf_siz-outbytesleft]='\0';
+	    }else {
+	       char *newpbuf;
+	       assert(outbytesleft==0);
+	       newpbuf = realloc(p_val, pbuf_siz+1);
+	       if (newpbuf == NULL) {
+		  fprintf(stderr, "realloc error");
+		  free(p_val);
+		  iconv_close(to_utf8);
+		  return 1;
+	       }
+	       p_val=newpbuf;
+	       p_val[pbuf_siz]='\0';
+	    }
+	 }
+
 	 if ((hash_arr_push(params->work_h,
-		  p_name, idx, p) != 0)
+		  p_name, idx, (*p == '\0') || (params->is_in_unicode) ? p : p_val) != 0)
 	       || (hash_arr_push(params->orig_h,
-		      p_name, idx, p) != 0))
+		      p_name, idx, (*p == '\0') || (params->is_in_unicode) ? p : p_val) != 0)) {
+	    free(p_val);
+	    iconv_close(to_utf8);
 	    return 1;
+	 }else
+	    free(p_val);
       }
 
       i = i + incr_i + 1;
    } /* while(i<argc) */
 
+   iconv_close(to_utf8);
    return 0;
 }
 
@@ -809,6 +919,8 @@ int main(int argc, char **argv)
    char *host_port;
 
    struct params_t params;
+
+   setlocale(LC_ALL, "");
 
    if (init_params(&params) < 0)
       return 1;
