@@ -48,6 +48,9 @@
 
 #include "ourfa.h"
 
+/* Locale-insensitive strtod */
+extern double ourfa_strtod_c(const char *s00, char **se);
+
 #define DEFAULT_ARRAY_SIZE 5
 
 enum ourfa_elm_type_t {
@@ -605,7 +608,7 @@ int ourfa_hash_get_double(ourfa_hash_t *h, const char *key, const char *idx, dou
 	    if ((s == NULL) || (s[0]=='\0'))
 	       return -1;
 	    errno=0;
-	    tmp = strtod(s, &end_p);
+	    tmp = ourfa_strtod_c(s, &end_p);
 	    if ((*end_p != '\0') || (errno==ERANGE))
 	       return -1;
 	    if (res)

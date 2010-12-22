@@ -3,6 +3,7 @@ SHELL=/bin/sh
 CC?=gcc
 AR?=ar
 RANLIB?=ranlib
+OBJCOPY?=objcopy
 #CFLAGS?= -W -Wall -O2 -DNDEBUG -s
 #CFLAGS=-W -Wall -g -O0 -fstack-protector
 CFLAGS+= -DNDEBUG -s
@@ -25,7 +26,8 @@ OBJS= hash.o \
       connection.o \
       func_call.o \
       ssl_ctx.o \
-      asprintf.o
+      asprintf.o \
+      dtoa.o
 
 all: libourfa.a ourfa_client
 
@@ -100,4 +102,7 @@ client_dump.o: client_dump.c ourfa.h
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c client_dump.c
 client_datafile.o: client_dump.o client_datafile.c ourfa.h
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c client_datafile.c
+dtoa.o: dtoa.c
+	$(CC) $(CFLAGS) -DIEEE_8087 -UUSE_LOCALE -o dtoa_orig.o -c dtoa.c
+	$(OBJCOPY) --redefine-sym strtod=ourfa_strtod_c --localize-symbol dtoa dtoa_orig.o dtoa.o
 

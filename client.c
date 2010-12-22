@@ -1126,6 +1126,9 @@ int main(int argc, char **argv)
    if (ourfa_connection_open(connection) != 0)
       goto main_end;
 
+   /* Print numbers in result in C locale */
+   setlocale(LC_NUMERIC, "C");
+
    {
       int state;
       ourfa_script_call_ctx_t *sctx;
