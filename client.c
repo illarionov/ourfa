@@ -830,8 +830,8 @@ static int load_command_line_params(int argc, char **argv, struct params_t *para
 	    const char *inbuf;
 	    char *outbuf;
 
-	    inbytesleft = strlen(p)+1;
-	    pbuf_siz = inbytesleft+1;
+	    inbytesleft = strlen(p);
+	    pbuf_siz = 6*inbytesleft+1;
 	    p_val = malloc(pbuf_siz);
 	    if (p_val == NULL) {
 	       fprintf(stderr, "malloc error");
@@ -847,12 +847,11 @@ static int load_command_line_params(int argc, char **argv, struct params_t *para
 		     &outbuf, &outbytesleft);
 	       if (i == (size_t)-1) {
 		  /* No room in output buffer  */
-		  if (errno == E2BIG) {
+		  if (errno == E2BIG) { /* XXX: win32 do not set errno?*/
 		     char *newpbuf;
 		     size_t old_pbuf_siz;
 
 		     assert(inbytesleft > 0);
-		     assert(outbytesleft == 0);
 
 		     old_pbuf_siz = pbuf_siz;
 		     pbuf_siz = pbuf_siz + inbytesleft + 1;
@@ -867,8 +866,8 @@ static int load_command_line_params(int argc, char **argv, struct params_t *para
 		     outbuf = &newpbuf[old_pbuf_siz];
 		     outbytesleft=pbuf_siz-old_pbuf_siz;
 		  }else {
-		     fprintf(stderr, "Wrong parameter '%s': can not convert value to UTF-8\n",
-			   p_name);
+		     fprintf(stderr, "Wrong parameter '%s', can not convert value to UTF-8, `%u` %s\n",
+			   p_name, errno, strerror(errno));
 		     free(p_val);
 		     iconv_close(to_utf8);
 		     return 1;
@@ -936,11 +935,26 @@ int main(int argc, char **argv)
    f = NULL;
    res=1;
 
-   /* Load config filename and data filename  */
+   /*
+    * Priorities:
+    *   1. Command line (highest)
+    *   2. Data file
+    *   3. Config file (lowest)
+    */
+
+   /* Load system parameters: config filename,
+    * data filename, is_in_unicode
+    */
+   res = load_command_line_params(argc, argv, &params, 1);
+   if (res != 0)
+      goto main_end;
+
+   /* Load params from command line  */
    res = load_command_line_params(argc, argv, &params, 0);
    if (res != 0)
       goto main_end;
 
+   /* load data_file. Already loaded datas not touched */
    if (params.data_file) {
       char err_str[200];
       fprintf(stderr, "Loading datafile %s\n", params.data_file);
@@ -955,10 +969,11 @@ int main(int argc, char **argv)
       }
    }
 
+   /* Load config file. Already loaded datas not touched */
    if (load_config_file(&params) < 0)
       goto main_end;
 
-   /* Reload system params from command line  */
+   /* Reload system params from command line */
    res = load_command_line_params(argc, argv, &params, 1);
    if (res != 0)
       goto main_end;
