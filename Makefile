@@ -60,24 +60,35 @@ DISTNAME=ourfa-521008001
 dist:
 	rm -f $(DISTNAME)
 	ln -s -f . $(DISTNAME)
+	git log --no-merges > $(DISTNAME)/Changelog
 	tar czvf $(DISTNAME).tar.gz \
 	   $(DISTNAME)/Makefile \
 	   $(DISTNAME)/Makefile.mingw \
 	   $(DISTNAME)/Makefile.msvc \
 	   $(DISTNAME)/README \
-	   $(DISTNAME)/ourfa.h \
+	   $(DISTNAME)/Changelog \
 	   $(DISTNAME)/asprintf.c \
-	   $(DISTNAME)/pkt.c \
-	   $(DISTNAME)/error.c \
-	   $(DISTNAME)/connection.c \
-	   $(DISTNAME)/func_call.c \
-	   $(DISTNAME)/ssl_ctx.c \
-	   $(DISTNAME)/hash.c \
-	   $(DISTNAME)/xmlapi.c \
+	   $(DISTNAME)/freebsd/ourfa/Makefile \
+	   $(DISTNAME)/freebsd/ourfa/distinfo \
+	   $(DISTNAME)/freebsd/ourfa/pkg-descr \
+	   $(DISTNAME)/freebsd/p5-Ourfa/Makefile \
+	   $(DISTNAME)/freebsd/p5-Ourfa/distinfo \
+	   $(DISTNAME)/freebsd/p5-Ourfa/pkg-descr \
+	   $(DISTNAME)/freebsd/p5-Ourfa/pkg-plist \
 	   $(DISTNAME)/client.c \
-	   $(DISTNAME)/client_dump.c \
 	   $(DISTNAME)/client_datafile.c \
-	   $(DISTNAME)/example.sh
+	   $(DISTNAME)/client_dump.c \
+	   $(DISTNAME)/connection.c \
+	   $(DISTNAME)/dtoa.c \
+	   $(DISTNAME)/error.c \
+	   $(DISTNAME)/example.sh \
+	   $(DISTNAME)/func_call.c \
+	   $(DISTNAME)/hash.c \
+	   $(DISTNAME)/ourfa.h \
+	   $(DISTNAME)/pkt.c \
+	   $(DISTNAME)/ssl_ctx.c \
+	   $(DISTNAME)/xmlapi.c \
+	   `eval "sed 's|^|$(DISTNAME)/ourfa-perl/|' ourfa-perl/MANIFEST"`
 	rm $(DISTNAME)
 
 asprintf.o: asprintf.c
