@@ -52,6 +52,8 @@ clean:
 
 asprintf.o: asprintf.c
 	$(CC) $(CFLAGS) -c asprintf.c
+strtod_c.o: strtod_c.c
+	$(CC) $(CFLAGS) -c strtod_c.c
 pkt.o: pkt.c ourfa.h
 	$(CC) $(CFLAGS) -c pkt.c
 error.o: error.c ourfa.h

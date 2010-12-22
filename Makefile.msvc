@@ -29,7 +29,6 @@ CFLAGS=$(CFLAGS) /DNDEBUG /O2
 LDFLAGS=$(LDFLAGS) 
 !endif
 
-
 OBJS= hash.obj \
       xmlapi.obj \
       pkt.obj \
@@ -37,7 +36,8 @@ OBJS= hash.obj \
       connection.obj \
       func_call.obj \
       ssl_ctx.obj \
-      asprintf.obj
+      asprintf.obj \
+      strtod_c.obj
 
 all: libourfa.lib ourfa_client.exe
 
@@ -69,8 +69,11 @@ package: libourfa.lib ourfa_client.exe
 	copy $(ZLIB_DIR)\bin\zlib1.dll libourfa\bin
 	
 
+
 asprintf.obj: asprintf.c
 	$(CC) $(CFLAGS) -c asprintf.c
+strtod_c.obj: strtod_c.c
+	$(CC) $(CFLAGS) -c strtod_c.c
 pkt.obj: pkt.c ourfa.h
 	$(CC) $(CFLAGS) -c pkt.c
 error.obj: error.c ourfa.h

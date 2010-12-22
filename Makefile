@@ -87,6 +87,7 @@ dist:
 	   $(DISTNAME)/ourfa.h \
 	   $(DISTNAME)/pkt.c \
 	   $(DISTNAME)/ssl_ctx.c \
+	   $(DISTNAME)/strtod_c.c \
 	   $(DISTNAME)/xmlapi.c \
 	   `eval "sed 's|^|$(DISTNAME)/ourfa-perl/|' ourfa-perl/MANIFEST"`
 	rm $(DISTNAME)
