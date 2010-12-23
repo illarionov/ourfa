@@ -50,9 +50,15 @@
 
 #include "ourfa.h"
 
+#ifdef WIN32
+#define DEFAULT_SSL_CERT "C:\\Program Files\\NetUP\\UTM5\\admin.crt"
+#else
 #define DEFAULT_SSL_CERT "/netup/utm5/admin.crt"
+#endif
 #define DEFAULT_SSL_KEY DEFAULT_SSL_CERT
 #define DEFAULT_SSL_CERT_PASS "netup"
+
+#define FUNC_BY_NAME_HASH_SIZE 180
 
 struct ourfa_ssl_ctx_t {
    unsigned ssl_type;
