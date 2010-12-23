@@ -27,7 +27,7 @@
 #ifndef _OURFA_H
 #define _OURFA_H
 
-#define OURFA_LIB_VERSION	 521008001
+#define OURFA_LIB_VERSION	 521008002
 #define OURFA_PROTO_VERSION	 0x23
 
 #define OURFA_PKT_SESSION_INIT   0xc0
@@ -315,6 +315,9 @@ int   ourfa_connection_write_ip(ourfa_connection_t *conn, unsigned type, in_addr
 
 int   ourfa_connection_flush_read(ourfa_connection_t *conn);
 int   ourfa_connection_flush_write(ourfa_connection_t *conn);
+
+int   ourfa_connection_purge_read(ourfa_connection_t *conn);
+int   ourfa_connection_purge_write(ourfa_connection_t *conn);
 
 const ourfa_pkt_t      *ourfa_connection_rbuf_cur_pkt(ourfa_connection_t *conn);
 const ourfa_attr_hdr_t *ourfa_connection_rbuf_cur_attr(ourfa_connection_t *conn);

@@ -1364,6 +1364,12 @@ int ourfa_connection_flush_read(ourfa_connection_t *conn)
   return OURFA_OK;
 }
 
+int ourfa_connection_purge_read(ourfa_connection_t *conn)
+{
+  pktbuf_free(&conn->rbuf);
+  conn->rbuf.term_attr_in_tail = 0;
+  return OURFA_OK;
+}
 
 static int prepare_pkt_for_attr_write(ourfa_connection_t *conn,
       size_t data_size)
@@ -1567,6 +1573,13 @@ int ourfa_connection_flush_write(ourfa_connection_t *conn)
   conn->wbuf.term_attr_in_tail = 0;
 
   return res;
+}
+
+int ourfa_connection_purge_write(ourfa_connection_t *conn)
+{
+  pktbuf_free(&conn->wbuf);
+  conn->wbuf.term_attr_in_tail = 0;
+  return OURFA_OK;
 }
 
 

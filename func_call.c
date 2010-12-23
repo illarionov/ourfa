@@ -784,7 +784,9 @@ ourfa_func_call_req_step_end:
    if (fctx->err != OURFA_OK && !socket_error) {
       /* Schema error. Send termination attribute.
        * ans flush server response
+       * XXX: Server may not send data and client blocks on flush_read()
        */
+      ourfa_connection_purge_write(conn);
       if (ourfa_connection_write_int(conn, OURFA_ATTR_TERMINATION, 3) == OURFA_OK)
 	 ourfa_connection_flush_read(conn);
    }
