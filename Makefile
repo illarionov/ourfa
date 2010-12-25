@@ -7,6 +7,7 @@ OBJCOPY?=objcopy
 #CFLAGS?= -W -Wall -O2 -DNDEBUG -s
 #CFLAGS=-W -Wall -g -O0 -fstack-protector
 CFLAGS+= -DNDEBUG -s
+CFLAGS+= -fPIC
 
 PREFIX=/usr/local
 LDFLAGS?=-L/usr/local/lib

@@ -11,7 +11,7 @@ CATEGORIES=	devel perl5
 MASTER_SITES=	${MASTER_SITE_SOURCEFORGE}
 MASTER_SITE_SUBDIR=	ourfa
 PKGNAMEPREFIX=	p5-
-DISTNAME=	Ourfa-521008.0.0_01
+DISTNAME=	Ourfa-521008.0.0
 
 MAINTAINER=	littlesavage@rambler.ru
 COMMENT=	Perl bindings for URFA (UTM Remote Function Access)
