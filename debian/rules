@@ -19,10 +19,10 @@ install-stamp: build-stamp
 	dh_clean -k
 	dh_installdirs
 
-	$(MAKE) ICONV_LIBS="" PREFIX=$(CURDIR)/debian/libourfa/usr install
+	$(MAKE) ICONV_LIBS="" PREFIX=$(CURDIR)/debian/ourfa/usr install
 
-	mkdir -p $(CURDIR)/debian/libourfa/usr/share/doc/libourfa/examples
-	cp $(CURDIR)/example.sh  $(CURDIR)/debian/libourfa/usr/share/doc/libourfa/examples
+	mkdir -p $(CURDIR)/debian/ourfa/usr/share/doc/ourfa/examples
+	cp $(CURDIR)/example.sh  $(CURDIR)/debian/ourfa/usr/share/doc/ourfa/examples
 
 	touch install-stamp
 
