@@ -5,7 +5,7 @@ use strict;
 use warnings;
 use Carp;
 
-our $VERSION = '521008.0.0_01';
+our $VERSION = '521008.0.0';
 
 
 1;

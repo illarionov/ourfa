@@ -1,0 +1,49 @@
+#!/usr/bin/make -f
+
+build: build-stamp
+build-stamp:
+	dh_testdir
+	$(MAKE) ICONV_LIBS=""
+	touch build-stamp
+
+clean:
+	dh clean
+	$(MAKE) clean
+	rm -f build-stamp install-stamp
+
+install: install-stamp
+
+install-stamp: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+
+	$(MAKE) ICONV_LIBS="" PREFIX=$(CURDIR)/debian/libourfa/usr install
+
+	mkdir -p $(CURDIR)/debian/libourfa/usr/share/doc/libourfa/examples
+	cp $(CURDIR)/example.sh  $(CURDIR)/debian/libourfa/usr/share/doc/libourfa/examples
+
+	touch install-stamp
+
+binary-indep: build install
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_install
+	dh_installdebconf
+	dh_installdocs
+	dh_installchangelogs
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install

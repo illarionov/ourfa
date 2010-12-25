@@ -1,0 +1,14 @@
+Source: libourfa
+Section: libs
+Priority: optional
+Build-Depends: debhelper (>= 5)
+Maintainer: Alexey Illarionv <littlesavage@rambler.ru>
+Standards-Version: 3.8.0
+Homepage: https://github.com/littlesavage/ourfa
+
+Package: libourfa
+Architecture: any
+Depends: ${shlibs:Depends}
+Description: URFA (UTM Remote Function Access) client library
+ For more information go to https://github.com/littlesavage/ourfa
+
