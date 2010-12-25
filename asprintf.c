@@ -1,6 +1,9 @@
 #if defined(WIN32) && !defined(_MSC_VER)
 #include <windows.h>
-#else 
+#ifndef va_copy
+#define va_copy(d,s) ((d) = (s))
+#endif
+#else
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -9,13 +12,20 @@
 
 int ourfa_vasprintf( char **ret, const char *fmt, va_list ap )
 {
+  int wanted;
+  va_list ap_copy;
+
+  va_copy(ap_copy, ap);
+
 #ifdef _MSC_VER
-  int wanted = _vscprintf(fmt, ap);
+  wanted = _vscprintf(fmt, ap);
 #else
-  int wanted = vsnprintf( *ret = NULL, 0, fmt, ap );
+  wanted = vsnprintf( *ret = NULL, 0, fmt, ap );
 #endif
   if( (wanted > 0) && ((*ret = malloc( 1 + wanted )) != NULL) )
-    return vsprintf( *ret, fmt, ap );
+    return vsprintf( *ret, fmt, ap_copy );
+
+  va_end(ap_copy);
 
   return wanted;
 }
