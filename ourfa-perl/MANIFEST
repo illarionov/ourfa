@@ -5,6 +5,11 @@ MANIFEST.SKIP
 Ourfa.xs
 ppport.h
 README
+debian/changelog
+debian/compat
+debian/control
+debian/copyright
+debian/rules
 fallback/const-c.inc
 fallback/const-xs.inc
 t/000_Const.t

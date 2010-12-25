@@ -68,6 +68,12 @@ dist:
 	   $(DISTNAME)/README \
 	   $(DISTNAME)/Changelog \
 	   $(DISTNAME)/asprintf.c \
+	   $(DISTNAME)/debian/changelog \
+	   $(DISTNAME)/debian/compat \
+	   $(DISTNAME)/debian/control \
+	   $(DISTNAME)/debian/copyright \
+	   $(DISTNAME)/debian/docs \
+	   $(DISTNAME)/debian/rules \
 	   $(DISTNAME)/freebsd/ourfa/Makefile \
 	   $(DISTNAME)/freebsd/ourfa/distinfo \
 	   $(DISTNAME)/freebsd/ourfa/pkg-descr \
