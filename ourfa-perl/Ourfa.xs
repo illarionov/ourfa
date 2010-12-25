@@ -415,8 +415,8 @@ static int ourfa_exec(ourfa_connection_t *conn,
 				  sctx->func.err = OURFA_ERROR_HASH;
 				  sctx->func.func_ret_code = 1;
 				  snprintf(sctx->func.last_err_str,
-					sizeof(sctx->script.last_err_str),
-					"Can not set hash: %s = %ll",
+					sizeof(sctx->func.last_err_str),
+					"Can not set hash: %s = %lli",
 					node_name, val);
 			       }
 			    }
@@ -609,6 +609,7 @@ ourfa_ssl_ctx_t *
 ourfa_ssl_ctx_new(CLASS)
    const char * CLASS
    CODE:
+      PERL_UNUSED_VAR(CLASS);
       RETVAL = ourfa_ssl_ctx_new();
       if (RETVAL)
 	    ourfa_ssl_ctx_set_err_f(RETVAL, ourfa_err_f_warn, NULL);
@@ -687,11 +688,12 @@ ourfa_connection_new(CLASS, ssl_ctx=NULL)
    const char * CLASS
    ourfa_ssl_ctx_t *ssl_ctx
    CODE:
+      PERL_UNUSED_VAR(CLASS);
       RETVAL = ourfa_connection_new(ssl_ctx);
       if (RETVAL)
 	 ourfa_connection_set_err_f(RETVAL, ourfa_err_f_warn, NULL);
       else
-	 croak(NULL);
+	 croak("malloc error");
    OUTPUT:
       RETVAL
 
@@ -1119,11 +1121,12 @@ ourfa_xmlapi_t *
 ourfa_xmlapi_new(CLASS)
    const char * CLASS
    CODE:
+      PERL_UNUSED_VAR(CLASS);
       RETVAL = ourfa_xmlapi_new();
       if (RETVAL)
 	 ourfa_xmlapi_set_err_f(RETVAL, ourfa_err_f_warn, NULL);
       else
-	 croak(NULL);
+	 croak("malloc error");
    OUTPUT:
       RETVAL
 
@@ -1298,9 +1301,10 @@ ourfa_func_call_new(CLASS, f, h)
    ourfa_xmlapi_func_t *f
    ourfa_hash_t *h
    CODE:
+      PERL_UNUSED_VAR(CLASS);
       RETVAL=ourfa_func_call_ctx_new(f, h);
       if (RETVAL == NULL)
-	    croak(NULL);
+	    croak("malloc error");
       else
 	 RETVAL->printf_err = ourfa_err_f_warn;
    OUTPUT:
@@ -1391,9 +1395,10 @@ ourfa_script_call_new(CLASS, f, h)
    ourfa_xmlapi_func_t *f
    ourfa_hash_t *h
    CODE:
+      PERL_UNUSED_VAR(CLASS);
       RETVAL=ourfa_script_call_ctx_new(f, h);
       if (RETVAL == NULL)
-	    croak(NULL);
+	    croak("malloc error");
       else
 	 RETVAL->script.printf_err =  RETVAL->func.printf_err = ourfa_err_f_warn;
    OUTPUT:
@@ -1421,6 +1426,7 @@ ourfa_script_call_call(CLASS, connection, xmlapi, func_name, h=NO_INIT)
       int ret;
       char err[500];
    CODE:
+      PERL_UNUSED_VAR(CLASS);
       f = ourfa_xmlapi_func(xmlapi, func_name);
       if (f == NULL)
 	    croak("%s: Function `%s` not found in API\n",
