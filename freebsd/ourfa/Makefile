@@ -8,8 +8,8 @@
 PORTNAME=	ourfa
 PORTVERSION=	521008002.1
 CATEGORIES=	devel
-MASTER_SITES=	${MASTER_SITE_SOURCEFORGE}
-MASTER_SITE_SUBDIR=	ourfa
+MASTER_SITES=	http://github.com/downloads/littlesavage/ourfa/ \
+   		http://ls.orionet.ru/
 
 MAINTAINER=	littlesavage@rambler.ru
 COMMENT=	URFA (UTM Remote Function Access) client library

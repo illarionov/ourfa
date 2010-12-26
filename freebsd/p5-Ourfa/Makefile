@@ -8,8 +8,9 @@
 PORTNAME=	Ourfa
 PORTVERSION=	521008.0.0
 CATEGORIES=	devel perl5
-MASTER_SITES=	${MASTER_SITE_SOURCEFORGE}
-MASTER_SITE_SUBDIR=	ourfa
+MASTER_SITES=	http://github.com/downloads/littlesavage/ourfa/ \
+   		http://ls.orionet.ru/
+
 PKGNAMEPREFIX=	p5-
 DISTNAME=	Ourfa-521008.0.0
 
