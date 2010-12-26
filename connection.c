@@ -571,7 +571,7 @@ int ourfa_connection_open(ourfa_connection_t *connection)
 	 char err_msg_buf[200];
 
 	 err_msg = err_msg_buf;
-	 snprintf(err_msg_buf, sizeof(err_msg_buf), "WSA erro %lu", SOCKET_ERRNO);
+	 snprintf(err_msg_buf, sizeof(err_msg_buf), "WSA error %lu", SOCKET_ERRNO);
 #else
 	 err_msg = strerror(SOCKET_ERRNO);
 #endif
