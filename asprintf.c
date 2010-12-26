@@ -1,13 +1,13 @@
 #if defined(WIN32) && !defined(_MSC_VER)
 #include <windows.h>
-#ifndef va_copy
-#define va_copy(d,s) ((d) = (s))
-#endif
 #else
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <errno.h>
+#endif
+#ifndef va_copy
+#define va_copy(d,s) ((d) = (s))
 #endif
 
 int ourfa_vasprintf( char **ret, const char *fmt, va_list ap )
