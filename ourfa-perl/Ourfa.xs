@@ -179,7 +179,7 @@ static int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct 
 	       if (!val || !*val)
 		  continue;
 
-	       if (SvTYPE(*val) == SVt_RV) {
+	       if (SvROK(*val)) {
 		  val1 = SvRV(*val);
 		  val = &val1;
 	       }
