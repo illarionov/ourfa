@@ -6,13 +6,13 @@
 #
 
 PORTNAME=	Ourfa
-PORTVERSION=	521008.0.0
+PORTVERSION=	521008.2.0
 CATEGORIES=	devel perl5
 MASTER_SITES=	http://github.com/downloads/littlesavage/ourfa/ \
    		http://ls.orionet.ru/
 
 PKGNAMEPREFIX=	p5-
-DISTNAME=	Ourfa-521008.0.0
+DISTNAME=	Ourfa-521008.2.0
 
 MAINTAINER=	littlesavage@rambler.ru
 COMMENT=	Perl bindings for URFA (UTM Remote Function Access)

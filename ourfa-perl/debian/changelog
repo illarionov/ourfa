@@ -1,4 +1,4 @@
-ourfa-perl (521008002.2.0) unstable; urgency=low
+ourfa-perl (521008.2.0) unstable; urgency=low
 
   * Fix cipher_list for rsa_cert SSL method
 
