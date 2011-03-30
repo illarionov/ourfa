@@ -1,4 +1,10 @@
-ourfa (521008002.1) ourfa; urgency=low
+ourfa (521008002.2) unstable; urgency=low
+
+  * Fix cipher_list for rsa_cert SSL method
+
+ -- Allexey Illarionov <littlesavage@rambler.ru>  Wed, 30 Mar 2011 22:11:38 +0400
+
+ourfa (521008002.1) unstable; urgency=low
 
   * Initial version
 
