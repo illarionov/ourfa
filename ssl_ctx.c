@@ -182,13 +182,6 @@ int ourfa_ssl_ctx_set_ssl_type(ourfa_ssl_ctx_t *ssl_ctx, unsigned ssl_type)
    if (ssl_ctx->ssl_type == ssl_type)
       return OURFA_OK;
 
-   if ((ssl_type != OURFA_SSL_TYPE_NONE)
-	 && SSL_CTX_set_cipher_list(ssl_ctx->ssl_ctx, cipher_list) == 0) {
-      return ssl_ctx->printf_err(OURFA_ERROR_WRONG_CLIENT_CERTIFICATE, ssl_ctx->err_ctx,
-	    "SSL_CTX_set_cipher_list(""%s"") Failed",
-	    cipher_list);
-   }
-
    switch (ssl_type) {
       case OURFA_SSL_TYPE_NONE:
 	 /* XXX */
@@ -226,6 +219,13 @@ int ourfa_ssl_ctx_set_ssl_type(ourfa_ssl_ctx_t *ssl_ctx, unsigned ssl_type)
    } /* switch (ssl_type)  */
 
    ssl_ctx->ssl_type = ssl_type;
+
+   if ((ssl_type != OURFA_SSL_TYPE_NONE)
+	 && SSL_CTX_set_cipher_list(ssl_ctx->ssl_ctx, cipher_list) == 0) {
+      return ssl_ctx->printf_err(OURFA_ERROR_WRONG_CLIENT_CERTIFICATE, ssl_ctx->err_ctx,
+	    "SSL_CTX_set_cipher_list(""%s"") Failed",
+	    cipher_list);
+   }
 
    return OURFA_OK;
 }
