@@ -29,7 +29,7 @@ my %make_conf = (
 if ($^O !~ /Win32/) {
    my $xml2_includes=`xml2-config --cflags`;
    my $xml2_libs = `xml2-config --libs`;
-   $make_conf{LIBS} = "-lssl -lcrypto $xml2_libs -lourfa";
+   $make_conf{LIBS} = "-lourfa $xml2_libs -lssl -lcrypto";
    $make_conf{DEFINE} = $xml2_includes;
 }else {
    if ($Config{ld} =~ /link/) {
