@@ -75,6 +75,7 @@ static const struct {
    {OURFA_XMLAPI_NODE_STRING,   "string"},
    {OURFA_XMLAPI_NODE_LONG,     "long"},
    {OURFA_XMLAPI_NODE_DOUBLE,   "double"},
+   {OURFA_XMLAPI_NODE_BIN,      "binary"},
    {OURFA_XMLAPI_NODE_IP,       "ip_address"},
    {OURFA_XMLAPI_NODE_IF,       "if"},
    {OURFA_XMLAPI_NODE_FOR,      "for"},
@@ -612,6 +613,7 @@ static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t
 	 case OURFA_XMLAPI_NODE_STRING:
 	 case OURFA_XMLAPI_NODE_LONG:
 	 case OURFA_XMLAPI_NODE_DOUBLE:
+	 case OURFA_XMLAPI_NODE_BIN:
 	 case OURFA_XMLAPI_NODE_IP:
 	    {
 	       struct t_nodes my_nodes[3]= {
@@ -992,6 +994,7 @@ static int dump_func_def(ourfa_xmlapi_func_node_t *def, FILE *stream)
 	 case OURFA_XMLAPI_NODE_STRING:
 	 case OURFA_XMLAPI_NODE_LONG:
 	 case OURFA_XMLAPI_NODE_DOUBLE:
+	 case OURFA_XMLAPI_NODE_BIN:
 	 case OURFA_XMLAPI_NODE_IP:
 	    fprintf(stream, "%-8s %s", ourfa_xmlapi_node_name_by_type(cur->type),
 		  cur->n.n_val.name);
@@ -1172,6 +1175,7 @@ static void free_func_def(ourfa_xmlapi_func_node_t *def)
 	 case OURFA_XMLAPI_NODE_STRING:
 	 case OURFA_XMLAPI_NODE_LONG:
 	 case OURFA_XMLAPI_NODE_DOUBLE:
+	 case OURFA_XMLAPI_NODE_BIN:
 	 case OURFA_XMLAPI_NODE_IP:
 	    free(def->n.n_val.name);
 	    free(def->n.n_val.array_index);
