@@ -639,15 +639,20 @@ int ourfa_pkt_get_attr(const ourfa_attr_hdr_t *attr,
 
    allowed_data_length = 8;
    switch (type) {
-      case OURFA_ATTR_DATA_INT:
       case OURFA_ATTR_DATA_IP:
+         if ((attr->data_length != 4)
+                 && (attr->data_length != 5)
+                 && (attr->data_length != 17))
+	    return -1;
+         break;
+      case OURFA_ATTR_DATA_INT:
 	 allowed_data_length = 4;
 	 /* FALLTHROUGH */
       case OURFA_ATTR_DATA_LONG:
       case OURFA_ATTR_DATA_DOUBLE:
 	 if (attr->data_length != allowed_data_length)
 	    return -1;
-	 /* FALLTHROUGH */
+         break;
       default:
 	 break;
    }
@@ -703,11 +708,22 @@ int ourfa_pkt_get_attr(const ourfa_attr_hdr_t *attr,
 	 }
 	 break;
       case OURFA_ATTR_DATA_IP:
-	 {
+         if (attr->data_length == 4) {
 	    uint32_t res32;
 	    res32 = *(uint32_t *)attr->data;
 	    *(in_addr_t *)res = (in_addr_t)res32;
-	 }
+	 } else if (attr->data_length == 5) {
+            uint8_t *d = (uint8_t *)attr->data;
+	    uint32_t res32 = (((uint32_t)d[3+1]) << 24 & 0xff000000L)
+	       | (((uint32_t)d[2+1]) << 16 & 0xff0000L)
+	       | (((uint32_t)d[1+1]) << 8 & 0xff00L)
+	       | (((uint32_t)d[0+1]) & 0xff);
+	    *(in_addr_t *)res = (in_addr_t)res32;
+         } else if (attr->data_length == 17) {
+             /* TODO IPV6 */
+	    *(in_addr_t *)res = 0;
+         } else
+            return -1;
 	 break;
       case OURFA_ATTR_DATA_STRING:
 	 {
