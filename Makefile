@@ -5,17 +5,23 @@ AR?=ar
 RANLIB?=ranlib
 OBJCOPY?=objcopy
 #CFLAGS?= -W -Wall -O2 -DNDEBUG -s
-#CFLAGS=-W -Wall -g -O0 -fstack-protector
-CFLAGS+= -DNDEBUG -s
+#CFLAGS=-W -Wall -g -O1 -fstack-protector -fno-omit-frame-pointer
+CFLAGS+= -DNDEBUG
 CFLAGS+= -fPIC
 
 PREFIX=/usr/local
 LDFLAGS?=-L/usr/local/lib
+LDFLAGS+=-s
 
 XML2_CFLAGS?=	`xml2-config --cflags`
 XML2_LIBS?=	`xml2-config --libs`
-ICONV_CFLAGS?=	-I/usr/local/include
-ICONV_LIBS?=	-L/usr/local/lib -liconv
+
+UNAME := $(shell uname)
+
+ifeq ($(UNAME), FreeBSD)
+      ICONV_CFLAGS?=	-I/usr/local/include
+      ICONV_LIBS?=	-L/usr/local/lib -liconv
+endif
 
 DESTDIR?=/
 PREFIX?=netup/utm5
@@ -27,6 +33,7 @@ OBJS= hash.o \
       connection.o \
       func_call.o \
       ssl_ctx.o \
+      ip.o \
       asprintf.o \
       dtoa.o
 
@@ -36,7 +43,7 @@ ourfa_client: ourfa.h libourfa.a client.o client_dump.o client_datafile.o
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) $(ICONV_CFLAGS) \
 	  -o ourfa_client \
 	  client.o client_dump.o client_datafile.o \
-	  $(LDFLAGS) -L. -lourfa -lssl -lcrypto $(XML2_LIBS) $(ICONV_LIBS)
+	  -L. $(LDFLAGS) -lourfa -lssl -lcrypto $(XML2_LIBS) $(ICONV_LIBS)
 
 libourfa.a: $(OBJS)
 	rm -f libourfa.a
@@ -92,6 +99,8 @@ dist:
 	   $(DISTNAME)/func_call.c \
 	   $(DISTNAME)/hash.c \
 	   $(DISTNAME)/ourfa.h \
+	   $(DISTNAME)/ourfa_private.h \
+	   $(DISTNAME)/ip.c \
 	   $(DISTNAME)/pkt.c \
 	   $(DISTNAME)/ssl_ctx.c \
 	   $(DISTNAME)/strtod_c.c \
@@ -99,8 +108,10 @@ dist:
 	   `eval "sed 's|^|$(DISTNAME)/ourfa-perl/|' ourfa-perl/MANIFEST"`
 	rm $(DISTNAME)
 
-asprintf.o: asprintf.c
+asprintf.o: asprintf.c ourfa_private.h
 	$(CC) $(CFLAGS) -c asprintf.c
+ip.o:  ip.c ourfa_private.h
+	$(CC) $(CFLAGS) -c ip.c
 pkt.o: pkt.c ourfa.h
 	$(CC) $(CFLAGS) -c pkt.c
 error.o: error.c ourfa.h
@@ -111,7 +122,7 @@ func_call.o: func_call.c ourfa.h
 	$(CC) $(CFLAGS) -c func_call.c
 ssl_ctx.o: ssl_ctx.c ourfa.h
 	$(CC) $(CFLAGS) -c ssl_ctx.c
-hash.o: hash.c ourfa.h
+hash.o: hash.c ourfa.h ourfa_private.h
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c hash.c
 xmlapi.o: xmlapi.c ourfa.h
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c xmlapi.c

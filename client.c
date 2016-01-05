@@ -47,6 +47,7 @@
 #include <iconv.h>
 #include <locale.h>
 #include "ourfa.h"
+#include "ourfa_private.h"
 
 #define DEFAULT_HOST "localhost"
 #define DEFAULT_PORT "11758"
@@ -93,8 +94,8 @@ struct params_t {
    char *data_file;
    char *action;
    char *session_id;
-   struct in_addr *session_ip;
-   struct in_addr session_ip_buf;
+   struct sockaddr *session_ip;
+   struct sockaddr_storage session_ip_buf;
    FILE *debug;
    unsigned is_in_unicode;
    unsigned show_help;
@@ -401,11 +402,11 @@ static int set_sysparam_session_ip(struct params_t *params,
 {
    if (val == NULL)
       return -1;
-   if (ourfa_hash_parse_ip(val, &params->session_ip_buf) < 0) {
+   if (ourfa_parse_ip(val, &params->session_ip_buf) < 0) {
       fprintf(stderr, "Wrong IP\n");
       return -1;
    }else
-      params->session_ip = &params->session_ip_buf;
+      params->session_ip = (struct sockaddr *)&params->session_ip_buf;
 
    return 2;
 }
@@ -613,10 +614,6 @@ static int load_config_file(struct params_t *params)
    line_num=0;
    while ((str_p = fgets(str, sizeof(str), f)) != NULL) {
       const char *param ,*val;
-      int state;
-      int is_comment;
-      state = 0;
-      is_comment = 0;
       param = val = NULL;
       line_num++;
 
@@ -705,7 +702,7 @@ static int load_command_line_params(int argc, char **argv, struct params_t *para
 
    while (i<argc) {
       int incr_i, is_system_param;
-      const char *p;
+      char *p;
       unsigned res_idx;
       char name[80];
       char idx[20];
@@ -751,10 +748,6 @@ static int load_command_line_params(int argc, char **argv, struct params_t *para
 
       /* Read index */
       if (*p == ':') {
-	 const char *idx_p;
-
-	 idx_p = p++;
-
 	 if (p[0] == '\0') {
 	    fprintf(stderr, "Wrong parameter '%s': wrong index\n",
 		  argv[i]);
@@ -827,7 +820,7 @@ static int load_command_line_params(int argc, char **argv, struct params_t *para
 	 /* convert parameter to utf-8  */
 	 if ((*p != '\0') && !params->is_in_unicode) {
 	    size_t inbytesleft, outbytesleft, pbuf_siz;
-	    const char *inbuf;
+	    char *inbuf;
 	    char *outbuf;
 
 	    inbytesleft = strlen(p);
@@ -1097,7 +1090,7 @@ int main(int argc, char **argv)
 	 goto main_end;
    }
    if (params.session_ip) {
-      res = ourfa_connection_set_session_ip(connection, &params.session_ip->s_addr);
+      res = ourfa_connection_set_session_ip(connection, params.session_ip);
       assert(res == OURFA_OK);
    }
 

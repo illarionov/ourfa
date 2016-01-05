@@ -53,6 +53,7 @@
 #include <libxml/tree.h>
 
 #include "ourfa.h"
+#include "ourfa_private.h"
 
 #ifdef WIN32
 #define DEFAULT_API_XML_FILE "C:\\Program Files\\NetUP\\UTM5\\share\\api.xml"
@@ -95,6 +96,7 @@ static const struct {
 
 static void xmlapi_func_free(void * payload, xmlChar *name);
 static void xml_generic_error_func(void *ctx, const char *msg, ...);
+static void xml_structured_error_func(void *ctx, xmlErrorPtr error);
 static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t *api, ourfa_xmlapi_func_t *f);
 static int get_xml_attributes(xmlNode *xml_node,
       struct t_nodes *nodes,
@@ -118,14 +120,15 @@ ourfa_xmlapi_t *ourfa_xmlapi_new()
    res->err_ctx = res;
    res->ref_cnt = 1;
 
-   xmlSetGenericErrorFunc(res, xml_generic_error_func);
+   xmlSetStructuredErrorFunc(res, xml_structured_error_func);
+
    res->func_by_name = xmlHashCreate(FUNC_BY_NAME_HASH_SIZE);
    if (res->func_by_name == NULL) {
       free(res);
       res = NULL;
    }
 
-   xmlSetGenericErrorFunc(NULL, NULL);
+   xmlSetStructuredErrorFunc(NULL, NULL);
 
    return res;
 }
@@ -189,7 +192,7 @@ int ourfa_xmlapi_load_apixml(ourfa_xmlapi_t *xmlapi,  const char *file)
    res = OURFA_OK;
 
    if (xmlapi->file != NULL) {
-      return xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+      return xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx,
 	    "File `%s` already loaded", xmlapi->file);
    }
 
@@ -203,11 +206,11 @@ int ourfa_xmlapi_load_apixml(ourfa_xmlapi_t *xmlapi,  const char *file)
       goto load_file_end;
    }
 
-   xmlSetGenericErrorFunc(xmlapi, xml_generic_error_func);
+   xmlSetStructuredErrorFunc(xmlapi, xml_structured_error_func);
 
    xmldoc = xmlReadFile(xmlapi->file, NULL, XML_PARSE_COMPACT);
    if (xmldoc == NULL) {
-      res = OURFA_ERROR_OTHER;
+      res = OURFA_ERROR_XML;
       goto load_file_end;
    }
 
@@ -215,12 +218,12 @@ int ourfa_xmlapi_load_apixml(ourfa_xmlapi_t *xmlapi,  const char *file)
 
    urfa_root = xmlDocGetRootElement(xmldoc);
    if (urfa_root == NULL) {
-      res = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx, "Can not find XML Root Element");
+      res = xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx, "Can not find XML Root Element");
       goto load_file_end;
    }
 
    if (xmlStrcasecmp(urfa_root->name, (const xmlChar *) "urfa") != 0) {
-      res = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx, "Document of the wrong type, root node != urfa");
+      res = xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx, "Document of the wrong type, root node != urfa");
       goto load_file_end;
    }
 
@@ -237,7 +240,7 @@ int ourfa_xmlapi_load_apixml(ourfa_xmlapi_t *xmlapi,  const char *file)
 
       prop_func_name = xmlGetProp(cur_node, (const xmlChar *)"name");
       if (prop_func_name == NULL) {
-	 xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+	 xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx,
 	       "Unnamed function found. file: `%s` line: %hu content: `%s`",
 	       xmlapi->file, cur_node->line, (const char *)cur_node->content);
 	 continue;
@@ -258,7 +261,7 @@ int ourfa_xmlapi_load_apixml(ourfa_xmlapi_t *xmlapi,  const char *file)
       /*  pasrse function id */
       prop_func_id = xmlGetProp(cur_node, (const xmlChar *)"id");
       if (prop_func_id == NULL || prop_func_id[0]=='\0') {
-	 xmlapi->printf_err(OURFA_ERROR_OTHER,
+	 xmlapi->printf_err(OURFA_ERROR_XML,
 	       xmlapi->err_ctx,
 	       "ID not defined for function `%s`. file: `%s` line: %hu content: `%s`",
 	       f->name, xmlapi->file, cur_node->line, (const char *)cur_node->content);
@@ -269,7 +272,7 @@ int ourfa_xmlapi_load_apixml(ourfa_xmlapi_t *xmlapi,  const char *file)
       f->id = (int)strtol((const char *)prop_func_id, &p_end, 0);
       if ((*p_end != '\0') || errno == ERANGE) {
 	 xmlapi->printf_err(
-	       OURFA_ERROR_OTHER,
+	       OURFA_ERROR_XML,
 	       xmlapi->err_ctx,
 	       "Wrong ID for function `%s`. file: `%s` line: %hu content: `%s`",
 	       f->name, xmlapi->file, cur_node->line, (const char *)cur_node->content);
@@ -291,7 +294,7 @@ int ourfa_xmlapi_load_apixml(ourfa_xmlapi_t *xmlapi,  const char *file)
 	 else if (xmlStrcasecmp(n->name, (const xmlChar *)"output") == 0)
 	    f_out = n;
 	 else {
-	    xmlapi->printf_err(OURFA_ERROR_OTHER,
+	    xmlapi->printf_err(OURFA_ERROR_XML,
 		  xmlapi->err_ctx,
 		  "Unknown node name `%s` for function `%s`. file: `%s` line: %hu content: `%s`",
 		  (const char *)n->name, f->name, xmlapi->file, cur_node->line, (const char *)cur_node->content);
@@ -311,7 +314,7 @@ int ourfa_xmlapi_load_apixml(ourfa_xmlapi_t *xmlapi,  const char *file)
       }
 
       if (xmlHashUpdateEntry(xmlapi->func_by_name, (const xmlChar *)f->name, f, xmlapi_func_free) < 0) {
-	 res = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+	 res = xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx,
 	       "Can not add function `%s` to hash. file: `%s` line: %hu content: `%s`",
 	       f->name, xmlapi->file, cur_node->line, (const char *)cur_node->content);
 	 xmlapi_func_free(f, NULL);
@@ -323,7 +326,7 @@ int ourfa_xmlapi_load_apixml(ourfa_xmlapi_t *xmlapi,  const char *file)
    /* TODO: function by id  */
 
 load_file_end:
-   xmlSetGenericErrorFunc(NULL, NULL);
+   xmlSetStructuredErrorFunc(NULL, NULL);
    if (xmldoc)
       xmlFreeDoc(xmldoc);
 
@@ -374,7 +377,7 @@ int ourfa_xmlapi_load_script(ourfa_xmlapi_t *xmlapi,  const char *file,
    if (func_name == NULL
 	 || func_name[0] == '\0'
 	 || func_name[0] == '\\') {
-      res = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+      res = xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx,
 	    "Wrong function name");
       free(file_dup);
       return res;
@@ -402,33 +405,33 @@ int ourfa_xmlapi_load_script(ourfa_xmlapi_t *xmlapi,  const char *file,
       f->name[funcname_len-4] = '\0';
    }
 
-   xmlSetGenericErrorFunc(xmlapi, xml_generic_error_func);
+   xmlSetStructuredErrorFunc(xmlapi, xml_structured_error_func);
 
    assert(xmlapi->func_by_name);
 
    xmldoc = xmlReadFile(file, NULL, XML_PARSE_COMPACT);
    if (xmldoc == NULL) {
-      res = OURFA_ERROR_OTHER;
+      res = OURFA_ERROR_XML;
       goto load_script_end;
    }
    urfa_root = xmlDocGetRootElement(xmldoc);
    if (urfa_root == NULL) {
-      res = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx, "Can not find XML Root Element");
+      res = xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx, "Can not find XML Root Element");
       goto load_script_end;
    }
    if (xmlStrcasecmp(urfa_root->name, (const xmlChar *) "urfa") != 0) {
-      res = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx, "Document of the wrong type, root node != urfa");
+      res = xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx, "Document of the wrong type, root node != urfa");
       goto load_script_end;
    }
 
    f->script = load_func_def(urfa_root, xmlapi, f);
    if (f->script == NULL) {
-      res = OURFA_ERROR_OTHER;
+      res = OURFA_ERROR_XML;
       goto load_script_end;
    }
 
    if (xmlHashUpdateEntry(xmlapi->func_by_name, (const xmlChar *)f->name, f, xmlapi_func_free) < 0) {
-      res = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+      res = xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx,
 	    "Can not add function `%s` to hash.",
 	    f->name);
       xmlapi_func_free(f, NULL);
@@ -436,7 +439,7 @@ int ourfa_xmlapi_load_script(ourfa_xmlapi_t *xmlapi,  const char *file,
    }
 
 load_script_end:
-   xmlSetGenericErrorFunc(NULL, NULL);
+   xmlSetStructuredErrorFunc(NULL, NULL);
    if (xmldoc)
       xmlFreeDoc(xmldoc);
    if ((res != OURFA_OK) && f )
@@ -550,7 +553,7 @@ static int get_xml_attributes(xmlNode *xml_node,
 	 xmlFree(src);
       }else {
 	 if (nodes[n].required) {
-	    res = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+	    res = xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx,
 		  "No `%s` attribute of node `%s`", nodes[n].name, xml_node->name);
 	    break;
 	 }
@@ -650,7 +653,7 @@ static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t
 		     && (condition[2] == '\0'))
 		  node->n.n_if.condition = OURFA_XMLAPI_IF_NE;
 	       else {
-		  ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+		  ret_code = xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx,
 			"Wrong condition on node `%s`. Function: '%s'",
 			xml_node->name,
 			f->name
@@ -678,7 +681,7 @@ static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t
 
 	       if (ret_code == OURFA_OK) {
 		  if (node->n.n_set.src && node->n.n_set.value) {
-		     ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+		     ret_code = xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx,
 			   "Both 'src' and 'value' properties exists in 'set' "
 			   "node (%s:%s). Function: '%s'",
 			   node->n.n_set.src,
@@ -689,7 +692,7 @@ static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t
 		     break;
 		  }
 		  if (!node->n.n_set.src && !node->n.n_set.dst) {
-		     ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+		     ret_code = xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx,
 			   "No 'src' and no 'value' properties defined in 'set' node. Function: '%s'",
 			   f->name);
 		     free_func_def(node);
@@ -722,7 +725,7 @@ static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t
 	       }
 	       node->n.n_for.array_name = NULL;
 	       if (ourfa_asprintf(&node->n.n_for.array_name, "array-%d", i) <= 0) {
-		  ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx, "asprintf error");
+		  ret_code = xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx, "asprintf error");
 		  free_func_def(node);
 		  break;
 	       }
@@ -746,7 +749,7 @@ static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t
 	       }
 
 	       if (!node_found)
-		  ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+		  ret_code = xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx,
 			"BREAK without FOR. Function: '%s'", f->name);
 	    }
 	    break;
@@ -765,7 +768,7 @@ static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t
 		  char *endptr;
 		  node->n.n_error.code = (int)strtol((const char *)code_str, &endptr, 10);
 		  if ((code_str[0] == '\0') || (*endptr != '\0')) {
-		     ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+		     ret_code = xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx,
 			   "Wrong error code `%s` of node `%s`. Function: '%s'",
 			   code_str, xml_node->name, f->name);
 		     free(code_str);
@@ -793,7 +796,7 @@ static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t
 		  char *endptr;
 		  node->n.n_call.output = (int)strtol((const char *)output, &endptr, 10);
 		  if ((output[0] == '\0') || (*endptr != '\0')) {
-		     ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+		     ret_code = xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx,
 			   "Wrong output attribute value  `%s` of node `%s`. Function: '%s'",
 			   output, xml_node->name, f->name);
 		     free(output);
@@ -882,7 +885,7 @@ static ourfa_xmlapi_func_node_t *load_func_def(xmlNode *xml_root, ourfa_xmlapi_t
 	    }
 	    break;
 	 default:
-	    ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+	    ret_code = xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx,
 		  "Unknown node type `%s`. Function: '%s'\n", xml_node->name,
 		  f->name);
 	    break;
@@ -948,7 +951,7 @@ load_f_def_next_node:
 		  ourfa_xmlapi_func_node_t *t;
 		  for (t=cur_node->children; t; t=t->next) {
 		     if (t->type != OURFA_XMLAPI_NODE_PARAMETER) {
-			ret_code = xmlapi->printf_err(OURFA_ERROR_OTHER, xmlapi->err_ctx,
+			ret_code = xmlapi->printf_err(OURFA_ERROR_XML, xmlapi->err_ctx,
 			      "Wrong child `%s` of call node Function: '%s'",
 			      ourfa_xmlapi_node_name_by_type(t->type), f->name);
 			break;
@@ -1250,9 +1253,14 @@ static void xml_generic_error_func(void *ctx, const char *msg, ...)
 
    va_start(ap, msg);
    vsnprintf(err, sizeof(err), msg, ap);
-   api->printf_err(OURFA_ERROR_OTHER, api->err_ctx, err);
+   //api->printf_err(OURFA_ERROR_XML, api->err_ctx, err);
    va_end(ap);
 }
 
+static void xml_structured_error_func(void *ctx, xmlErrorPtr error) {
+   ourfa_xmlapi_t *api;
+   api = (ourfa_xmlapi_t *)ctx;
+   api->printf_err(OURFA_ERROR_XML, api->err_ctx, error->message);
+}
 
 

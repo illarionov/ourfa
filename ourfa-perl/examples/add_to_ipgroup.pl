@@ -1,4 +1,4 @@
-#! /usr/bin/perl
+#!/usr/bin/env perl
 
 use strict;
 use warnings;
@@ -7,6 +7,7 @@ use Ourfa;
 use Getopt::Long;
 use Pod::Usage;
 use Socket;
+use Data::Dumper;
 
 my $api_xml_file="/netup/utm5/xml/api.xml";
 my $server="localhost";
@@ -16,7 +17,7 @@ my $password="init";
 my $account_id;
 my $slink_id;
 my $ip_address;
-my $mask="255.255.255.255";
+my $mask="32";
 my $iptraffic_login="";
 my $iptraffic_password="";
 my $iptraffic_allowed_cid="";
@@ -59,7 +60,7 @@ my $ourfa = Ourfa->new(
       login=>$login,
       password=>$password,
       debug => $debug,
-      timeout=>10
+      timeout=>20
     );
 
 # user_id
@@ -84,17 +85,18 @@ foreach my $s (@{$services->{'array-1'}}) {
       }
    }
 }
+print Dumper($services);
 die ("Service link not found\n") if (!$service_rec);
 
 # Поиск IP группы в связке
-my $service = $ourfa->rpcf_get_iptraffic_service_link(
+my $service = $ourfa->rpcf_get_iptraffic_service_link_ipv6(
    slink_id=>$service_rec->{slink_id_array}
 );
 my $removed_ip_group;
 foreach my $ip_group (@{$service->{'array-1'}}) {
-   warn("ipgroup_ip: " . inet_ntoa($ip_group->{ip_address}) . " our_ip: $ip_address");
-   if ( (inet_ntoa($ip_group->{ip_address}) eq $ip_address)
-      && (inet_ntoa($ip_group->{mask}) eq $mask)) {
+   warn("ipgroup_ip: " . $ip_group->{ip_address} . " our_ip: $ip_address");
+   if ( ($ip_group->{ip_address} eq $ip_address)
+      && ($ip_group->{mask} eq $mask)) {
       if (($ip_group->{mac} eq $mac)
 	 && ($ip_group->{iptraffic_login} eq $iptraffic_login)
 	 && ($ip_group->{iptraffic_password} eq $iptraffic_password)
@@ -136,12 +138,12 @@ my %new_service_link = (
 
 my $res;
 eval {
-   $res = $ourfa->rpcf_add_service_to_user(%new_service_link,
+   $res = $ourfa->rpcf_add_iptraffic_service_link_ipv6(%new_service_link,
       ip_groups=>[
       {
-	 ip_address=>inet_aton($ip_address),
+	 ip_address=>$ip_address,
 	 mac => $mac,
-	 mask=>inet_aton($mask),
+	 mask=>$mask,
 	 iptraffic_login=>$iptraffic_login,
 	 iptraffic_allowed_cid=>$iptraffic_allowed_cid,
 	 iptraffic_password=>$iptraffic_password,

@@ -32,19 +32,27 @@ ourfa
 
     $ sudo apt-get install libxml2-dev libssl-dev
 
-Сборка в общем случае:
+Установка:
 
      $ make
      $ su
      # make install
 
-При этом устанавливается сама библиотека (`ourfa.h`, `libourfa.a`) и `ourfa_client`.
+Устанавливается сама библиотека (`ourfa.h`, `libourfa.a`) и `ourfa_client`.
 
-В современных дистрибутивах `linux` не требуется `libiconv` и собирать нужно
-без -liconv: `make install ICONV_LIBS=""`  
+Для работы требуется каталог со схемой api.xml. Он должен быть именно от
+установленной версии UTM. По умолчанию он находится в `/netup/utm5/xml`.
+Схема читается из `api.xml` и если использовать её из другой версии, то
+формат аргументов вызываемых функций может не совпасть.  
 
-В `linux` устанавливать лучше не через `makе install`, а через
-`checkinstall`.  
+Для версий старше UTM 5.2.1-008 нужен ещё сертификат. Его можно найти на 
+вики [urfaclient на PHP](http://wiki.flintnet.ru/doku.php/urfaclient_php)
+("admin.crt - Поддержка админских функций"). Сохраните его в `/netup/UTM5/admin.crt`.
+
+
+В `FreeBSD` вместо make нужно использовать gmake (GNU make)  
+
+В `linux` для установки лучше использовать `checkinstall`.  
 
 В `deb-based linux` можно собрать пакет:
 
@@ -65,8 +73,8 @@ ourfa
 
 ### ourfa_client
 
-Работа похожа на работу с официальным `urfa_client`, поэтому лучше сначала 
-ознакомиться с официальной документаций. Но есть много отличий.
+Работа похожа на работу с официальным `urfa_client`, нужно
+ознакомиться с официальной документаций.
 
       usage: ourfa_client -a action 
        [-H addr] [-p port] [-l login] [-P pass] [-api api.xml] [-h]
@@ -94,17 +102,6 @@ ourfa
     -api       URFA server API file (default: api.xml)
     -<param>[:idx] Set input parameter param(idx)
 
-
-С версии UTM 5.2.1-008 запускать утилиту нужно обязательно с SSL и сертификатом.
-Сертификат можно найти на вики [urfaclient на PHP](http://wiki.flintnet.ru/doku.php/urfaclient_php).
-Можно просто скачать `admin.crt` в `/netup/UTM5/admin.crt` и запускать
-`ourfa_client` с аргументом `-s rsa_cert`
-
-Каталог со схемой api.xml должен быть именно от той версии UTM, которая
-используется в системе (задается ключом `-x`, по умолчанию
-`/netup/utm5/xml`). Схема читается из `api.xml` и
-если использовать её из другой версии, то формат аргументов вызываемых функций 
-может не совпасть.
 
 Пример вызова, выполнение функции `rpcf_core_version`:
 

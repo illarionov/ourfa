@@ -47,6 +47,7 @@
 #include <openssl/ssl.h>
 
 #include "ourfa.h"
+#include "ourfa_private.h"
 
 static int init_func_call_ctx(ourfa_func_call_ctx_t *fctx,
       ourfa_xmlapi_func_t *f, ourfa_hash_t *h);
@@ -543,7 +544,7 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
    int state;
    int old_err;
    int socket_error = 0;
-   const char *node_type, *node_name, *arr_index;
+   const char *node_name, *arr_index;
    ourfa_xmlapi_func_node_t *n;
 
    assert(fctx->cur);
@@ -577,7 +578,6 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
       return state;
 
    n = fctx->cur;
-   node_type = ourfa_xmlapi_node_name_by_type(n->type);
    if (state == OURFA_FUNC_CALL_STATE_NODE) {
       node_name = n->n.n_val.name;
       arr_index = n->n.n_val.array_index ? n->n.n_val.array_index : "0";
@@ -607,7 +607,7 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
 		  /* Default value */
 		  long long defval;
 		  fctx->err = ourfa_func_call_get_long_prop_val(fctx,
-			   n->n.n_val.defval, &defval); 
+			   n->n.n_val.defval, &defval);
 		  if (fctx->err == OURFA_OK)
 		     val = (int)defval;
 		  else {
@@ -622,7 +622,7 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
 			node_name, arr_index, val);
 		  break; /* switch  */
 	       }
-	    } /* if (ourfa_hash_get_int)  */ 
+	    } /* if (ourfa_hash_get_int)  */
 
 	    fctx->err=ourfa_connection_write_int(conn, OURFA_ATTR_DATA, val);
 	    if (fctx->err != OURFA_OK)
@@ -737,11 +737,10 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
 	 break;
       case OURFA_XMLAPI_NODE_IP:
 	 {
-	    in_addr_t val;
+	    struct sockaddr_storage val;
 
 	    /*  Get user value */
-	    if (ourfa_hash_get_ip(fctx->h, node_name, arr_index, &val) != 0) {
-	       struct in_addr addr;
+	    if (ourfa_hash_get_ip(fctx->h, node_name, arr_index, (struct sockaddr *)&val) != 0) {
 
 	       /*  Get default value */
 	       if (n->n.n_val.defval == NULL) {
@@ -750,17 +749,16 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
 		  break; /* switch  */
 	       }
 
-	       if ((ourfa_hash_parse_ip(n->n.n_val.defval, &addr) != 0)
+	       if ((ourfa_parse_ip(n->n.n_val.defval, &val) != 0)
 		     && (ourfa_hash_get_ip(fctx->h, n->n.n_val.defval,
-			   NULL, &val) != 0)) {
+			   NULL, (struct sockaddr *)&val) != 0)) {
 		  setf_err(fctx, OURFA_ERROR_HASH,
 			"Wrong input parameter '%s' ('%s')",
 			node_name,
 			n->n.n_val.defval);
 		  break; /* switch  */
 	       }
-	       val = addr.s_addr;
-	       if (ourfa_hash_set_ip(fctx->h, node_name, arr_index, val) != 0) {
+	       if (ourfa_hash_set_ip(fctx->h, node_name, arr_index, (struct sockaddr *)&val) != 0) {
 		  setf_err(fctx, OURFA_ERROR_HASH,
 			"Can not set hash value: %s(%s) = %s",
 			node_name, arr_index,
@@ -768,7 +766,7 @@ int ourfa_func_call_req_step(ourfa_func_call_ctx_t *fctx,
 		  break; /* switch  */
 	       }
 	    }
-	    fctx->err = ourfa_connection_write_ip(conn, OURFA_ATTR_DATA, val);
+	    fctx->err = ourfa_connection_write_ip(conn, OURFA_ATTR_DATA, (struct sockaddr *)&val);
 	    if (fctx->err != OURFA_OK)
 	       socket_error = 1;
 	 }
@@ -923,22 +921,23 @@ int ourfa_func_call_resp_step(ourfa_func_call_ctx_t *fctx,
 	 break;
       case OURFA_XMLAPI_NODE_IP:
 	 {
-	    in_addr_t val;
+            struct sockaddr_storage val;
+            struct sockaddr *val_p = (struct sockaddr *)&val;
 
-	    fctx->err = ourfa_connection_read_ip(conn, OURFA_ATTR_DATA, &val);
+	    fctx->err = ourfa_connection_read_ip(conn, OURFA_ATTR_DATA, val_p);
 	    if (fctx->err != OURFA_OK) {
 	       setf_err(fctx, fctx->err,
 		     "Cannot get %s value for node %s(%s)",
 		     node_type, node_name, arr_index);
 	    }else {
 	       if (ourfa_hash_set_ip(fctx->h, node_name,
-			arr_index, val) != 0) {
-		  struct in_addr tmp;
-		  tmp.s_addr=val;
+			arr_index, val_p) != 0) {
+                  char ip[INET6_ADDRSTRLEN+1];
+                  ourfa_ip_ntop((struct sockaddr *)&val, ip, sizeof(ip));
 		  setf_err(fctx, OURFA_ERROR_HASH,
 			"Cannot set hash value to %s "
 			"for node %s(%s)",
-			inet_ntoa(tmp), node_name, arr_index);
+			ip, node_name, arr_index);
 	       }
 	    }
 	 }

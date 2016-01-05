@@ -1,10 +1,8 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 use strict;
 use Ourfa;
 use DateTime;
 use DateTime::Format::Strptime;
-
-my $month = $ARGV[0] || '2010-02-01';
 
 my $date;
 
@@ -22,16 +20,13 @@ if ($ARGV[0]) {
 $date->truncate(to=>'month');
 my $end_date = $date->clone->add(months=>1);
 
-print "report from $date to $end_date\n";
+print "Report from $date to $end_date\n";
 
 my $ourfa = Ourfa->new(
-      api_xml_dir=>"/netup/utm5/xml",
       server=>$ENV{OURFA_HOSTNAME} || 'localhost',
       login=>$ENV{OURFA_LOGIN} || 'init',
       password=>$ENV{OURFA_PASSWORD} || 'init',
-      timeout => 500,
       debug=>$ENV{OURFA_DEBUG}+0,
-      #ssl => 'sslv3'
     );
 
 my $report = $ourfa->rpcf_general_report_new(
@@ -51,4 +46,3 @@ foreach my $login (@{$report->{'array-1'}}) {
 }
 
 print
-

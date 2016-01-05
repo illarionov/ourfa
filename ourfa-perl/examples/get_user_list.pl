@@ -1,15 +1,13 @@
-#!/usr/bin/perl
-
+#!/usr/bin/env perl
 use strict;
 use Ourfa;
 use Socket;
 
 my $ourfa = Ourfa->new(
-      api_xml_dir=>"/netup/utm5/xml",
-      server=>'localhost',
+      server=>$ENV{OURFA_HOSTNAME} || 'localhost',
       login=>$ENV{OURFA_LOGIN} || 'init',
       password=>$ENV{OURFA_PASSWORD} || 'init',
-#      debug=>1
+      debug=>$ENV{OURFA_DEBUG}+0,
     );
 
 my $users = $ourfa->rpcf_get_users_list(from=>0, to=>10);
@@ -23,9 +21,9 @@ foreach my $user (@{$users->{'array-1'}}) {
    foreach my $group (@{$user->{'array-1'}}) {
       foreach my $ip (@{$group->{'array-1'}}) {
          if ($ip->{group_type} == 0) {
-            push (@ip_vpn, inet_ntoa($ip->{ip_address}));
+            push (@ip_vpn, "$ip->{ip_address}/$ip->{mask}");
          }else {
-            push (@ip_not_vpn, inet_ntoa($ip->{ip_address}));
+            push (@ip_not_vpn, "$ip->{ip_address}/$ip->{mask}");
          }
       }
    }
@@ -40,4 +38,3 @@ foreach my $user (@{$users->{'array-1'}}) {
    );
 }
 print
-

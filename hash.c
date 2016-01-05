@@ -47,9 +47,7 @@
 #include <openssl/ssl.h>
 
 #include "ourfa.h"
-
-/* Locale-insensitive strtod */
-extern double ourfa_strtod_c(const char *s00, char **se);
+#include "ourfa_private.h"
 
 #define DEFAULT_ARRAY_SIZE 5
 
@@ -89,6 +87,10 @@ static struct hash_val_t *findncreate_arr_by_idx(ourfa_hash_t *h,
 ourfa_hash_t *ourfa_hash_new(int size)
 {
    return xmlHashCreate(size ? size : 10);
+}
+
+static inline struct sockaddr *hash_ip_data(const struct hash_val_t *val, int idx) {
+   return (struct sockaddr *)&((struct sockaddr_storage *)val->data)[idx];
 }
 
 static struct hash_val_t *hash_val_new(enum ourfa_elm_type_t type, size_t size)
@@ -410,12 +412,14 @@ int ourfa_hash_set_string(ourfa_hash_t *h, const char *key, const char *idx, con
    }
 
    if ((arr->type != OURFA_ELM_STRING)
-      && (convert_hashval2string(arr) != 0))
+      && (convert_hashval2string(arr) != 0)) {
+      free(val0);
       return -1;
+   }
 
    assert(arr->data_pool_size > last_idx);
 
-   if (last_idx >=  arr->elm_cnt) {
+   if (last_idx >= arr->elm_cnt) {
       for (i=arr->elm_cnt; i <= last_idx; i++)
 	 ((char **)arr->data)[i] = NULL;
       arr->elm_cnt = last_idx+1;
@@ -427,9 +431,8 @@ int ourfa_hash_set_string(ourfa_hash_t *h, const char *key, const char *idx, con
    return 0;
 }
 
-int ourfa_hash_set_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr_t val)
+int ourfa_hash_set_ip(ourfa_hash_t *h, const char *key, const char *idx, const struct sockaddr *val)
 {
-   int res;
    unsigned last_idx;
    unsigned i;
    struct hash_val_t *arr;
@@ -448,32 +451,26 @@ int ourfa_hash_set_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr
 	 return -1;
    }
 
-   res = 0;
    switch (arr->type) {
       case OURFA_ELM_IP:
-	 assert(arr->data_pool_size > last_idx);
+         assert(arr->data_pool_size > last_idx);
 
-	 ((in_addr_t *)arr->data)[last_idx] = val;
+         if (ourfa_ip_copy(hash_ip_data(arr, last_idx), val) != 0)
+            return -1;
 
-	 if (last_idx >=  arr->elm_cnt) {
-	    for (i=arr->elm_cnt; i < last_idx; i++)
-	       ((in_addr_t *)arr->data)[i] = 0;
-	    arr->elm_cnt = last_idx+1;
-	 }
+         if (last_idx >= arr->elm_cnt) {
+            for (i=arr->elm_cnt; i < last_idx; i++)
+               ourfa_ip_reset(hash_ip_data(arr, i));
+            arr->elm_cnt = last_idx+1;
+         }
 	 break;
       case OURFA_ELM_STRING:
 	 {
-	    struct in_addr ip_s;
-	    char ip[INET_ADDRSTRLEN+1];
-
-	    ip_s.s_addr = val;
-#ifdef WIN32
-	    strncpy(ip, inet_ntoa(ip_s), INET_ADDRSTRLEN);
-#else
-	    inet_ntop(AF_INET, &ip_s, ip, INET_ADDRSTRLEN);
-#endif
-	    ip[INET_ADDRSTRLEN]='\0';
-	    res = ourfa_hash_set_string(h, key, idx, ip);
+            char ip[INET6_ADDRSTRLEN+1];
+            if (ourfa_ip_ntop(val, ip, sizeof(ip)) != 0) {
+               return -1;
+            }
+            ourfa_hash_set_string(h, key, idx, ip);
 	 }
 	 break;
       case OURFA_ELM_DOUBLE:
@@ -539,7 +536,11 @@ int ourfa_hash_get_long(ourfa_hash_t *h, const char *key, const char *idx, long 
 	 *res = (long long)(((double *)arr->data)[last_idx]);
 	 break;
       case OURFA_ELM_IP:
-	 *res = (long long)(((in_addr_t *)arr->data)[last_idx]);
+         if (hash_ip_data(arr, last_idx)->sa_family == AF_INET) {
+            *res = (long long)((struct sockaddr_in *)hash_ip_data(arr, last_idx))->sin_addr.s_addr;
+         } else {
+            retval = -1;
+         }
 	 break;
       case OURFA_ELM_STRING:
 	 {
@@ -655,7 +656,7 @@ int ourfa_hash_copy_val(ourfa_hash_t *h, const char *dst_key, const char *dst_id
 	 res = ourfa_hash_set_string(h, dst_key, dst_idx, ((char **)src_arr->data)[last_idx]);
 	 break;
       case OURFA_ELM_IP:
-	 res = ourfa_hash_set_ip(h, dst_key, dst_idx, ((in_addr_t *)src_arr->data)[last_idx]);
+	 res = ourfa_hash_set_ip(h, dst_key, dst_idx, hash_ip_data(src_arr, last_idx));
 	 break;
       case OURFA_ELM_ARRAY:
       case OURFA_ELM_HASH:
@@ -666,64 +667,7 @@ int ourfa_hash_copy_val(ourfa_hash_t *h, const char *dst_key, const char *dst_id
    return res;
 }
 
-
-int ourfa_hash_parse_ip(const char *str, struct in_addr *res)
-{
-   char *p_end;
-   long long_val;
-
-
-   if (str == NULL || (str[0]=='\0') || res == NULL)
-      return -1;
-
-   /* Dirty hack for ourfa-perl. */
-   if (strlen(str) == 4) {
-      /* String is a binary in_addr_t  */
-      const unsigned char *ustr;
-
-      ustr = (const unsigned char *)str;
-
-      res->s_addr = htonl((ustr[0] & 0xFF) << 24 |
-      (ustr[1] & 0xFF) << 16 |
-      (ustr[2] & 0xFF) <<  8 |
-      (ustr[3] & 0xFF));
-
-      return 0;
-   }
-
-   /* /mask */
-   if ((str[0]=='/') && (str[1] != '\0')) {
-      unsigned m;
-      long_val = strtol(&str[1], &p_end, 0);
-      if (long_val < 0 || long_val > 32)
-	 return -1;
-      m = 32-long_val;
-      res->s_addr = ((INADDR_NONE >> m) << m) & 0xffffffff;
-      return 0;
-   }
-
-   long_val = strtol(str, &p_end, 0);
-   /* Numeric?  */
-   if ((*p_end == '\0')) {
-      if (long_val == -1)
-	 res->s_addr = INADDR_NONE;
-      else
-	 res->s_addr = (in_addr_t)long_val;
-      return 0;
-   }
-
-   /* ip */
-#ifdef WIN32
-   res->s_addr = inet_addr(str);
-#else
-   if (inet_aton(str, res) == 0)
-      return -1;
-#endif
-
-   return 0;
-}
-
-int ourfa_hash_get_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr_t *res)
+int ourfa_hash_get_ip(ourfa_hash_t *h, const char *key, const char *idx, struct sockaddr *res)
 {
    unsigned last_idx;
    struct hash_val_t *arr;
@@ -742,39 +686,39 @@ int ourfa_hash_get_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr
 
    switch  (arr->type) {
       case OURFA_ELM_IP:
-	 if (res != NULL)
-	    *res = ((in_addr_t *)arr->data)[last_idx];
+	 if (res != NULL) {
+            if (ourfa_ip_copy(res, hash_ip_data(arr, last_idx)) != 0)
+               return -1;
+         }
 	 break;
       case OURFA_ELM_STRING:
 	 {
 	    char *s;
-	    struct in_addr in;
+	    struct sockaddr_storage in;
 
 	    s = ((char **)arr->data)[last_idx];
 	    if ((s == NULL) || (s[0]=='\0'))
 	       return -1;
-	    if (ourfa_hash_parse_ip(s, &in) != 0)
+	    if (ourfa_parse_ip(s, &in) != 0)
 	       return -1;
 	    if (res)
-	       *res = in.s_addr;
+               ourfa_ip_copy(res, (struct sockaddr *)&in);
 	 }
 	 break;
+      case OURFA_ELM_INT:
+         if (res != NULL) {
+            int val = ((int *)arr->data)[last_idx];
+            ourfa_ip_set(res, val != -1 ? (in_addr_t)val : INADDR_NONE);
+         }
+         break;
+      case OURFA_ELM_LONG:
+         if (res != NULL) {
+            long long val = ((long long *)arr->data)[last_idx];
+            ourfa_ip_set(res, val != -1 ? (in_addr_t)val : INADDR_NONE);
+         }
+         break;
       default:
-	 {
-	    int val;
-	    if (arr->type == OURFA_ELM_INT) {
-	       val = ((int *)arr->data)[last_idx];
-	    }else if (arr->type == OURFA_ELM_LONG) {
-	       val = (int)((long long *)arr->data)[last_idx];
-	    }else
-	       return -1;
-	    if (res) {
-	       if (val == -1)
-		  *res = INADDR_NONE;
-	       else
-		  *res = (in_addr_t)val;
-	    }
-	 }
+         return -1;
    }
 
    return 0;
@@ -857,18 +801,16 @@ int ourfa_hash_get_string(ourfa_hash_t *h,
 	 }
 	 break;
       case OURFA_ELM_IP:
-	    *res = malloc(INET_ADDRSTRLEN+1);
-	    if (*res != NULL) {
-	       struct in_addr in;
-	       in.s_addr = ((in_addr_t *)arr->data)[last_idx];
-#ifdef WIN32
-	       strncpy(*res, inet_ntoa(in), INET_ADDRSTRLEN);
-#else
-	       inet_ntop(AF_INET, &in, *res, INET_ADDRSTRLEN);
-#endif
-	       (*res)[INET_ADDRSTRLEN]='\0';
-	       retval = 0;
-	    }
+	    *res = malloc(INET6_ADDRSTRLEN);
+            if (*res != NULL) {
+               if (ourfa_ip_ntop(hash_ip_data(arr, last_idx), *res,
+                        INET6_ADDRSTRLEN) == 0) {
+                  retval = 0;
+               } else {
+                  free(*res);
+                  *res = NULL;
+               }
+            }
 	 break;
       case OURFA_ELM_ARRAY:
       case OURFA_ELM_HASH:
@@ -915,9 +857,9 @@ static void hash_dump_0(void *payload, void *data, xmlChar *name)
 	    break;
 	 case OURFA_ELM_IP:
 	    {
-	       struct in_addr s;
-	       s.s_addr = ((in_addr_t *)arr->data)[idx];
-	       fprintf(stream, "%-7s %-18s %s\n", "IP", name0, inet_ntoa(s));
+               char ip_s[INET6_ADDRSTRLEN];
+               ourfa_ip_ntop(hash_ip_data(arr, idx), ip_s, sizeof(ip_s));
+	       fprintf(stream, "%-7s %-18s %s\n", "IP", name0, ip_s);
 	    }
 	    break;
 	 case OURFA_ELM_STRING:
@@ -1060,7 +1002,7 @@ static int convert_hashval2string(struct hash_val_t *val)
    assert(tmp->data_pool_size >= val->elm_cnt);
 
    while (tmp->elm_cnt < val->elm_cnt) {
-      char *str;
+      char *str = NULL;
       switch (val->type) {
 	 case OURFA_ELM_INT:
 	    ourfa_asprintf(&str, "%i", ((int *)val->data)[tmp->elm_cnt]);
@@ -1072,22 +1014,15 @@ static int convert_hashval2string(struct hash_val_t *val)
 	    ourfa_asprintf(&str, "%f", ((double *)val->data)[tmp->elm_cnt]);
 	    break;
 	 case OURFA_ELM_IP:
-	    str = malloc(INET_ADDRSTRLEN+1);
-	    if (str != NULL) {
-	       struct in_addr in;
-	       in.s_addr = ((in_addr_t *)val->data)[tmp->elm_cnt];
-#ifdef WIN32
-	       strncpy(str, inet_ntoa(in), INET_ADDRSTRLEN);
-#else
-	       inet_ntop(AF_INET, &in, str, INET_ADDRSTRLEN);
-#endif
-	       str[INET_ADDRSTRLEN]='\0';
-	    }
+	    str = malloc(INET6_ADDRSTRLEN);
+	    if (str != NULL)
+               ourfa_ip_ntop(hash_ip_data(val, tmp->elm_cnt), str, INET6_ADDRSTRLEN);
 	    break;
 	 default:
+            str = NULL;
 	    assert(0);
       }
-      if (!str) {
+      if (str == NULL) {
 	 hash_val_free(tmp);
 	 return -1;
       }
@@ -1212,7 +1147,7 @@ static size_t elm_size_by_type(enum ourfa_elm_type_t t)
 	 res = sizeof(const char *);
 	 break;
       case OURFA_ELM_IP:
-	 res = sizeof(in_addr_t);
+	 res = sizeof(struct sockaddr_storage);
 	 break;
       default:
 	 assert(0);

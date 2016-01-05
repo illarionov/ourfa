@@ -1,13 +1,12 @@
-#!/usr/bin/perl
-
+#!/usr/bin/env perl
 use strict;
 use Ourfa;
 
 my $ourfa = Ourfa->new(
-      api_xml_dir=>"/netup/utm5/xml",
       server=>$ENV{OURFA_HOSTNAME} || 'localhost',
       login=>$ENV{OURFA_LOGIN} || 'init',
       password=>$ENV{OURFA_PASSWORD} || 'init',
+      debug=>$ENV{OURFA_DEBUG}+0,
 #      debug=>1
     );
 
@@ -25,4 +24,3 @@ foreach my $module (@{$modules->{'array-1'}}) {
       $module->{module}, $module->{version}, $module->{path})
 }
 print
-

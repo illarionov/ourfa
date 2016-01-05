@@ -50,6 +50,7 @@
 #include <openssl/ssl.h>
 
 #include "ourfa.h"
+#include "ourfa_private.h"
 
 #define DEFAULT_LOGIN "init"
 #define DEFAULT_PASSWORD "init"
@@ -91,7 +92,7 @@ struct ourfa_connection_t {
    char *password;
    char *hostname;
    void *session_id;
-   in_addr_t *session_ip;
+   struct sockaddr *session_ip;
 
    BIO *bio;
    ourfa_ssl_ctx_t *ssl_ctx;
@@ -105,8 +106,7 @@ struct ourfa_connection_t {
    struct pktbuf_t wbuf;
 
    uint8_t session_id_buf[16];
-   in_addr_t session_ip_buf;
-
+   struct sockaddr_storage session_ip_buf;
 };
 
 
@@ -290,7 +290,7 @@ int ourfa_connection_session_id(ourfa_connection_t *connection, char *res, size_
    return 1;
 }
 
-const in_addr_t *ourfa_connection_session_ip(ourfa_connection_t *connection)
+const struct sockaddr *ourfa_connection_session_ip(ourfa_connection_t *connection)
 {
    assert(connection);
    return connection->session_ip;
@@ -466,7 +466,7 @@ int ourfa_connection_set_session_id(ourfa_connection_t *connection, const char *
    return OURFA_OK;
 }
 
-int ourfa_connection_set_session_ip(ourfa_connection_t *connection, const in_addr_t *session_ip)
+int ourfa_connection_set_session_ip(ourfa_connection_t *connection, const struct sockaddr *session_ip)
 {
    assert(connection);
 
@@ -476,8 +476,8 @@ int ourfa_connection_set_session_ip(ourfa_connection_t *connection, const in_add
    if (session_ip == NULL)
       connection->session_ip = NULL;
    else {
-      connection->session_ip = &connection->session_ip_buf;
-      connection->session_ip_buf = *session_ip;
+      ourfa_ip_copy((struct sockaddr*)&connection->session_ip_buf, session_ip);
+      connection->session_ip = (struct sockaddr*)&connection->session_ip_buf;
    }
 
    return OURFA_OK;
@@ -697,8 +697,8 @@ static int login(ourfa_connection_t *connection)
 	    connection->session_id_buf);
    }
    if (connection->session_ip) {
-      assert(connection->session_ip == &connection->session_ip_buf);
-      ourfa_pkt_add_ip(write_pkt, OURFA_ATTR_SESSION_IP, *connection->session_ip);
+      assert(connection->session_ip == (struct sockaddr *)&connection->session_ip_buf);
+      ourfa_pkt_add_ip(write_pkt, OURFA_ATTR_SESSION_IP, connection->session_ip);
    }
 
    if (write_pkt == NULL) {
@@ -745,11 +745,10 @@ static int login(ourfa_connection_t *connection)
    attr_ssl_type = ourfa_pkt_get_attrs_list(read_pkt, OURFA_ATTR_SSL_REQUEST);
    if (attr_ssl_type) {
       int tmp;
-      int res0;
       BIO *b;
       SSL *ssl;
 
-      res0 = ourfa_pkt_get_int(attr_ssl_type, &tmp);
+      ourfa_pkt_get_int(attr_ssl_type, &tmp);
 
       if ((unsigned)tmp != ourfa_ssl_ctx_ssl_type(connection->ssl_ctx)) {
 	 res = connection->printf_err(OURFA_ERROR_WRONG_SSL_TYPE,
@@ -959,7 +958,7 @@ int ourfa_connection_start_func_call(ourfa_connection_t *connection, int func_id
 	 goto ourfa_start_call_exit;
       }else if (tmp != 4){
 	 res=connection->printf_err(OURFA_ERROR_ACCESS_DENIED, connection->err_ctx,
-	       "Recvd ATTR_TERMINATION attribute with unknown code 0x%x", tmp);
+	       "Recvd ATTR_TERMINATION attribute with 0x%x", tmp);
 	 goto ourfa_start_call_exit;
       }
    }
@@ -1310,7 +1309,7 @@ int ourfa_connection_read_double(ourfa_connection_t *conn, unsigned type, double
    return OURFA_OK;
 }
 
-int ourfa_connection_read_ip(ourfa_connection_t *conn, unsigned type, in_addr_t *val)
+int ourfa_connection_read_ip(ourfa_connection_t *conn, unsigned type, struct sockaddr *val)
 {
    const ourfa_attr_hdr_t *attr;
    int res;
@@ -1488,12 +1487,13 @@ int ourfa_connection_write_double(ourfa_connection_t *conn, unsigned type, doubl
    return type == OURFA_ATTR_TERMINATION ? ourfa_connection_flush_write(conn) : partial_flush_write(conn);
 }
 
-int ourfa_connection_write_ip(ourfa_connection_t *conn, unsigned type, in_addr_t val)
+int ourfa_connection_write_ip(ourfa_connection_t *conn, unsigned type, const struct sockaddr *val)
 {
    int res;
    ourfa_pkt_t *pkt;
 
-   res = prepare_pkt_for_attr_write(conn, /* XXX  */ 4);
+   res = prepare_pkt_for_attr_write(conn,
+         val->sa_family == AF_INET6 ? 16 : 4);
    if (res != OURFA_OK)
       return res;
    pkt = conn->wbuf.head->pkt;
@@ -1504,7 +1504,6 @@ int ourfa_connection_write_ip(ourfa_connection_t *conn, unsigned type, in_addr_t
 
    return type == OURFA_ATTR_TERMINATION ? ourfa_connection_flush_write(conn) : partial_flush_write(conn);
 }
-
 
 int ourfa_connection_write_string(ourfa_connection_t *conn, unsigned type, const char * val)
 {

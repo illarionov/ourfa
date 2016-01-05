@@ -6,38 +6,47 @@ ARFLAGS=/nologo
 
 XML_DIR=..\libxml
 ICONV_DIR=..\iconv
-SSL_DIR=c:\OpenSSL-Win32\ 
+SSL_DIR=..\openssl
 ZLIB_DIR=..\zlib
 
 CFLAGS=/W3 /nologo /TC /MD
 
 CFLAGS=$(CFLAGS) /DWIN32 /D_MBCS \
+	/D_USING_V110_SDK71_ \
 	/D_CRT_SECURE_NO_WARNINGS \
-	/Dstrcasecmp=_stricmp /Dsnprintf=ourfa_snprintf /Dstrdup=_strdup
+	/D_CRT_NONSTDC_NO_DEPRECATE \
+	/D_WIN32_WINNT=0x501 \
+	/Dinet_ntop=ourfa_inet_ntop \
+	/Dinet_pton=ourfa_inet_pton \
+	/Dstrcasecmp=_stricmp
+
 CFLAGS=$(CFLAGS) /I$(XML_DIR)\include /I$(SSL_DIR)\include \
 	/I$(ICONV_DIR)\include
 
 LDFLAGS=/LIBPATH:$(XML_DIR)/lib /LIBPATH:$(SSL_DIR)/lib \
-	/LIBPATH:$(ICONV_DIR)/lib 
-
+	/LIBPATH:$(ICONV_DIR)/lib \
+	/SUBSYSTEM:CONSOLE,5.01
 
 !if "$(DEBUG)" == "1"
 CFLAGS=$(CFLAGS) /D_DEBUG /Od /Z7
-LDFLAGS=$(LDFLAGS) /DEBUG 
+LDFLAGS=$(LDFLAGS) /DEBUG
 !else
 CFLAGS=$(CFLAGS) /DNDEBUG /O2
-LDFLAGS=$(LDFLAGS) 
+LDFLAGS=$(LDFLAGS)
 !endif
 
 OBJS= hash.obj \
       xmlapi.obj \
+      ip.obj \
       pkt.obj \
       error.obj \
       connection.obj \
       func_call.obj \
       ssl_ctx.obj \
       asprintf.obj \
-      strtod_c.obj
+      strtod_c.obj  \
+      inet_ntop.obj \
+      inet_pton.obj
 
 all: libourfa.lib ourfa_client.exe
 
@@ -67,13 +76,17 @@ package: libourfa.lib ourfa_client.exe
 	copy $(SSL_DIR)\libeay32.dll libourfa\bin
 	copy $(SSL_DIR)\ssleay32.dll libourfa\bin
 	copy $(ZLIB_DIR)\bin\zlib1.dll libourfa\bin
-	
-
 
 asprintf.obj: asprintf.c
 	$(CC) $(CFLAGS) -c asprintf.c
+inet_ntop.obj: inet_ntop.c
+	$(CC) $(CFLAGS) -c inet_ntop.c
+inet_pton.obj: inet_pton.c
+	$(CC) $(CFLAGS) -c inet_pton.c
 strtod_c.obj: strtod_c.c
 	$(CC) $(CFLAGS) -c strtod_c.c
+ip.obj: ip.c ourfa.h ourfa_private.h inet_ntop.h inet_pton.h
+	$(CC) $(CFLAGS) -c ip.c
 pkt.obj: pkt.c ourfa.h
 	$(CC) $(CFLAGS) -c pkt.c
 error.obj: error.c ourfa.h
@@ -94,4 +107,3 @@ client_dump.obj: client_dump.c ourfa.h
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c client_dump.c
 client_datafile.o: client_dump.o client_datafile.c ourfa.h
 	$(CC) $(CFLAGS) $(XML2_CFLAGS) -c client_datafile.c
-

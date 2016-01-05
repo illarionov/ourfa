@@ -64,6 +64,9 @@
 #define DEFAULT_DATA_POOL_SIZE 512
 #define MAXIMUM_DATA_POOL_SIZE (PKT_MAX_SIZE-PKT_HDR_SIZE)
 
+#define PKT_IP4_DATA_SIZE 4
+#define PKT_IP6_DATA_SIZE 16
+
 struct attr_list_t {
    size_t cnt;
    size_t data_pool_size; /*  elements count */
@@ -313,16 +316,25 @@ int ourfa_pkt_add_double(ourfa_pkt_t *pkt, unsigned type, double val)
    return ourfa_pkt_add_attr(pkt, type, sizeof(tmp0.u), (const void *)v);
 }
 
-int ourfa_pkt_add_ip(ourfa_pkt_t *pkt, unsigned type, in_addr_t ip)
+int ourfa_pkt_add_ip(ourfa_pkt_t *pkt, unsigned type, const struct sockaddr *ip)
 {
-   uint32_t v;
+   if (ip->sa_family == AF_INET) {
+      const struct sockaddr_in *ip4 = (const struct sockaddr_in *)ip;
+      uint32_t v;
 
-   /* XXX: OURFA_ATTR_SESSION_IP must be the same byte order as UTM server  */
-   if (type != OURFA_ATTR_SESSION_IP)
-      v = ip & 0xffffffff;
-   else
-      v = ntohl(ip & 0xffffffff);
-   return ourfa_pkt_add_attr(pkt, type, 4, (const void *)&v);
+      /* XXX: OURFA_ATTR_SESSION_IP must be the same byte order as UTM server  */
+      if (type != OURFA_ATTR_SESSION_IP)
+         v = ip4->sin_addr.s_addr & 0xffffffff;
+      else
+         v = ntohl(ip4->sin_addr.s_addr & 0xffffffff);
+      return ourfa_pkt_add_attr(pkt, type, PKT_IP4_DATA_SIZE, (const void *)&v);
+   } else if (ip->sa_family == AF_INET6) {
+      const struct sockaddr_in6 *ip6 = (const struct sockaddr_in6 *)ip;
+      return ourfa_pkt_add_attr(pkt, type, PKT_IP6_DATA_SIZE,
+            (const void *)ip6->sin6_addr.s6_addr);
+   } else {
+      return -1;
+   }
 }
 
 size_t ourfa_pkt_space_left(const ourfa_pkt_t *pkt)
@@ -361,7 +373,7 @@ int ourfa_pkt_add_attrs_v(ourfa_pkt_t *pkt, const char *fmt, va_list ap)
    double arg_double;
    const void *arg_data;
    size_t arg_data_size;
-   in_addr_t arg_ip;
+   const struct sockaddr *arg_ip;
    va_list ap0;
 
    /* Check data */
@@ -423,8 +435,12 @@ int ourfa_pkt_add_attrs_v(ourfa_pkt_t *pkt, const char *fmt, va_list ap)
 	    break;
 	 case 'I':
 	    attr_cnt++;
-	    arg_ip = va_arg(ap0, in_addr_t);
-	    data_size += 4;
+	    arg_ip = va_arg(ap0, struct sockaddr *);
+            if (arg_ip->sa_family == AF_INET6) {
+               data_size += PKT_IP6_DATA_SIZE;
+            } else {
+               data_size += PKT_IP4_DATA_SIZE;
+            }
 	    break;
 	 case 'D':
 	    attr_cnt++;
@@ -505,7 +521,7 @@ int ourfa_pkt_add_attrs_v(ourfa_pkt_t *pkt, const char *fmt, va_list ap)
 	    ourfa_pkt_add_double(pkt, attr_type, arg_double);
 	    break;
 	 case 'I':
-	    arg_ip = va_arg(ap0, in_addr_t);
+	    arg_ip = va_arg(ap0, const struct sockaddr *);
 	    ourfa_pkt_add_ip(pkt, attr_type, arg_ip);
 	    break;
 	 case 'D':
@@ -628,29 +644,28 @@ int ourfa_pkt_get_attr(const ourfa_attr_hdr_t *attr,
       ourfa_attr_data_type_t type,
       void *res)
 {
-   unsigned allowed_data_length;
-
    if (attr == NULL)
       return 1; /* NULL attr (end of list) */
 
    if ((type != OURFA_ATTR_DATA_STRING)
+         && (type != OURFA_ATTR_DATA_IP)
 	 && attr->data == NULL)
       return -2;
 
-   allowed_data_length = 8;
    switch (type) {
       case OURFA_ATTR_DATA_IP:
-         if ((attr->data_length != 4)
-                 && (attr->data_length != 5)
-                 && (attr->data_length != 17))
+         if ((attr->data_length != PKT_IP4_DATA_SIZE)
+                 && (attr->data_length != 1 + PKT_IP4_DATA_SIZE)
+                 && (attr->data_length != 1 + PKT_IP6_DATA_SIZE))
 	    return -1;
          break;
       case OURFA_ATTR_DATA_INT:
-	 allowed_data_length = 4;
-	 /* FALLTHROUGH */
+	 if (attr->data_length != 4)
+	    return -1;
+         break;
       case OURFA_ATTR_DATA_LONG:
       case OURFA_ATTR_DATA_DOUBLE:
-	 if (attr->data_length != allowed_data_length)
+	 if (attr->data_length != 8)
 	    return -1;
          break;
       default:
@@ -708,22 +723,23 @@ int ourfa_pkt_get_attr(const ourfa_attr_hdr_t *attr,
 	 }
 	 break;
       case OURFA_ATTR_DATA_IP:
-         if (attr->data_length == 4) {
-	    uint32_t res32;
-	    res32 = *(uint32_t *)attr->data;
-	    *(in_addr_t *)res = (in_addr_t)res32;
-	 } else if (attr->data_length == 5) {
-            uint8_t *d = (uint8_t *)attr->data;
-	    uint32_t res32 = (((uint32_t)d[3+1]) << 24 & 0xff000000L)
-	       | (((uint32_t)d[2+1]) << 16 & 0xff0000L)
-	       | (((uint32_t)d[1+1]) << 8 & 0xff00L)
-	       | (((uint32_t)d[0+1]) & 0xff);
-	    *(in_addr_t *)res = (in_addr_t)res32;
-         } else if (attr->data_length == 17) {
-             /* TODO IPV6 */
-	    *(in_addr_t *)res = 0;
-         } else
-            return -1;
+         {
+            if (attr->data_length == 4 || (attr->data_length == 5)) {
+               struct sockaddr_in *sock = (struct sockaddr_in *)res;
+               uint8_t *d = (uint8_t *)attr->data;
+               memset(sock, 0, sizeof(struct sockaddr_in));
+               sock->sin_family = AF_INET;
+               memcpy(&sock->sin_addr.s_addr, &d[attr->data_length - 4],
+                     PKT_IP4_DATA_SIZE);
+            } else if (attr->data_length == 17) {
+               struct sockaddr_in6 *sock = (struct sockaddr_in6 *)res;
+               uint8_t *d = (uint8_t *)attr->data;
+               memset(sock, 0, sizeof(struct sockaddr_in6));
+               sock->sin6_family = AF_INET6;
+               memcpy(sock->sin6_addr.s6_addr, &d[1], PKT_IP6_DATA_SIZE);
+            } else
+               return -1;
+         }
 	 break;
       case OURFA_ATTR_DATA_STRING:
 	 {
@@ -765,89 +781,10 @@ int ourfa_pkt_get_double(const ourfa_attr_hdr_t *attr, double *res)
    return ourfa_pkt_get_attr(attr, OURFA_ATTR_DATA_DOUBLE, res);
 }
 
-int ourfa_pkt_get_ip(const ourfa_attr_hdr_t *attr, in_addr_t *res)
+int ourfa_pkt_get_ip(const ourfa_attr_hdr_t *attr, struct sockaddr *res)
 {
    return ourfa_pkt_get_attr(attr, OURFA_ATTR_DATA_IP, res);
 }
-
-int ourfa_pkt_read_attrs(ourfa_attr_hdr_t **head, const char *fmt, ...)
-{
-   va_list ap;
-   const char *p;
-   int attr_cnt;
-
-   int *arg_int_p;
-   char **arg_string_p;
-   long long *arg_long_p;
-   double *arg_double_p;
-   in_addr_t *arg_ip_p;
-
-   if (head == NULL || fmt == NULL)
-      return -1;
-
-   /* check fmt */
-   va_start(ap, fmt);
-   for (p=fmt; *p; p++) {
-      switch (*p) {
-	 case 'i':
-	 case 's':
-	 case 'l':
-	 case 'd':
-	 case 'I':
-	 case ' ':
-	    break;
-	 default:
-	    return -2;
-	    break;
-      }
-   }
-
-  /*  read attributes */
-   attr_cnt = 0;
-   va_start(ap, fmt);
-   for (p=fmt; *p; p++) {
-      if (*head == NULL)
-	 break;
-
-      switch (*p) {
-	 case 'i':
-	    arg_int_p = va_arg(ap, int *);
-	    if (ourfa_pkt_get_attr(*head, OURFA_ATTR_DATA_INT, arg_int_p) != 0)
-	       return attr_cnt;
-	    break;
-	 case 's':
-	    arg_string_p = va_arg(ap, char **);
-	    if (ourfa_pkt_get_attr(*head, OURFA_ATTR_DATA_STRING, arg_string_p) != 0)
-	       return attr_cnt;
-	    break;
-	 case 'l':
-	    arg_long_p = va_arg(ap, long long *);
-	    if (ourfa_pkt_get_attr(*head, OURFA_ATTR_DATA_LONG, arg_long_p) != 0)
-	       return attr_cnt;
-	    break;
-	 case 'd':
-	    arg_double_p = va_arg(ap, double *);
-	    if (ourfa_pkt_get_attr(*head, OURFA_ATTR_DATA_DOUBLE, arg_double_p) != 0)
-	       return attr_cnt;
-	    break;
-	 case 'I':
-	    arg_ip_p = va_arg(ap, in_addr_t *);
-	    if (ourfa_pkt_get_attr(*head, OURFA_ATTR_DATA_IP, arg_ip_p) != 0)
-	       return attr_cnt;
-	    break;
-	 case ' ':
-	    break;
-	 default:
-	    assert(0);
-      }
-      *head = (*head)->next;
-   }
-   va_end(ap);
-
-   return attr_cnt;
-}
-
-
 
 const char *ourfa_pkt_code2str(unsigned pkt_code)
 {
@@ -1140,7 +1077,7 @@ void ourfa_pkt_dump(const ourfa_pkt_t *pkt, FILE *stream, const char *annotation
 	 pkt_code,
 	 pkt->proto,
 	 (unsigned)pkt->data_p,
-	 pkt->attrs.all.cnt);
+	 (unsigned)pkt->attrs.all.cnt);
    for (i=0; i<pkt->attrs.all.cnt; i++) {
       const char *attr_type;
       char data_str[40];
@@ -1183,7 +1120,7 @@ void ourfa_pkt_dump(const ourfa_pkt_t *pkt, FILE *stream, const char *annotation
 
       fprintf(stream, "attr: %-18s size: 0x%04x %s\n",
 	    attr_type,
-	    pkt->attrs.all.data_pool[i].data_length,
+	    (unsigned)pkt->attrs.all.data_pool[i].data_length,
 	    data_str);
    }
    fprintf(stream,"\n");

@@ -39,23 +39,3 @@ int ourfa_asprintf( char **res, const char *fmt, ... )
   va_end( argv );
   return retval;
 }
-
-#ifdef _MSC_VER
-int ourfa_snprintf(char *str, size_t size, const char *format, ...)
-{
-  int retval;
-  va_list argv;
-  va_start( argv, format );
-  retval = _vsnprintf(str, size, format, argv);
-  va_end( argv );
-  if (((retval < 0) || (retval == size))
-	&& str
-	&& (size > 0))
-	  str[size-1]='\0';
-  if (errno == ERANGE)
-    errno = 0;
-  return retval == size ? retval-1 : retval;
-}
-#endif
-
-

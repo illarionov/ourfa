@@ -6,6 +6,8 @@ use Data::Dumper;
 BEGIN { use_ok('Ourfa');
 };
 
+Ourfa->enable_ipv6(0);
+
 my $conn = Ourfa::Connection->new();
 
 isa_ok($conn, "Ourfa::Connection", "connection is object of Ourfa::Connection");

@@ -50,14 +50,18 @@
 #define PRN(format, ...)
 #endif
 
-#ifdef _MSC_VER
-#define snprintf ourfa_snprintf
-#endif
-
 #ifdef WIN32
 #define malloc win32_malloc
 #define free win32_free
 #endif
+
+#define MY_CXT_KEY "Ourfa::_guts" XS_VERSION
+
+typedef struct {
+    int enable_ipv6;
+} my_cxt_t;
+
+START_MY_CXT
 
 #define OURFA2HV_S_SIZE 20
 struct ourfah2hv_ctx {
@@ -74,6 +78,7 @@ struct t_idx_list {
    unsigned cnt;
    char idx_list_s[80];
 };
+
 
 static int sv2in_addr_t(SV *val, const char *proc, in_addr_t *res, int croak_on_error);
 
@@ -102,7 +107,8 @@ static void init_idx_list_s(struct t_idx_list *t)
    }
 }
 
-static int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct t_idx_list *idx)
+static int hv2ourfah_add_val(pMY_CXT_
+    ourfa_hash_t *res, const char *key, SV *sv, struct t_idx_list *idx)
 {
    int err = 1;
 
@@ -138,12 +144,16 @@ static int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct 
 	    char *str;
 	    STRLEN len;
 	    str = SvPV(sv, len);
-	    if ((len > 0) && (strlen(str) != len)) {
+	    if (!MY_CXT.enable_ipv6
+               && (len > 0)
+               && (strlen(str) != len)) {
 	       /* Binary data. Try to set as ip  */
-	       struct in_addr ip;
-	       if (sv2in_addr_t(sv, "hv2ourfah_add_val", &ip.s_addr, 0) == 0) {
-		  PRN("adding key: %s idx: %s ip: %s\n", key, idx->idx_list_s, inet_ntoa(ip));
-		  if (ourfa_hash_set_ip(res, key, idx->idx_list_s, ip.s_addr) != 0)
+               struct sockaddr_in sock;
+               memset(&sock, 0, sizeof(sock));
+               sock.sin_family = AF_INET;
+	       if (sv2in_addr_t(sv, "hv2ourfah_add_val", &sock.sin_addr.s_addr, 0) == 0) {
+		  PRN("adding key: %s idx: %s ip: %s\n", key, idx->idx_list_s, inet_ntoa(sock.sin_addr.s_addr));
+		  if (ourfa_hash_set_ip(res, key, idx->idx_list_s, (struct sockaddr *)&sock) != 0)
 		     err = -1;
 		  break;
 	       }
@@ -186,7 +196,7 @@ static int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct 
 
 	       if (SvTYPE(*val) != SVt_PVHV) {
 		  if (err > 0)
-		     err = hv2ourfah_add_val(res, key, *val, idx);
+		     err = hv2ourfah_add_val(aMY_CXT_ res, key, *val, idx);
 	       }else {
 		  /*  Hash */
 		  HV *hv;
@@ -199,7 +209,7 @@ static int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct 
 		  hv_iterinit(hv);
 		  while ((val0 = hv_iternextsv(hv, &key2, &retlen)) != NULL) {
 		     if (err > 0)
-			err = hv2ourfah_add_val(res, key2, val0, idx);
+			err = hv2ourfah_add_val(aMY_CXT_ res, key2, val0, idx);
 		  }
 	       }
 	    }
@@ -223,7 +233,7 @@ static int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct 
 	       hv_iterinit(hv);
 	       while ((val = hv_iternextsv(hv, &key2, &retlen)) != NULL) {
 		  if (err > 0)
-		     err = hv2ourfah_add_val(res, key2, val, idx);
+		     err = hv2ourfah_add_val(aMY_CXT_ res, key2, val, idx);
 	       }
 	    }
 	 }
@@ -257,7 +267,7 @@ static int hv2ourfah_add_val(ourfa_hash_t *res, const char *key, SV *sv, struct 
    return err;
 }
 
-static int hv2ourfah(HV *hv, ourfa_hash_t **h)
+static int hv2ourfah(pMY_CXT_ HV *hv, ourfa_hash_t **h)
 {
    ourfa_hash_t *res;
    SV *val;
@@ -280,7 +290,7 @@ static int hv2ourfah(HV *hv, ourfa_hash_t **h)
    idx_list.cnt=0;
    hv_iterinit(hv);
    while ((val = hv_iternextsv(hv, &key, &retlen)) != NULL) {
-      hv2ourfah_add_val(res, key, val, &idx_list);
+      hv2ourfah_add_val(aMY_CXT_ res, key, val, &idx_list);
    }
 
 
@@ -295,15 +305,15 @@ static int sv2in_addr_t(SV *val, const char *proc, in_addr_t *res, int croak_on_
    unsigned char * ip_address;
    if (DO_UTF8(val) && !sv_utf8_downgrade(val, 1)) {
       if (croak_on_error)
-	 croak("Wide character in %s", proc);
+	 croak("Wide character in %s\n", proc);
       return -1;
    }
    ip_address = (unsigned char *)SvPVbyte(val, addrlen);
    if (addrlen != sizeof(addr) && addrlen != 4) {
       if (croak_on_error)
-	 croak("Bad arg length for %s, length is %d, should be %d",
-	       "Ourfa::Connection::session_ip",
-	       addrlen, sizeof(addr));
+	 croak("Bad arg length for %s, length is %u, should be %u\n",
+	       proc,
+	       (unsigned)addrlen, (unsigned)sizeof(addr));
       return -1;
    }
 
@@ -319,27 +329,22 @@ static int ourfa_err_f_warn(int err_code, void *user_ctx, const char *fmt, ...)
 {
 
    va_list ap;
-   SV * saved_error;
 
    if (user_ctx) {}
 
-   saved_error = sv_newmortal();
-
    if (fmt) {
       va_start(ap, fmt);
-      sv_vsetpvf(saved_error, fmt, &ap);
+      vwarn(fmt, &ap);
       va_end(ap);
    }else if (err_code == OURFA_ERROR_SYSTEM) {
-      sv_setpv(saved_error, strerror(errno));
+      warn("%s\n", strerror(errno));
    }else
-      sv_setpv(saved_error, ourfa_error_strerror(err_code));
-
-   warn(SvPVbyte_nolen(saved_error));
+      warn("%s\n", ourfa_error_strerror(err_code));
 
    return err_code;
 }
 
-static int ourfa_exec(ourfa_connection_t *conn,
+static int ourfa_exec(pMY_CXT_ ourfa_connection_t *conn,
    ourfa_xmlapi_func_t *f, ourfa_hash_t *in, HV **ret_h,
    char *err, size_t err_size)
 {
@@ -358,7 +363,7 @@ static int ourfa_exec(ourfa_connection_t *conn,
 
    sctx = ourfa_script_call_ctx_new(f, in);
    if (sctx == NULL) {
-      snprintf(err, err_size, strerror(errno));
+      snprintf(err, err_size, "%s", strerror(errno));
       return OURFA_ERROR_SYSTEM;
    }
    ourfa_script_call_start(sctx);
@@ -447,7 +452,7 @@ static int ourfa_exec(ourfa_connection_t *conn,
 			    SV *tmp;
 			    if (ourfa_hash_get_string(sctx->func.h,
 				     node_name, arr_index, &val) == 0 ) {
-			       tmp = newSVpvn(val, strlen(val));
+			       tmp = newSVpv(val, 0);
 			       SvUTF8_on(tmp);
 			       if (hv_store((HV *)s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
 				  SvREFCNT_dec(tmp);
@@ -464,20 +469,39 @@ static int ourfa_exec(ourfa_connection_t *conn,
 			 break;
 		      case OURFA_XMLAPI_NODE_IP:
 			 {
-			    struct in_addr val;
+			    struct sockaddr_storage val;
 			    SV *tmp;
 			    if (ourfa_hash_get_ip(sctx->func.h,
-				     node_name, arr_index, &val.s_addr) == 0 ) {
-			       tmp = newSVpvn((const char *)&val, sizeof(val));
-			       if (hv_store((HV *)s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
-				  SvREFCNT_dec(tmp);
-				  sctx->func.err = OURFA_ERROR_HASH;
-				  sctx->func.func_ret_code = 1;
-				  snprintf(sctx->func.last_err_str,
-					sizeof(sctx->func.last_err_str),
-					"Can not set hash: %s = %s",
-					node_name, inet_ntoa(val));
-			       }
+				     node_name, arr_index, (struct sockaddr *)&val) == 0 ) {
+                               if (!MY_CXT.enable_ipv6 && val.ss_family == AF_INET) {
+                                  struct sockaddr_in *addr4 = (struct sockaddr_in *)&val;
+                                  tmp = newSVpvn((const char *)&addr4->sin_addr, sizeof(addr4->sin_addr));
+                                  if (hv_store((HV *)s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
+                                     char ip_str[INET6_ADDRSTRLEN];
+                                     SvREFCNT_dec(tmp);
+                                     sctx->func.err = OURFA_ERROR_HASH;
+                                     sctx->func.func_ret_code = 1;
+                                     ourfa_ip_ntop((struct sockaddr *)addr4, ip_str, sizeof(ip_str));
+                                     snprintf(sctx->func.last_err_str,
+                                           sizeof(sctx->func.last_err_str),
+                                           "Can not set hash: %s = %s",
+                                           node_name, ip_str);
+                                  }
+                               } else {
+                                  char ip_str[INET6_ADDRSTRLEN];
+                                  ourfa_ip_ntop((struct sockaddr *)&val, ip_str, sizeof(ip_str));
+                                  tmp = newSVpv(ip_str, 0);
+                                  SvUTF8_on(tmp);
+                                  if (hv_store((HV *)s[s_top], node_name, strlen(node_name), tmp, 0)==NULL) {
+                                     SvREFCNT_dec(tmp);
+                                     sctx->func.err = OURFA_ERROR_HASH;
+                                     sctx->func.func_ret_code = 1;
+                                     snprintf(sctx->func.last_err_str,
+                                           sizeof(sctx->func.last_err_str),
+                                           "Can not set hash: %s = %s",
+                                           node_name, ip_str);
+                                  }
+                               }
 			    }
 			 }
 			 break;
@@ -626,7 +650,7 @@ ourfa_ssl_ctx_ssl_type(ssl_ctx, val=NO_INIT)
       if (items > 1) {
 	 res = ourfa_ssl_ctx_set_ssl_type(ssl_ctx, val);
 	 if (res != OURFA_OK)
-	    croak("%s: %s", "Ourfa::SSLCtx::type", ourfa_error_strerror(res));
+	    croak("%s: %s\n", "Ourfa::SSLCtx::type", ourfa_error_strerror(res));
 	 RETVAL=val;
       }else
 	 RETVAL = ourfa_ssl_ctx_ssl_type(ssl_ctx);
@@ -644,7 +668,7 @@ ourfa_ssl_ctx_load_cert(ssl_ctx, cert=NULL)
    const char *cert
    POSTCALL:
       if (RETVAL != OURFA_OK)
-	    croak("%s: %s", "Ourfa::SSLCtx::load_cert", ourfa_error_strerror(RETVAL));
+	    croak("%s: %s\n", "Ourfa::SSLCtx::load_cert", ourfa_error_strerror(RETVAL));
 
 const char *
 ourfa_ssl_ctx_key(ssl_ctx)
@@ -661,7 +685,7 @@ ourfa_ssl_ctx_load_private_key(ssl_ctx, cert, pass=NULL)
    const char *pass
    POSTCALL:
       if (RETVAL != OURFA_OK)
-	    croak("%s: %s", "Ourfa::SSLCtx::load_private_key", ourfa_error_strerror(RETVAL));
+	    croak("%s: %s\n", "Ourfa::SSLCtx::load_private_key", ourfa_error_strerror(RETVAL));
 
 SSL_CTX *
 ourfa_ssl_ctx_get_ctx(ssl_ctx)
@@ -693,7 +717,7 @@ ourfa_connection_new(CLASS, ssl_ctx=NULL)
       if (RETVAL)
 	 ourfa_connection_set_err_f(RETVAL, ourfa_err_f_warn, NULL);
       else
-	 croak("malloc error");
+	 croak("malloc error\n");
    OUTPUT:
       RETVAL
 
@@ -711,7 +735,7 @@ ourfa_connection_proto(connection, val=NO_INIT)
       if (items > 1) {
 	 res = ourfa_connection_set_proto(connection, val);
 	 if (res != OURFA_OK)
-	    croak("%s: %s", "Ourfa::Connection::proto", ourfa_error_strerror(res));
+	    croak("%s: %s\n", "Ourfa::Connection::proto", ourfa_error_strerror(res));
 	 RETVAL=val;
       }else {
 	 RETVAL = ourfa_connection_proto(connection);
@@ -739,7 +763,7 @@ ourfa_connection_login_type(connection, val=NO_INIT)
       if (items > 1) {
 	 res = ourfa_connection_set_login_type(connection, val);
 	 if (res != OURFA_OK)
-	    croak("%s: %s", "Ourfa::Connection::login_type", ourfa_error_strerror(res));
+	    croak("%s: %s\n", "Ourfa::Connection::login_type", ourfa_error_strerror(res));
 	 RETVAL=val;
       }else {
 	 RETVAL = ourfa_connection_login_type(connection);
@@ -757,7 +781,7 @@ ourfa_connection_timeout(connection, val=NO_INIT)
       if (items > 1) {
 	 res = ourfa_connection_set_timeout(connection, val);
 	 if (res != OURFA_OK)
-	    croak("%s: %s", "Ourfa::Connection::timeout", ourfa_error_strerror(res));
+	    croak("%s: %s\n", "Ourfa::Connection::timeout", ourfa_error_strerror(res));
 	 RETVAL=val;
       }else {
 	 RETVAL = ourfa_connection_timeout(connection);
@@ -776,13 +800,14 @@ ourfa_connection_auto_reconnect(connection, val=NO_INIT)
       if (items > 1) {
 	 res = ourfa_connection_set_auto_reconnect(connection, val);
 	 if (res != OURFA_OK)
-	    croak("%s: %s", "Ourfa::Connection::auto_reconnect", ourfa_error_strerror(res));
+	    croak("%s: %s\n", "Ourfa::Connection::auto_reconnect", ourfa_error_strerror(res));
 	 RETVAL=val;
       }else {
 	 RETVAL = ourfa_connection_auto_reconnect(connection);
       }
    OUTPUT:
       RETVAL
+
 
 
 const char *
@@ -800,7 +825,7 @@ ourfa_connection_login(connection, val=NO_INIT)
 	    val_str = (const char *)SvPV_nolen(val);
 	 res = ourfa_connection_set_login(connection, val_str);
 	 if (res != OURFA_OK)
-	    croak("%s: %s", "Ourfa::Connection::login", ourfa_error_strerror(res));
+	    croak("%s: %s\n", "Ourfa::Connection::login", ourfa_error_strerror(res));
       }
       RETVAL = ourfa_connection_login(connection);
    OUTPUT:
@@ -822,7 +847,7 @@ ourfa_connection_password(connection, val=NO_INIT)
 	    val_str = (const char *)SvPV_nolen(val);
 	 res = ourfa_connection_set_password(connection, val_str);
 	 if (res != OURFA_OK)
-	    croak("%s: %s", "Ourfa::Connection::password", ourfa_error_strerror(res));
+	    croak("%s: %s\n", "Ourfa::Connection::password", ourfa_error_strerror(res));
       }
       RETVAL = ourfa_connection_password(connection);
    OUTPUT:
@@ -844,7 +869,7 @@ ourfa_connection_hostname(connection, val=NO_INIT)
 	    val_str = (const char *)SvPV_nolen(val);
 	 res = ourfa_connection_set_hostname(connection, val_str);
 	 if (res != OURFA_OK)
-	    croak("%s: %s", "Ourfa::Connection::hostname", ourfa_error_strerror(res));
+	    croak("%s: %s\n", "Ourfa::Connection::hostname", ourfa_error_strerror(res));
       }
       RETVAL = ourfa_connection_hostname(connection);
    OUTPUT:
@@ -867,7 +892,7 @@ ourfa_connection_session_id(connection, val=NO_INIT)
 	    val_str = (const char *)SvPV_nolen(val);
 	 res = ourfa_connection_set_session_id(connection, val_str);
 	 if (res  != OURFA_OK)
-	    croak("%s: %s", "Ourfa::Connection::session_id", ourfa_error_strerror(res));
+	    croak("%s: %s\n", "Ourfa::Connection::session_id", ourfa_error_strerror(res));
       }
       if (ourfa_connection_session_id(connection, sessid, sizeof(sessid))) {
          ST(0) = sv_newmortal();
@@ -880,28 +905,47 @@ ourfa_connection_session_ip(connection, val=NO_INIT)
    ourfa_connection_t *connection
    SV *val
    PREINIT:
-      const in_addr_t *ip0;
+      const struct sockaddr *ip0;
+      char ip_str[INET6_ADDRSTRLEN];
       int res;
+      dMY_CXT;
    CODE:
       if (items > 1) {
-	 struct in_addr ip;
-	 if (SvOK(val)) {
-	    sv2in_addr_t(val, "Ourfa::Connection::session_ip", &ip.s_addr, 1);
-	    PRN("set session ip: %s", inet_ntoa(ip));
-	    res = ourfa_connection_set_session_ip(connection, &ip.s_addr);
-	 }else
-	    res = ourfa_connection_set_session_ip(connection, NULL);
-	 if (res != OURFA_OK)
-	    croak("%s: %s", "Ourfa::Connection::session_ip", ourfa_error_strerror(res));
+         if (!SvOK(val)) {
+            res = ourfa_connection_set_session_ip(connection, NULL);
+         } else {
+            if (!MY_CXT.enable_ipv6) {
+               struct sockaddr_in sock;
+               memset(&sock, 0, sizeof(sock));
+               sock.sin_family = AF_INET;
+               sv2in_addr_t(val, "Ourfa::Connection::session_ip", &sock.sin_addr.s_addr, 1);
+               ourfa_ip_ntop((struct sockaddr *)&sock, ip_str, sizeof(ip_str));
+               PRN("set session ip: %s", ip_str);
+               res = ourfa_connection_set_session_ip(connection, (struct sockaddr *)&sock);
+            } else {
+               struct sockaddr_storage sock;
+               if (ourfa_parse_ip(SvPV_nolen(val), &sock) != 0) {
+                  croak("%s: %s\n", "Ourfa::Connection::session_ip", "invalid IP");
+               } else {
+                  res = ourfa_connection_set_session_ip(connection, (struct sockaddr *)&sock);
+               }
+            }
+         }
+         if (res != OURFA_OK)
+            croak("%s: %s\n", "Ourfa::Connection::session_ip", ourfa_error_strerror(res));
       }
       ip0 = ourfa_connection_session_ip(connection);
       if (ip0) {
-	 struct in_addr ip;
-	 ip.s_addr = *ip0;
-	 PRN("session ip: %s", inet_ntoa(ip));
-	 ST(0) = sv_newmortal();
-	 sv_setpvn(ST(0), (char *)&ip, sizeof(ip));
-      }else
+          if (!MY_CXT.enable_ipv6 && ip0->sa_family == AF_INET) {
+              struct sockaddr_in *addr4 = (struct sockaddr_in *)ip0;
+              ST(0) = sv_newmortal();
+              sv_setpvn(ST(0), (char *)&addr4->sin_addr, sizeof(addr4->sin_addr));
+          } else {
+              ourfa_ip_ntop(ip0, ip_str, sizeof(ip_str));
+              ST(0) = sv_newmortal();
+              sv_setpv(ST(0), ip_str);
+          }
+      } else
 	 ST(0) = &PL_sv_undef;
 
 BIO *
@@ -923,7 +967,7 @@ ourfa_connection_debug_stream(connection, val=NO_INIT)
 	    stream = NULL;
 	 res = ourfa_connection_set_debug_stream(connection, stream);
 	 if (res != OURFA_OK)
-	    croak("%s: %s", "Ourfa::Connection::debug_stream", ourfa_error_strerror(res));
+	    croak("%s: %s\n", "Ourfa::Connection::debug_stream", ourfa_error_strerror(res));
       }
       RETVAL = ourfa_connection_debug_stream(connection);
    OUTPUT:
@@ -942,7 +986,7 @@ ourfa_connection_open(connection)
    CODE:
       res = ourfa_connection_open(connection);
       if (res != OURFA_OK)
-	  croak("%s: %s", "Ourfa::Connection::open", ourfa_error_strerror(res));
+	  croak("%s: %s\n", "Ourfa::Connection::open", ourfa_error_strerror(res));
 
 void
 ourfa_connection_close(connection)
@@ -952,7 +996,7 @@ ourfa_connection_close(connection)
    CODE:
       res = ourfa_connection_close(connection);
       if (res != OURFA_OK)
-	  croak("%s: %s", "Ourfa::Connection::close", ourfa_error_strerror(res));
+	  croak("%s: %s\n", "Ourfa::Connection::close", ourfa_error_strerror(res));
 
 int
 ourfa_connection_send_packet(connection, pkt, descr=NULL)
@@ -982,7 +1026,7 @@ ourfa_connection_read_int(connection, type=OURFA_ATTR_DATA)
    CODE:
       res = ourfa_connection_read_int(connection, type, &RETVAL);
       if (res != OURFA_OK)
-	 croak("%s: %s", "Ourfa::Connection::read_int", ourfa_error_strerror(res));
+	 croak("%s: %s\n", "Ourfa::Connection::read_int", ourfa_error_strerror(res));
    OUTPUT:
       RETVAL
 
@@ -995,7 +1039,7 @@ ourfa_connection_read_long(connection, type=OURFA_ATTR_DATA)
    CODE:
       res = ourfa_connection_read_long(connection, type, &RETVAL);
       if (res != OURFA_OK)
-	 croak("%s: %s", "Ourfa::Connection::read_long", ourfa_error_strerror(res));
+	 croak("%s: %s\n", "Ourfa::Connection::read_long", ourfa_error_strerror(res));
    OUTPUT:
       RETVAL
 
@@ -1008,7 +1052,7 @@ ourfa_connection_read_double(connection, type=OURFA_ATTR_DATA)
    CODE:
       res = ourfa_connection_read_double(connection, type, &RETVAL);
       if (res != OURFA_OK)
-	 croak("%s: %s", "Ourfa::Connection::read_double", ourfa_error_strerror(res));
+	 croak("%s: %s\n", "Ourfa::Connection::read_double", ourfa_error_strerror(res));
    OUTPUT:
       RETVAL
 
@@ -1021,7 +1065,7 @@ ourfa_connection_read_string(connection, type=OURFA_ATTR_DATA)
    CODE:
       res = ourfa_connection_read_string(connection, type, &RETVAL);
       if (res != OURFA_OK)
-	 croak("%s: %s", "Ourfa::Connection::read_string", ourfa_error_strerror(res));
+	 croak("%s: %s\n", "Ourfa::Connection::read_string", ourfa_error_strerror(res));
    OUTPUT:
       RETVAL
    CLEANUP:
@@ -1033,13 +1077,21 @@ ourfa_connection_read_ip(connection, type=OURFA_ATTR_DATA)
    unsigned type
    PREINIT:
       int res;
-      struct in_addr ip;
+      struct sockaddr_storage sock;
+      dMY_CXT;
    CODE:
-      res = ourfa_connection_read_ip(connection, type, &ip.s_addr);
+      res = ourfa_connection_read_ip(connection, type, (struct sockaddr *)&sock);
       if (res != OURFA_OK)
-	 croak("%s: %s", "Ourfa::Connection::read_ip", ourfa_error_strerror(res));
+	 croak("%s: %s\n", "Ourfa::Connection::read_ip", ourfa_error_strerror(res));
       ST(0) = sv_newmortal();
-      sv_setpvn(ST(0), (char *)&ip, sizeof(ip));
+      if (!MY_CXT.enable_ipv6 && sock.ss_family == AF_INET) {
+         struct sockaddr_in *addr4 = (struct sockaddr_in *)&sock;
+         sv_setpvn(ST(0), (char *)&addr4->sin_addr, sizeof(addr4->sin_addr));
+      } else {
+         char ip_str[INET6_ADDRSTRLEN];
+         ourfa_ip_ntop((struct sockaddr *)&sock, ip_str, sizeof(ip_str));
+         sv_setpv(ST(0), ip_str);
+      }
 
 
 #ourfa_connection_write_attr
@@ -1052,7 +1104,7 @@ ourfa_connection_write_int(connection, val, type=OURFA_ATTR_DATA)
    CODE:
       RETVAL = ourfa_connection_write_int(connection, type, val);
       if (RETVAL != OURFA_OK)
-	 croak("%s: %s", "Ourfa::Connection::write_int", ourfa_error_strerror(RETVAL));
+	 croak("%s: %s\n", "Ourfa::Connection::write_int", ourfa_error_strerror(RETVAL));
 
 NO_OUTPUT int
 ourfa_connection_write_long(connection, val, type=OURFA_ATTR_DATA)
@@ -1062,7 +1114,7 @@ ourfa_connection_write_long(connection, val, type=OURFA_ATTR_DATA)
    CODE:
       RETVAL = ourfa_connection_write_long(connection, type, val);
       if (RETVAL != OURFA_OK)
-	 croak("%s: %s", "Ourfa::Connection::write_long", ourfa_error_strerror(RETVAL));
+	 croak("%s: %s\n", "Ourfa::Connection::write_long", ourfa_error_strerror(RETVAL));
 
 NO_OUTPUT int
 ourfa_connection_write_double(connection, val, type=OURFA_ATTR_DATA)
@@ -1072,7 +1124,7 @@ ourfa_connection_write_double(connection, val, type=OURFA_ATTR_DATA)
    CODE:
       RETVAL = ourfa_connection_write_double(connection, type, val);
       if (RETVAL != OURFA_OK)
-	 croak("%s: %s", "Ourfa::Connection::write_double", ourfa_error_strerror(RETVAL));
+	 croak("%s: %s\n", "Ourfa::Connection::write_double", ourfa_error_strerror(RETVAL));
 
 NO_OUTPUT int
 ourfa_connection_write_string(connection, val, type=OURFA_ATTR_DATA)
@@ -1082,7 +1134,7 @@ ourfa_connection_write_string(connection, val, type=OURFA_ATTR_DATA)
    CODE:
       RETVAL = ourfa_connection_write_string(connection, type, val);
       if (RETVAL != OURFA_OK)
-	 croak("%s: %s", "Ourfa::Connection::write_string", ourfa_error_strerror(RETVAL));
+	 croak("%s: %s\n", "Ourfa::Connection::write_string", ourfa_error_strerror(RETVAL));
 
 NO_OUTPUT int
 ourfa_connection_write_ip(connection, val, type=OURFA_ATTR_DATA)
@@ -1090,12 +1142,28 @@ ourfa_connection_write_ip(connection, val, type=OURFA_ATTR_DATA)
    unsigned type
    SV *val
    PREINIT:
-      in_addr_t addr;
+      dMY_CXT;
    CODE:
-      sv2in_addr_t(val, "Ourfa::Connection::write_ip", &addr, 1);
-      RETVAL = ourfa_connection_write_ip(connection, type, addr);
-      if (RETVAL != OURFA_OK)
-	 croak("%s: %s", "Ourfa::Connection::write_string", ourfa_error_strerror(RETVAL));
+      PERL_UNUSED_VAR(RETVAL);
+      if (!MY_CXT.enable_ipv6) {
+         struct sockaddr_in sock;
+         memset(&sock, 0, sizeof(sock));
+         sock.sin_family = AF_INET;
+         sv2in_addr_t(val, "Ourfa::Connection::write_ip", &sock.sin_addr.s_addr, 1);
+         RETVAL = ourfa_connection_write_ip(connection, type, (struct sockaddr *)&sock);
+         if (RETVAL != OURFA_OK)
+	    croak("%s: %s\n", "Ourfa::Connection::write_ip", ourfa_error_strerror(RETVAL));
+      } else {
+         struct sockaddr_storage sock;
+         if (ourfa_parse_ip(SvPV_nolen(val), &sock) != 0) {
+            croak("%s: %s\n", "Ourfa::Connection::write_ip", "invalid IP");
+            RETVAL = -1;
+         } else {
+            RETVAL = ourfa_connection_write_ip(connection, type, (struct sockaddr *)&sock);
+            if (RETVAL != OURFA_OK)
+               croak("%s: %s\n", "Ourfa::Connection::write_ip", ourfa_error_strerror(RETVAL));
+         }
+      }
 
 int
 ourfa_connection_flush_read(connection)
@@ -1126,7 +1194,7 @@ ourfa_xmlapi_new(CLASS)
       if (RETVAL)
 	 ourfa_xmlapi_set_err_f(RETVAL, ourfa_err_f_warn, NULL);
       else
-	 croak("malloc error");
+	 croak("malloc error\n");
    OUTPUT:
       RETVAL
 
@@ -1136,7 +1204,7 @@ ourfa_xmlapi_load_apixml(xmlapi, fname=NULL)
    const char *fname
    POSTCALL:
       if (RETVAL != OURFA_OK)
-	    croak("%s: %s", "Ourfa::Xmlapi::load_apixml", ourfa_error_strerror(RETVAL));
+	    croak("%s: %s\n", "Ourfa::Xmlapi::load_apixml", ourfa_error_strerror(RETVAL));
 
 NO_OUTPUT int
 ourfa_xmlapi_load_script(xmlapi, file_name, function_name)
@@ -1145,7 +1213,7 @@ ourfa_xmlapi_load_script(xmlapi, file_name, function_name)
    const char *function_name
    POSTCALL:
       if (RETVAL != OURFA_OK)
-	    croak("%s: %s", "Ourfa::Xmlapi::load_script", ourfa_error_strerror(RETVAL));
+	    croak("%s: %s\n", "Ourfa::Xmlapi::load_script", ourfa_error_strerror(RETVAL));
 
 const char *
 ourfa_xmlapi_node_name_by_type(type)
@@ -1304,7 +1372,7 @@ ourfa_func_call_new(CLASS, f, h)
       PERL_UNUSED_VAR(CLASS);
       RETVAL=ourfa_func_call_ctx_new(f, h);
       if (RETVAL == NULL)
-	    croak("malloc error");
+	    croak("malloc error\n");
       else
 	 RETVAL->printf_err = ourfa_err_f_warn;
    OUTPUT:
@@ -1335,7 +1403,7 @@ ourfa_func_call_req(fctx, connection)
    ourfa_connection_t *connection
    POSTCALL:
       if (RETVAL != OURFA_OK)
-	    croak("%s: %s", "Ourfa::Func::Call::req", ourfa_error_strerror(RETVAL));
+	    croak("%s: %s\n", "Ourfa::Func::Call::req", ourfa_error_strerror(RETVAL));
 
 NO_OUTPUT int
 ourfa_func_call_resp(fctx, connection)
@@ -1343,7 +1411,7 @@ ourfa_func_call_resp(fctx, connection)
    ourfa_connection_t *connection
    POSTCALL:
       if (RETVAL != OURFA_OK)
-	    croak("%s: %s", "Ourfa::Func::Call::resp", ourfa_error_strerror(RETVAL));
+	    croak("%s: %s\n", "Ourfa::Func::Call::resp", ourfa_error_strerror(RETVAL));
 
 int
 ourfa_func_call_state(fctx)
@@ -1398,7 +1466,7 @@ ourfa_script_call_new(CLASS, f, h)
       PERL_UNUSED_VAR(CLASS);
       RETVAL=ourfa_script_call_ctx_new(f, h);
       if (RETVAL == NULL)
-	    croak("malloc error");
+	    croak("malloc error\n");
       else
 	 RETVAL->script.printf_err =  RETVAL->func.printf_err = ourfa_err_f_warn;
    OUTPUT:
@@ -1421,6 +1489,7 @@ ourfa_script_call_call(CLASS, connection, xmlapi, func_name, h=NO_INIT)
    const char *func_name
    HV *h
    PREINIT:
+      dMY_CXT;
       ourfa_hash_t *ourfa_in;
       ourfa_xmlapi_func_t *f;
       int ret;
@@ -1434,9 +1503,9 @@ ourfa_script_call_call(CLASS, connection, xmlapi, func_name, h=NO_INIT)
 		  func_name);
       if (items <= 4)
 	 h = NULL;
-      if (hv2ourfah(h, &ourfa_in) <= 0)
+      if (hv2ourfah(aMY_CXT_ h, &ourfa_in) <= 0)
 	    croak("Can not parse input parameters\n");
-      ret = ourfa_exec(connection, f, ourfa_in, &RETVAL, err, sizeof(err));
+      ret = ourfa_exec(aMY_CXT_ connection, f, ourfa_in, &RETVAL, err, sizeof(err));
       ourfa_hash_free(ourfa_in);
       if (ret != OURFA_OK)
 	    croak("%s: %s\n", "Ourfa::ScriptCall::call", err);
@@ -1453,13 +1522,35 @@ ourfa_script_call_DESTROY(fctx)
       ourfa_script_call_ctx_free(fctx);
 
 
-MODULE = Ourfa		PACKAGE = Ourfa
+MODULE = Ourfa		PACKAGE = Ourfa PREFIX = ourfa_
 
 INCLUDE: const-xs.inc
 PROTOTYPES: ENABLE
 
 BOOT:
+   MY_CXT_INIT;
+   MY_CXT.enable_ipv6 = 1;
+
    SSL_load_error_strings();
    SSL_library_init();
+
+
+bool
+ourfa_enable_ipv6(CLASS, val=NO_INIT)
+   const char *CLASS
+   int val
+   PREINIT:
+      dMY_CXT;
+   CODE:
+      PERL_UNUSED_VAR(CLASS);
+      if (items > 1) {
+         int previous_value = MY_CXT.enable_ipv6;
+         MY_CXT.enable_ipv6 = val;
+	 RETVAL=previous_value;
+      }else {
+	 RETVAL = MY_CXT.enable_ipv6;
+      }
+   OUTPUT:
+      RETVAL
 
 

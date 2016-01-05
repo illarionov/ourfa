@@ -27,7 +27,7 @@ our @CARP_NOT;
 # If you do not need this, moving things directly into @EXPORT or @EXPORT_OK
 # will save memory.
 #our %EXPORT_TAGS = ( 'all' => [ qw(
-#	
+#
 #) ] );
 
 our @EXPORT_OK = qw(
@@ -187,12 +187,12 @@ Ourfa - Open source implementation of URFA (UTM Remote Function Access) protocol
 =head1 SYNOPSIS
 
   use Ourfa;
+  Ourfa->enable_ipv6(1);
+
   my $ourfa = Ourfa->new(
-      api_xml_file => "/netup/utm5/xml/api.xml",
       server      => 'localhost:11758',
       login       => 'init',
       password    => 'init',
-      login_type  => OURFA_LOGIN_SYSTEM
   );
 
   my $version = $ourfa->rpcf_core_version();
@@ -216,7 +216,7 @@ XXX
 	 login_type   => 'admin',
 	 server       => 'localhost:11758',
 	 api_xml_file => '/netup/utm5/xml/api.xml',
-	 ssl          => 'none',
+	 ssl          => 'rsa_cert',
 	 ssl_cert     => '/netup/utm5/admin.crt',
 	 ssl_key      => '/netup/utm5/admin.crt',
 	 timeout      => 500,
@@ -287,7 +287,13 @@ Output debug information to stderr. Default: C<no>
 
 =back
 
+
+=head2  enable_ipv6
+
+Turn on IPV6 support. Default: C<yes>
+
 =cut
+
 
 sub new {
    my ($class, %params) = @_;
@@ -328,10 +334,17 @@ sub new {
 	    if (!exists($types{$type}));
 	 return $self->connection->ssl_ctx->ssl_type($types{$type});
       },
-      'ssl_cert' => sub { shift->connection->ssl_ctx->load_cert(shift) },
-      'ssl_key' => sub { shift->connection->ssl_ctx->load_private_key(shift) },
+      'ssl_cert' => sub {
+          my ($self, $path) = @_;
+          shift->connection->ssl_ctx->load_cert($path) if ($path);
+      },
+      'ssl_key' => sub {
+          my ($self, $path) = @_;
+          shift->connection->ssl_ctx->load_private_key($path) if ($path);
+      },
       'timeout' => sub {shift->connection->timeout(shift)},
       'auto_reconnect' => sub {shift->connection->auto_reconnect(shift)},
+      'enable_ipv6' => sub {shift->enable_ipv6(shift)},
       'debug' => sub {
 	 my ($self, $val) = @_;
 	 $self->connection->debug_stream($val ? *STDERR : undef);
@@ -351,6 +364,16 @@ sub new {
       $api_xml_file ||= 'api.xml';
       $self->xmlapi->load_apixml(defined($api_xml_dir) ?
 	    $api_xml_dir . '/' . $api_xml_file : $api_xml_file);
+   } else {
+      $self->xmlapi->load_apixml("/netup/utm5/xml/api.xml");
+   }
+
+   $params{ssl} ||= 'rsa_cert';
+   if ($params{ssl} ne 'none' && !exists $params{ssl_cert}) {
+       $params{'ssl_cert'} = "/netup/utm5/admin.crt";
+   }
+   if (exists $params{ssl_cert} && !exists $params{ssl_key}) {
+       $params{ssl_key} = $params{ssl_cert};
    }
 
    while (my ($k, $v) = each (%params)) {

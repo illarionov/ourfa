@@ -1,0 +1,4 @@
+*.o
+*~
+/ourfa_client
+/libourfa.a

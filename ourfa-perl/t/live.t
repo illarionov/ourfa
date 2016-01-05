@@ -7,7 +7,7 @@ BEGIN {
    }
 };
 
-use Test::More tests => 51;
+use Test::More tests => 50;
 use Ourfa;
 use Socket;
 use Data::Dumper;
@@ -21,7 +21,9 @@ ok(!$@, "can not load xmlapi");
 my $conn = Ourfa::Connection->new();
 $conn->login_type(OURFA_LOGIN_SYSTEM);
 $conn->hostname($ENV{OURFA_HOSTNAME} || "localhost");
-$conn->ssl_ctx->ssl_type(OURFA_SSL_TYPE_SSL3);
+$conn->ssl_ctx->ssl_type(OURFA_SSL_TYPE_RSA_CRT);
+$conn->ssl_ctx->load_cert($ENV{OURFA_SSL_CERT} || "/netup/utm5/admin.crt");
+$conn->ssl_ctx->load_private_key($ENV{OURFA_SSL_CERT_KEY} || "/netup/utm5/admin.crt");
 #$conn->debug_stream(*STDERR);
 
 #Test for rejected auth
@@ -88,11 +90,6 @@ eval {$h = Ourfa::ScriptCall->call($conn, $xmlapi, "rpcf_get_stats",
       {type=>undef})};
 ok($@, "error on rpcf_get_stats with type undefined");
 
-diag("rpcf_get_stats with wrong type=-1");
-eval {$h = Ourfa::ScriptCall->call($conn, $xmlapi, "rpcf_get_stats", {type =>
-	 -1})};
-ok($@, "error on rpcf_get_stats with type=-1");
-
 #normal get_stats
 $h = Ourfa::ScriptCall->call($conn, $xmlapi, "rpcf_get_stats", {type => 0});
 isa_ok($h, "HASH", "rpcf_get_stats returns hash");
@@ -132,16 +129,15 @@ my $ourfa = Ourfa->new(
    api_xml_file=>$ENV{OURFA_XML_API} || "/netup/utm5/xml/api.xml",
    login_type=>'admin',
    server=>$ENV{OURFA_HOSTNAME} || "localhost",
-   ssl=>'sslv3',
    login=>$ENV{OURFA_LOGIN} || 'test',
-   password=>$ENV{OURFA_PASSWORD} || 'test'
+   password=>$ENV{OURFA_PASSWORD} || 'test',
+   ssl=>'rsa_cert'
 );
 
 $h = $ourfa->rpcf_core_version();
 isa_ok($h, "HASH", "returns hash");
 ok(defined $h->{core_version});
 diag("core_version: " . $h->{core_version});
-
 
 #Test ip_address on rpcf_add_ipzone
 my @testips = (
@@ -153,16 +149,22 @@ my @testips = (
    ["240.240.240.240", "255.255.255.255", "240.240.240.240"]
 );
 
+my @zones = map {
+    net=>unpack("N", inet_aton($_->[0])),
+    mask => unpack("N", inet_aton($_->[1])),
+    gateaway => unpack("N", inet_aton($_->[2]))
+    }, @testips;
+
+#diag(Dumper(\@zones));
+
 #XXX: gateAway is a typo in api.xml
 my $zone_id = $ourfa->rpcf_add_ipzone(
    id => 0,
    name => 'testzone',
    count => scalar(@testips),
-   zones => [ map { net=>inet_aton($_->[0]),
-      mask => inet_aton($_->[1]),
-      gateaway => inet_aton($_->[2])
-   }, @testips ]
+   zones =>  \@zones
 );
+
 
 ok($zone_id->{id} > 0, "create new IP zone");
 
@@ -175,9 +177,9 @@ is($z->{name}, "testzone", "same zone name");
 isa_ok($z->{'array-1'}, "ARRAY", "zones is array");
 
 for (my $i = 0; $i < scalar(@testips); $i++) {
-   is(inet_ntoa($z->{'array-1'}->[$i]->{'net'}), $testips[$i]->[0], "net $i");
-   is(inet_ntoa($z->{'array-1'}->[$i]->{'mask'}), $testips[$i]->[1], "mask $i");
+   is(inet_ntoa(pack("N", $z->{'array-1'}->[$i]->{'net'})), $testips[$i]->[0], "net $i");
+   is(inet_ntoa(pack("N", $z->{'array-1'}->[$i]->{'mask'})), $testips[$i]->[1], "mask $i");
    #XXX: gateAway is a typo in api.xml
-   is(inet_ntoa($z->{'array-1'}->[$i]->{'gateaway'}), $testips[$i]->[2], "gateway $i");
+   is(inet_ntoa(pack("N", $z->{'array-1'}->[$i]->{'gateaway'})), $testips[$i]->[2], "gateway $i");
 }
 

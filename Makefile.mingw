@@ -16,6 +16,7 @@ PREFIX?=netup/utm5
 
 OBJS= hash.o \
       xmlapi.o \
+      ip.o \
       pkt.o \
       error.o \
       connection.o \
@@ -54,6 +55,8 @@ asprintf.o: asprintf.c
 	$(CC) $(CFLAGS) -c asprintf.c
 strtod_c.o: strtod_c.c
 	$(CC) $(CFLAGS) -c strtod_c.c
+ip.o: ip.c ourfa.h
+	$(CC) $(CFLAGS) -c ip.c
 pkt.o: pkt.c ourfa.h
 	$(CC) $(CFLAGS) -c pkt.c
 error.o: error.c ourfa.h

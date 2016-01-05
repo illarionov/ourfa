@@ -91,6 +91,7 @@ enum {
    OURFA_ERROR_PKT_TERM,
    OURFA_ERROR_HASH,
    OURFA_ERROR_SOCKET,
+   OURFA_ERROR_XML,
    OURFA_ERROR_OTHER
 } ourfa_errcode_t;
 
@@ -136,12 +137,11 @@ int ourfa_pkt_add_attr(ourfa_pkt_t *pkt,
 
 int ourfa_pkt_add_data_long(ourfa_pkt_t *pkt, long long val);
 int ourfa_pkt_add_data_double(ourfa_pkt_t *pkt, double val);
-int ourfa_pkt_add_data_ip(ourfa_pkt_t *pkt, in_addr_t ip);
 int ourfa_pkt_add_int(ourfa_pkt_t *pkt, unsigned type, int val);
 int ourfa_pkt_add_string(ourfa_pkt_t *pkt, unsigned type, const char *val);
 int ourfa_pkt_add_long(ourfa_pkt_t *pkt, unsigned type, long long val);
 int ourfa_pkt_add_double(ourfa_pkt_t *pkt, unsigned type, double val);
-int ourfa_pkt_add_ip(ourfa_pkt_t *pkt, unsigned type, in_addr_t ip);
+int ourfa_pkt_add_ip(ourfa_pkt_t *pkt, unsigned type, const struct sockaddr *ip);
 
 
 /*
@@ -190,17 +190,7 @@ int ourfa_pkt_get_int    (const ourfa_attr_hdr_t *attr, int *res);
 int ourfa_pkt_get_long   (const ourfa_attr_hdr_t *attr, long long *res);
 int ourfa_pkt_get_double (const ourfa_attr_hdr_t *attr, double *res);
 int ourfa_pkt_get_string (const ourfa_attr_hdr_t *attr, char **res);
-int ourfa_pkt_get_ip     (const ourfa_attr_hdr_t *attr, in_addr_t *res);
-
-/*
- * ourfa_pkt_read_attrs input format:
- * i - integer (argument - int *)
- * s - string (argument - char **). Must be free()'d after usage
- * l - long (argument - long *)
- * d - double (argument - double *)
- * I - ip (argument - in_addr_t *)
- */
-int ourfa_pkt_read_attrs(ourfa_attr_hdr_t **head, const char *fmt, ...);
+int ourfa_pkt_get_ip     (const ourfa_attr_hdr_t *attr, struct sockaddr *res);
 
 const char *ourfa_pkt_attr_type2str(unsigned attr_type);
 unsigned    ourfa_pkt_is_valid_attr_type(unsigned attr_type);
@@ -217,7 +207,7 @@ int ourfa_hash_set_int(ourfa_hash_t *h, const char *key, const char *idx, int va
 int ourfa_hash_set_long(ourfa_hash_t *h, const char *key, const char *idx, long long val);
 int ourfa_hash_set_double(ourfa_hash_t *h, const char *key, const char *idx, double val);
 int ourfa_hash_set_string(ourfa_hash_t *h, const char *key, const char *idx, const char *val);
-int ourfa_hash_set_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr_t val);
+int ourfa_hash_set_ip(ourfa_hash_t *h, const char *key, const char *idx, const struct sockaddr *val);
 int ourfa_hash_copy_val(ourfa_hash_t *h, const char *dst_key, const char *dst_idx,
       const char *src_key, const char *src_idx);
 void ourfa_hash_unset(ourfa_hash_t *h, const char *key);
@@ -226,12 +216,19 @@ int ourfa_hash_get_int(ourfa_hash_t *h, const char *key, const char *idx, int *r
 int ourfa_hash_get_long(ourfa_hash_t *h, const char *key, const char *idx, long long *res);
 int ourfa_hash_get_double(ourfa_hash_t *h, const char *key, const char *idx, double *res);
 int ourfa_hash_get_string(ourfa_hash_t *h, const char *key, const char *idx, char **res);
-int ourfa_hash_get_ip(ourfa_hash_t *h, const char *key, const char *idx, in_addr_t *res);
+int ourfa_hash_get_ip(ourfa_hash_t *h, const char *key, const char *idx, struct sockaddr *res);
 int ourfa_hash_get_arr_size(ourfa_hash_t *h, const char *key, const char *idx, unsigned *res);
 void ourfa_hash_dump(ourfa_hash_t *h, FILE *stream, const char *annotation_fmt, ...);
 int ourfa_hash_parse_idx_list(ourfa_hash_t *h, const char *idx_list,
       unsigned *res, size_t res_size);
-int ourfa_hash_parse_ip(const char *str, struct in_addr *res);
+
+/* Ip */
+void ourfa_ip_reset(struct sockaddr *dst);
+int ourfa_ip_copy(struct sockaddr *dst, const struct sockaddr *src);
+void ourfa_ip_set6(struct sockaddr *dst, const void *addr);
+void ourfa_ip_set(struct sockaddr *dst, in_addr_t ip);
+int ourfa_ip_ntop(const struct sockaddr *sa, char *dst, socklen_t dst_size);
+int ourfa_parse_ip(const char *str, struct sockaddr_storage *res);
 
 /* SSL CTX  */
 ourfa_ssl_ctx_t *ourfa_ssl_ctx_new();
@@ -267,7 +264,7 @@ const char *ourfa_connection_login(ourfa_connection_t *connection);
 const char *ourfa_connection_password(ourfa_connection_t *connection);
 const char *ourfa_connection_hostname(ourfa_connection_t *connection);
 int ourfa_connection_session_id(ourfa_connection_t *connection, char *res, size_t buf_size);
-const in_addr_t *ourfa_connection_session_ip(ourfa_connection_t *connection);
+const struct sockaddr *ourfa_connection_session_ip(ourfa_connection_t *connection);
 BIO *ourfa_connection_bio(ourfa_connection_t *connection);
 
 
@@ -283,7 +280,7 @@ int ourfa_connection_set_login(ourfa_connection_t *connection, const char *login
 int ourfa_connection_set_password(ourfa_connection_t *connection, const char *password);
 int ourfa_connection_set_hostname(ourfa_connection_t *connection, const char *hostname);
 int ourfa_connection_set_session_id(ourfa_connection_t *connection, const char *session_id);
-int ourfa_connection_set_session_ip(ourfa_connection_t *connection, const in_addr_t *session_ip);
+int ourfa_connection_set_session_ip(ourfa_connection_t *connection, const struct sockaddr *session_ip);
 
 int ourfa_connection_set_err_f(ourfa_connection_t *connection, ourfa_err_f_t *f, void *user_ctx);
 int ourfa_connection_set_debug_stream(ourfa_connection_t *connection, FILE *stream);
@@ -303,7 +300,7 @@ int   ourfa_connection_read_int(ourfa_connection_t *conn, unsigned type, int *va
 int   ourfa_connection_read_long(ourfa_connection_t *conn, unsigned type, long long  *val);
 int   ourfa_connection_read_double(ourfa_connection_t *conn, unsigned type, double *val);
 int   ourfa_connection_read_string(ourfa_connection_t *conn, unsigned type, char **val);
-int   ourfa_connection_read_ip(ourfa_connection_t *conn, unsigned type, in_addr_t *val);
+int   ourfa_connection_read_ip(ourfa_connection_t *conn, unsigned type, struct sockaddr *val);
 
 int   ourfa_connection_write_attr(ourfa_connection_t *conn, unsigned type,
       size_t size, const void *data);
@@ -311,7 +308,7 @@ int   ourfa_connection_write_int(ourfa_connection_t *conn, unsigned type, int va
 int   ourfa_connection_write_long(ourfa_connection_t *conn, unsigned type, long long  val);
 int   ourfa_connection_write_double(ourfa_connection_t *conn, unsigned type, double val);
 int   ourfa_connection_write_string(ourfa_connection_t *conn, unsigned type, const char * val);
-int   ourfa_connection_write_ip(ourfa_connection_t *conn, unsigned type, in_addr_t val);
+int   ourfa_connection_write_ip(ourfa_connection_t *conn, unsigned type, const struct sockaddr *val);
 
 int   ourfa_connection_flush_read(ourfa_connection_t *conn);
 int   ourfa_connection_flush_write(ourfa_connection_t *conn);
@@ -546,11 +543,5 @@ int ourfa_script_call_start(ourfa_script_call_ctx_t *sctx);
 
 int ourfa_script_call_step(ourfa_script_call_ctx_t *sctx,
        ourfa_connection_t *conn);
-
-int ourfa_asprintf( char **ret, const char *format, ... );
-int ourfa_vasprintf( char **ret, const char *format, va_list ap);
-#ifdef _MSC_VER
-int ourfa_snprintf(char *str, size_t size, const char *format, ... );
-#endif
 
 #endif  /* _OURFA_H */

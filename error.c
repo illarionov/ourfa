@@ -68,6 +68,8 @@ const char *ourfa_error_strerror(int err_code)
       case OURFA_ERROR_PKT_TERM: res = "Termination packet received"; break;
       case OURFA_ERROR_SOCKET: res = "Socket error"; break;
       case OURFA_ERROR_HASH: res = "Hash error"; break;
+      case OURFA_ERROR_XML: res = "XML error"; break;
+      case OURFA_ERROR_OTHER: res = ""; break;
       default: res = "Unknown error code"; break;
    }
    return res;

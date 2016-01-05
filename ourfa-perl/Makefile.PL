@@ -22,7 +22,7 @@ my %make_conf = (
        LIBS           => '',
        INC            => '',
        DEFINE         => '',
-    #OPTIMIZE	      => '-O0 -g',
+       #OPTIMIZE	      => '-W -g -O1 -fstack-protector -fno-omit-frame-pointer',
     PERL_MALLOC_OK    => 0 #strdup(), asprintf()
 );
 
@@ -101,6 +101,7 @@ if  (eval {require ExtUtils::Constant; 1}) {
               {name=>"OURFA_ERROR_NOT_CONNECTED", macro=>"1"},
               {name=>"OURFA_ERROR_NOT_IMPLEMENTED", macro=>"1"},
               {name=>"OURFA_ERROR_NO_DATA", macro=>"1"},
+              {name=>"OURFA_ERROR_XML", macro=>"1"},
               {name=>"OURFA_ERROR_OTHER", macro=>"1"},
               {name=>"OURFA_ERROR_PKT_TERM", macro=>"1"},
               {name=>"OURFA_ERROR_SESSION_ACTIVE", macro=>"1"},
