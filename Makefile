@@ -70,10 +70,11 @@ dist:
 	ln -s -f . $(DISTNAME)
 	git log --no-merges > $(DISTNAME)/Changelog
 	tar czvf $(DISTNAME).tar.gz \
+	   $(DISTNAME)/.gitignore \
 	   $(DISTNAME)/Makefile \
 	   $(DISTNAME)/Makefile.mingw \
 	   $(DISTNAME)/Makefile.msvc \
-	   $(DISTNAME)/README \
+	   $(DISTNAME)/README.md \
 	   $(DISTNAME)/Changelog \
 	   $(DISTNAME)/asprintf.c \
 	   $(DISTNAME)/debian/changelog \
@@ -101,6 +102,10 @@ dist:
 	   $(DISTNAME)/ourfa.h \
 	   $(DISTNAME)/ourfa_private.h \
 	   $(DISTNAME)/ip.c \
+	   $(DISTNAME)/inet_ntop.c \
+	   $(DISTNAME)/inet_ntop.h \
+	   $(DISTNAME)/inet_pton.c \
+	   $(DISTNAME)/inet_pton.h \
 	   $(DISTNAME)/pkt.c \
 	   $(DISTNAME)/ssl_ctx.c \
 	   $(DISTNAME)/strtod_c.c \
