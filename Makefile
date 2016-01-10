@@ -63,7 +63,7 @@ install: ourfa_client
 clean:
 	rm -f *.o ourfa_client libourfa.a
 
-DISTNAME=ourfa-521008002.2
+DISTNAME=ourfa-530002000.b1
 
 dist:
 	rm -f $(DISTNAME)

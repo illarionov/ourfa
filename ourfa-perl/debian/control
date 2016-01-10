@@ -1,7 +1,7 @@
 Source: ourfa-perl
 Section: perl
 Priority: optional
-Build-Depends: debhelper (>= 5), perl (>= 5.6.10-12), ourfa(>= 521008002.2)
+Build-Depends: debhelper (>= 5), perl (>= 5.6.10-12), ourfa(>= 530002000.1)
 Maintainer: Alexey Illarionov <littlesavage@rambler.ru>
 Standards-Version: 3.8.0
 Homepage: https://github.com/littlesavage/ourfa

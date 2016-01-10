@@ -142,7 +142,7 @@ our @EXPORT = (@EXPORT_OK);
 
 BEGIN {
    require XSLoader;
-   our $VERSION = '521008.2.0';
+   our $VERSION = '530002.0.0';
    XSLoader::load('Ourfa', $VERSION);
 }
 

@@ -6,7 +6,7 @@
 #
 
 PORTNAME=	ourfa
-PORTVERSION=	521008002.2
+PORTVERSION=	530002000
 CATEGORIES=	devel
 MASTER_SITES=	http://github.com/downloads/littlesavage/ourfa/ \
    		http://ls.orionet.ru/

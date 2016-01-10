@@ -1,3 +1,9 @@
+ourfa (530002000.1) UNRELEASED; urgency=medium
+
+  * New version. UTM 5.3.002
+
+ -- Alexey Illarionov <littlesavage@rambler.ru>   Sun, 10 Jan 2016 16:15:54 +0300
+
 ourfa (521008002.2) unstable; urgency=low
 
   * Fix cipher_list for rsa_cert SSL method
